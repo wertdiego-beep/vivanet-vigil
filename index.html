@@ -351,6 +351,10 @@ textarea{min-height:96px;resize:vertical}
         <input type="text" id="contactoChatId" placeholder="Ej: 7328672657">
         <label>Teléfono para llamada de alarma (opcional)</label>
         <input type="text" id="contactoTelefono" placeholder="Ej: +56912345678">
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+          <input type="checkbox" id="contactoActivo" checked style="width:auto; margin:0;">
+          <span style="font-weight:600; font-size:.85rem; margin:0;">Avisarle cuando presione el botón SOS</span>
+        </label>
         <div class="error-msg" id="contactoError"></div>
         <button class="btn-full" id="agregarContacto">Agregar contacto</button>
       </div>
@@ -576,23 +580,41 @@ function cargarContactos(uid) {
       return;
     }
 
-    if (resumen) resumen.textContent = snap.size + (snap.size === 1 ? ' persona configurada' : ' personas configuradas');
+    const activos = snap.docs.filter((d) => d.data().activo !== false).length;
+    if (resumen) resumen.textContent = activos + (activos === 1 ? ' persona avisada en SOS' : ' personas avisadas en SOS');
 
     list.innerHTML = '';
     snap.forEach((d) => {
       const c = d.data();
+      const activo = c.activo !== false; // por compatibilidad con contactos creados antes de este campo
       const div = document.createElement('div');
       div.className = 'evento';
+      div.style.opacity = activo ? '1' : '.55';
       const detalle = [c.chatId ? `Telegram: ${c.chatId}` : null, c.telefono ? `📞 ${c.telefono}` : null].filter(Boolean).join(' · ') || 'Sin datos de contacto';
-      div.innerHTML = `<div class="ev-ic v">👤</div><div style="flex:1"><strong>${c.nombre || 'Contacto'}</strong><small>${detalle}</small></div>`;
+      div.innerHTML = `<div class="ev-ic v">👤</div><div style="flex:1"><strong>${c.nombre || 'Contacto'}</strong><small>${detalle}${activo ? '' : ' · Silenciado'}</small></div>`;
+
+      const btnToggle = document.createElement('button');
+      btnToggle.textContent = activo ? '🔔' : '🔕';
+      btnToggle.title = activo ? 'Avisarle en SOS (clic para silenciar)' : 'No se le avisa en SOS (clic para activar)';
+      btnToggle.style.cssText = 'font-size:1.1rem; padding:6px 8px;';
+      btnToggle.onclick = () => toggleContacto(uid, d.id, !activo);
+      div.appendChild(btnToggle);
+
       const btnBorrar = document.createElement('button');
       btnBorrar.textContent = '✕';
       btnBorrar.style.cssText = 'color:var(--rojo); font-weight:700; font-size:1rem; padding:6px 10px;';
       btnBorrar.onclick = () => eliminarContacto(uid, d.id);
       div.appendChild(btnBorrar);
+
       list.appendChild(div);
     });
   }).catch((err) => console.error('Error cargando contactos:', err));
+}
+
+function toggleContacto(uid, contactoId, nuevoValor) {
+  db.collection('usuarios').doc(uid).collection('contactos').doc(contactoId).update({ activo: nuevoValor })
+    .then(() => cargarContactos(uid))
+    .catch((err) => console.error('Error actualizando contacto:', err));
 }
 
 function eliminarContacto(uid, contactoId) {
@@ -610,6 +632,7 @@ document.getElementById('agregarContacto').addEventListener('click', () => {
   const nombre = document.getElementById('contactoNombre').value.trim();
   const chatId = document.getElementById('contactoChatId').value.trim();
   const telefono = document.getElementById('contactoTelefono').value.trim();
+  const activo = document.getElementById('contactoActivo').checked;
 
   if (!nombre) { errorEl.textContent = 'Ingresa el nombre del contacto.'; return; }
   if (!chatId && !telefono) { errorEl.textContent = 'Ingresa al menos un Chat ID de Telegram o un teléfono.'; return; }
@@ -618,11 +641,13 @@ document.getElementById('agregarContacto').addEventListener('click', () => {
     nombre: nombre,
     chatId: chatId,
     telefono: telefono,
+    activo: activo,
     creadoEn: firebase.firestore.FieldValue.serverTimestamp()
   }).then(() => {
     document.getElementById('contactoNombre').value = '';
     document.getElementById('contactoChatId').value = '';
     document.getElementById('contactoTelefono').value = '';
+    document.getElementById('contactoActivo').checked = true;
     cargarContactos(user.uid);
   }).catch((err) => {
     console.error('Error agregando contacto:', err);
@@ -723,6 +748,7 @@ function notificarContactosEmergencia(texto) {
   db.collection('usuarios').doc(user.uid).collection('contactos').get().then((snap) => {
     snap.forEach((d) => {
       const c = d.data();
+      if (c.activo === false) return; // este contacto está silenciado, no se le avisa
       if (c.chatId) notificarTelegram(texto, c.chatId);
       if (c.telefono) llamarContactoEmergencia(c.telefono, user.email);
     });
