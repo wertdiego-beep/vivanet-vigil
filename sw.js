@@ -1,11 +1,48 @@
 // Service Worker de Vigil: permite instalar la app y usarla sin conexión
-// para lo básico. Los datos en vivo (Firestore, chat IA, Telegram) siempre
-// requieren internet.
+// para lo básico, y recibir notificaciones push (Firebase Cloud Messaging)
+// aunque la app esté cerrada. Los datos en vivo (Firestore, chat IA, Telegram)
+// siempre requieren internet.
 //
 // IMPORTANTE: el HTML de la app (navegación) usa estrategia "red primero":
 // siempre pide la versión más nueva al servidor, y solo usa la copia
 // guardada si no hay conexión. Así, cuando subimos cambios a la app,
 // los usuarios los ven de inmediato en vez de quedarse con una versión vieja.
+
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
+
+firebase.initializeApp({
+  apiKey: "AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g",
+  authDomain: "vivanet-f8ac2.firebaseapp.com",
+  projectId: "vivanet-f8ac2",
+  storageBucket: "vivanet-f8ac2.firebasestorage.app",
+  messagingSenderId: "553479199763",
+  appId: "1:553479199763:web:d7004add8e769bbc2b73e6"
+});
+
+const messaging = firebase.messaging();
+
+// Cuando llega un push y la app está cerrada o en segundo plano,
+// mostramos una notificación del sistema.
+messaging.onBackgroundMessage((payload) => {
+  const titulo = payload.notification?.title || 'Vigil';
+  const cuerpo = payload.notification?.body || '';
+  self.registration.showNotification(titulo, {
+    body: cuerpo,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png'
+  });
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((clientList) => {
+      if (clientList.length > 0) return clientList[0].focus();
+      return clients.openWindow('/');
+    })
+  );
+});
 
 const CACHE_NAME = 'vigil-cache-v2';
 const APP_SHELL = [

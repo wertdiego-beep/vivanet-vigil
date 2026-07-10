@@ -21,6 +21,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 <style>
 :root{
   --blanco:#FFFFFF; --fondo:#F6F6FB; --tinta:#171530; --gris:#5C5A72;
@@ -359,6 +360,16 @@ textarea{min-height:96px;resize:vertical}
           </div>
         </div>
         <button class="btn-full" id="instalarBtn">Instalar app</button>
+      </div>
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="width:46px; height:46px; background:var(--violeta-suave); color:var(--violeta); border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">🔔</span>
+          <div>
+            <strong style="font-size:.95rem;">Notificaciones push</strong>
+            <div style="font-size:.8rem; color:var(--gris);" id="pushEstado">Recibe avisos de SOS aunque no tengas Telegram abierto</div>
+          </div>
+        </div>
+        <button class="btn-full" id="pushBtn">Activar notificaciones</button>
       </div>
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
@@ -823,6 +834,29 @@ function crearAlertaSOS() {
 
   notificarTelegram(`🚨 ALERTA SOS activada por ${user.email}. Revisando ubicación en vivo…`);
   notificarContactosEmergencia(`🚨 ALERTA SOS: ${user.email} activó el botón de pánico en su local. Se está revisando su ubicación en vivo.`);
+  enviarPushSOS(user.email);
+}
+
+// ══ NOTIFICACIÓN PUSH (vía función serverless, además de Telegram) ══
+// Avisa a la central (si activó notificaciones push) y, si el propio usuario
+// también las activó, le confirma que su alerta fue enviada.
+function enviarPushSOS(emailUsuario) {
+  const user = auth.currentUser;
+  if (!user) return;
+  db.collection('usuarios').doc(user.uid).get().then((doc) => {
+    const data = doc.exists ? doc.data() : {};
+    fetch('/api/send-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tituloCentral: '🚨 Alerta SOS',
+        cuerpoCentral: `${emailUsuario} activó el botón de pánico. Revisa Telegram para la ubicación en vivo.`,
+        propioToken: data.fcmToken || null,
+        tituloPropio: 'Alerta enviada',
+        cuerpoPropio: 'Tu alerta SOS fue enviada a la central Vigil.'
+      })
+    }).catch((err) => console.error('Error enviando push de SOS:', err));
+  }).catch((err) => console.error('Error obteniendo token propio para push:', err));
 }
 
 // ══ NOTIFICACIÓN TELEGRAM (vía función serverless, sin exponer el token) ══
@@ -1107,6 +1141,60 @@ window.addEventListener('appinstalled', () => {
   const card = document.getElementById('instalarCard');
   if (card) card.style.display = 'none';
 });
+
+// ══ NOTIFICACIONES PUSH (Firebase Cloud Messaging) ══
+const VAPID_KEY = 'BBs2TpKj_Ibxjtz11goxYnB-rrE2NTXsK89YfionWs8QDvdFlXaSDCFa0W9Dh8aWn_QHMfonPbxT-U-r9wfWZ24';
+const pushBtn = document.getElementById('pushBtn');
+const pushEstado = document.getElementById('pushEstado');
+
+function actualizarEstadoPushBtn() {
+  if (!('Notification' in window)) {
+    if (pushBtn) { pushBtn.textContent = 'No disponible en este navegador'; pushBtn.disabled = true; }
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    if (pushBtn) pushBtn.textContent = 'Notificaciones activas ✓';
+    if (pushEstado) pushEstado.textContent = 'Este dispositivo recibirá avisos de SOS';
+  } else if (Notification.permission === 'denied') {
+    if (pushBtn) { pushBtn.textContent = 'Notificaciones bloqueadas'; }
+    if (pushEstado) pushEstado.textContent = 'Las bloqueaste en el navegador. Actívalas desde la configuración del sitio.';
+  }
+}
+actualizarEstadoPushBtn();
+
+async function activarNotificacionesPush() {
+  const user = auth.currentUser;
+  if (!user) return;
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    if (pushEstado) pushEstado.textContent = 'Tu navegador no soporta notificaciones push.';
+    return;
+  }
+
+  try {
+    const permiso = await Notification.requestPermission();
+    if (permiso !== 'granted') {
+      if (pushEstado) pushEstado.textContent = 'No se activaron las notificaciones (permiso no concedido).';
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
+
+    if (!token) {
+      if (pushEstado) pushEstado.textContent = 'No se pudo obtener el token de notificaciones.';
+      return;
+    }
+
+    await db.collection('usuarios').doc(user.uid).set({ fcmToken: token }, { merge: true });
+    actualizarEstadoPushBtn();
+  } catch (err) {
+    console.error('Error activando notificaciones push:', err);
+    if (pushEstado) pushEstado.textContent = 'Ocurrió un error activando las notificaciones.';
+  }
+}
+
+if (pushBtn) pushBtn.addEventListener('click', activarNotificacionesPush);
 </script>
 </body>
 </html>
