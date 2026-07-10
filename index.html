@@ -683,7 +683,7 @@ function go(id){
 }
 document.querySelectorAll('.nav button[data-s]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.s)));
 // ══ BOTÓN SOS Y MAPA ══
-let map = null, marker = null, watchID = null, alertaActualId = null;
+let map = null, marker = null, watchID = null, alertaActualId = null, ubicacionEnviada = false;
 const sosBtn = document.getElementById('sosBtn');
 const sosProg = document.getElementById('sosProg');
 let sosTimer=null, sosStart=0;
@@ -718,6 +718,7 @@ function cerrarSOS(){
 function crearAlertaSOS() {
   const user = auth.currentUser;
   if (!user) return;
+  ubicacionEnviada = false;
   db.collection('usuarios').doc(user.uid).collection('alertas').add({
     estado: 'activa',
     creadaEn: firebase.firestore.FieldValue.serverTimestamp(),
@@ -774,6 +775,35 @@ function actualizarUbicacionAlerta(lat, lng) {
     ubicacion: { lat: lat, lng: lng },
     ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
   }).catch((err) => console.error('Error actualizando ubicación de alerta:', err));
+
+  // La primera vez que tenemos la ubicación real, se la mandamos por Telegram (central + contactos)
+  if (!ubicacionEnviada) {
+    ubicacionEnviada = true;
+    notificarUbicacionTelegram(lat, lng);
+    notificarUbicacionContactosEmergencia(lat, lng);
+  }
+}
+
+// ══ UBICACIÓN POR TELEGRAM (mapa en vivo) ══
+function notificarUbicacionTelegram(lat, lng, chatId) {
+  fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendLocation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId || TELEGRAM_CHAT_ID, latitude: lat, longitude: lng })
+  }).catch((err) => console.error('Error enviando ubicación por Telegram:', err));
+}
+
+// Manda la ubicación también a cada contacto de emergencia activo
+function notificarUbicacionContactosEmergencia(lat, lng) {
+  const user = auth.currentUser;
+  if (!user) return;
+  db.collection('usuarios').doc(user.uid).collection('contactos').get().then((snap) => {
+    snap.forEach((d) => {
+      const c = d.data();
+      if (c.activo === false) return;
+      if (c.chatId) notificarUbicacionTelegram(lat, lng, c.chatId);
+    });
+  }).catch((err) => console.error('Error notificando ubicación a contactos:', err));
 }
 
 function cancelarAlertaSOS() {
