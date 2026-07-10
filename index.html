@@ -158,7 +158,10 @@ textarea{min-height:96px;resize:vertical}
         <label>Contraseña</label>
         <input type="password" id="passField" placeholder="Mínimo 6 caracteres">
 
+        <button type="button" onclick="recuperarContrasena()" style="background:none; border:none; color:var(--violeta); font-size:.8rem; font-weight:600; text-align:right; width:100%; padding:6px 0 2px; cursor:pointer;">¿Olvidaste tu contraseña?</button>
+
         <div class="error-msg" id="authError"></div>
+        <div id="authInfo" style="color:#048A52; font-size:.8rem; text-align:center; margin-top:2px; min-height:1rem;"></div>
 
         <button class="btn-full" onclick="loginUser()">Iniciar Sesión</button>
         <button class="btn-full" onclick="registerUser()" style="background:transparent; color:var(--violeta); border:1.5px solid var(--violeta);">Crear Cuenta</button>
@@ -434,7 +437,9 @@ function loginUser() {
   const email = document.getElementById('emailField').value;
   const pass = document.getElementById('passField').value;
   const errorEl = document.getElementById('authError');
+  const infoEl = document.getElementById('authInfo');
   errorEl.textContent = '';
+  infoEl.textContent = '';
   auth.signInWithEmailAndPassword(email, pass)
     .catch((error) => {
       errorEl.textContent = "Error: " + traducirError(error.code);
@@ -444,7 +449,9 @@ function registerUser() {
   const email = document.getElementById('emailField').value;
   const pass = document.getElementById('passField').value;
   const errorEl = document.getElementById('authError');
+  const infoEl = document.getElementById('authInfo');
   errorEl.textContent = '';
+  infoEl.textContent = '';
   auth.createUserWithEmailAndPassword(email, pass)
     .catch((error) => {
       errorEl.textContent = "Error: " + traducirError(error.code);
@@ -460,7 +467,30 @@ function traducirError(code) {
   if(code === 'auth/weak-password') return 'La contraseña debe tener al menos 6 caracteres.';
   if(code === 'auth/email-already-in-use') return 'Este correo ya está registrado.';
   if(code === 'auth/invalid-credential' || code === 'auth/wrong-password') return 'Correo o contraseña incorrectos.';
+  if(code === 'auth/user-not-found') return 'No encontramos una cuenta con ese correo.';
+  if(code === 'auth/too-many-requests') return 'Demasiados intentos. Espera un momento y vuelve a intentar.';
   return 'Ocurrió un error inesperado.';
+}
+// ══ RECUPERAR CONTRASEÑA ══
+function recuperarContrasena() {
+  const email = document.getElementById('emailField').value.trim();
+  const errorEl = document.getElementById('authError');
+  const infoEl = document.getElementById('authInfo');
+  errorEl.textContent = '';
+  infoEl.textContent = '';
+
+  if (!email) {
+    errorEl.textContent = 'Escribe tu correo arriba y luego toca "¿Olvidaste tu contraseña?".';
+    return;
+  }
+
+  auth.sendPasswordResetEmail(email)
+    .then(() => {
+      infoEl.textContent = 'Te enviamos un correo a ' + email + ' para restablecer tu contraseña.';
+    })
+    .catch((error) => {
+      errorEl.textContent = "Error: " + traducirError(error.code);
+    });
 }
 // Observador de estado de autenticación (Se ejecuta solo cuando abres la app)
 auth.onAuthStateChanged((user) => {
