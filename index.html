@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#4B3F9F">
-<title>Vivanet — Plataforma de Servicios</title>
+<title>Vigil — Seguridad y Monitoreo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -139,14 +139,14 @@ textarea{min-height:96px;resize:vertical}
     <!-- ══ LOGIN ══ -->
     <div class="screen active" id="s-login" style="justify-content:center; text-align:center; padding:40px 20px;">
       <div class="brand" style="justify-content:center; margin-bottom:60px;">
-        <span class="mark" style="background:#2A2745;">V</span>VIVANET
+        <span class="mark" style="background:#2A2745;">V</span>VIGIL
       </div>
       <h2 style="font-size:1.8rem; margin-bottom:8px;">Bienvenido</h2>
-      <p style="color:var(--gris); margin-bottom:30px;">Ingresa para gestionar tus servicios.</p>
+      <p style="color:var(--gris); margin-bottom:30px;">Ingresa para proteger tu local.</p>
 
       <div class="card" style="text-align:left;">
         <label>Correo electrónico</label>
-        <input type="email" id="emailField" placeholder="ejemplo@vivanet.cl">
+        <input type="email" id="emailField" placeholder="ejemplo@correo.cl">
 
         <label>Contraseña</label>
         <input type="password" id="passField" placeholder="Mínimo 6 caracteres">
@@ -155,26 +155,6 @@ textarea{min-height:96px;resize:vertical}
 
         <button class="btn-full" onclick="loginUser()">Iniciar Sesión</button>
         <button class="btn-full" onclick="registerUser()" style="background:transparent; color:var(--violeta); border:1.5px solid var(--violeta);">Crear Cuenta</button>
-      </div>
-    </div>
-    <!-- ══ PORTAL VIVANET ══ -->
-    <div class="screen" id="s-vivanet" style="justify-content:center; text-align:center; padding: 40px 20px;">
-      <div class="brand" style="justify-content:center; margin-bottom:50px;">
-        <span class="mark" style="background:#2A2745;">V</span>VIVANET
-      </div>
-      <h2 style="font-size:1.5rem; margin-bottom:8px;">Tu plataforma de servicios</h2>
-      <p style="color:var(--gris); margin-bottom:40px;">Gestiona tus aplicaciones y suscripciones.</p>
-
-      <div class="card" style="text-align:left;">
-        <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
-          <span style="width:50px; height:50px; background:var(--rojo); color:#fff; border-radius:14px; display:grid; place-items:center; font-size:1.6rem;">🛡️</span>
-          <div>
-            <strong style="font-size:1.1rem;">Vigil App</strong>
-            <div style="font-size:.8rem; color:var(--gris);">Seguridad y Monitoreo 24/7</div>
-          </div>
-          <span class="chip on" style="margin-left:auto;"><span class="dot"></span>Activo</span>
-        </div>
-        <button class="btn-full" onclick="entrarAVigil()">Acceder a Vigil</button>
       </div>
     </div>
     <!-- ══ COMPLETAR PERFIL (primer ingreso) ══ -->
@@ -324,7 +304,7 @@ textarea{min-height:96px;resize:vertical}
     <div class="screen-scroll" id="s-mas">
       <div class="card">
         <div class="card-title">Mi cuenta</div>
-        <div class="evento"><div class="ev-ic v">👤</div><div><strong id="accountName">Usuario</strong><small id="accountEmail">correo@vivanet.cl</small></div></div>
+        <div class="evento"><div class="ev-ic v">👤</div><div><strong id="accountName">Usuario</strong><small id="accountEmail">correo@ejemplo.cl</small></div></div>
         <div class="evento"><div class="ev-ic v">📍</div><div><strong id="accountLocal">Cargando…</strong><small id="accountDireccion">—</small></div></div>
         <button class="evento" style="width:100%; text-align:left; background:none; cursor:pointer;" onclick="go('s-contactos')">
           <div class="ev-ic v">📞</div><div><strong>Contactos de emergencia</strong><small id="contactosResumen">Sin contactos configurados</small></div>
@@ -424,7 +404,7 @@ function registerUser() {
 }
 function cerrarSesion() {
   auth.signOut();
-  volverAVivanet(); // Opcional: vuelve al portal antes de mostrar el login
+  volverAlLogin();
 }
 function traducirError(code) {
   if(code === 'auth/invalid-email') return 'El correo no es válido.';
@@ -437,9 +417,9 @@ function traducirError(code) {
 // Observador de estado de autenticación (Se ejecuta solo cuando abres la app)
 auth.onAuthStateChanged((user) => {
   if (user) {
-    // Usuario logueado: Mostrar Portal Vivanet
+    // Usuario logueado: entra directo a Vigil
     document.getElementById('userAvatar').textContent = user.email.substring(0,2).toUpperCase();
-    go('s-vivanet');
+    entrarAVigil();
   } else {
     // Usuario NO logueado: Mostrar Login
     document.getElementById('appHead').style.display = 'none';
@@ -670,10 +650,10 @@ function renderEventos(snap) {
     list.appendChild(div);
   });
 }
-function volverAVivanet() {
+function volverAlLogin() {
   document.getElementById('appHead').style.display = 'none';
   document.getElementById('bottomNav').style.display = 'none';
-  go('s-vivanet');
+  go('s-login');
 }
 function go(id){
   document.querySelectorAll('.screen, .screen-scroll').forEach(s=>s.classList.remove('active'));
