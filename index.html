@@ -164,16 +164,39 @@ textarea{min-height:96px;resize:vertical}
         <button class="btn-full" onclick="registerUser()" style="background:transparent; color:var(--violeta); border:1.5px solid var(--violeta);">Crear Cuenta</button>
       </div>
     </div>
+    <!-- ══ ELEGIR MODO (primer ingreso) ══ -->
+    <div class="screen" id="s-modo" style="justify-content:center; text-align:center; padding: 40px 20px;">
+      <h2 style="font-size:1.5rem; margin-bottom:8px;">¿Para qué usarás Vigil?</h2>
+      <p style="color:var(--gris); margin-bottom:30px;">Puedes cambiarlo más adelante desde tu cuenta.</p>
+      <button class="card" style="text-align:left; width:100%; cursor:pointer;" onclick="seleccionarModo('familia')">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="width:50px; height:50px; background:var(--violeta-suave); color:var(--violeta); border-radius:14px; display:grid; place-items:center; font-size:1.6rem;">👨‍👩‍👧</span>
+          <div>
+            <strong style="font-size:1.05rem;">Familia</strong>
+            <div style="font-size:.8rem; color:var(--gris);">SOS y contactos de emergencia para tu hogar</div>
+          </div>
+        </div>
+      </button>
+      <button class="card" style="text-align:left; width:100%; cursor:pointer;" onclick="seleccionarModo('empresa')">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="width:50px; height:50px; background:var(--verde-suave); color:#048A52; border-radius:14px; display:grid; place-items:center; font-size:1.6rem;">🏪</span>
+          <div>
+            <strong style="font-size:1.05rem;">Empresa</strong>
+            <div style="font-size:.8rem; color:var(--gris);">Seguridad, soporte técnico y monitoreo de tu local</div>
+          </div>
+        </div>
+      </button>
+    </div>
     <!-- ══ COMPLETAR PERFIL (primer ingreso) ══ -->
     <div class="screen-scroll" id="s-perfil">
       <div class="card">
-        <div class="card-title">Completa el perfil de tu local</div>
-        <p style="color:var(--gris); font-size:.85rem; margin-bottom:6px;">Necesitamos estos datos para coordinar visitas técnicas y alertas de tu local.</p>
+        <div class="card-title" id="perfilTitulo">Completa el perfil de tu local</div>
+        <p style="color:var(--gris); font-size:.85rem; margin-bottom:6px;" id="perfilIntro">Necesitamos estos datos para coordinar visitas técnicas y alertas de tu local.</p>
         <label>Tu nombre</label>
         <input type="text" id="perfilNombre" placeholder="Ej: Diego Wert">
-        <label>Nombre del local</label>
+        <label id="perfilLocalLabel">Nombre del local</label>
         <input type="text" id="perfilLocal" placeholder="Ej: Local Balmaceda">
-        <label>Dirección</label>
+        <label id="perfilDireccionLabel">Dirección</label>
         <input type="text" id="perfilDireccion" placeholder="Ej: Balmaceda 450, La Serena">
         <div class="error-msg" id="perfilError"></div>
         <button class="btn-full" id="guardarPerfil">Guardar y continuar</button>
@@ -199,23 +222,29 @@ textarea{min-height:96px;resize:vertical}
       </div>
       <div class="card-title" style="margin:22px 0 12px">Accesos rápidos</div>
       <div class="quick-grid">
-        <button class="quick" onclick="go('s-soporte')">
+        <button class="quick" onclick="go('s-soporte')" data-modo="empresa">
           <span class="ic">🛠</span><strong>Reportar falla</strong><small>Cámara, sensor, alarma…</small>
         </button>
-        <button class="quick" onclick="go('s-estado')">
+        <button class="quick" onclick="go('s-estado')" data-modo="empresa">
           <span class="ic">📊</span><strong>Mi sistema</strong><small>Estado y eventos</small>
         </button>
         <button class="quick" onclick="go('s-chat')">
           <span class="ic">💬</span><strong>Asistente Vigil</strong><small>Respuesta inmediata</small>
         </button>
-        <button class="quick" onclick="alert('Demo: aquí se integraría Mercado Pago / Webpay para pagar la mantención mensual.')">
+        <button class="quick" onclick="alert('Demo: aquí se integraría Mercado Pago / Webpay para pagar la mantención mensual.')" data-modo="empresa">
           <span class="ic">💳</span><strong>Pagos</strong><small>Facturas y mantención</small>
+        </button>
+        <button class="quick" onclick="go('s-contactos')" data-modo="familia" style="display:none">
+          <span class="ic">📞</span><strong>Contactos de emergencia</strong><small>A quién avisamos con el SOS</small>
+        </button>
+        <button class="quick" onclick="go('s-estado')" data-modo="familia" style="display:none">
+          <span class="ic">📊</span><strong>Actividad</strong><small>Historial de alertas</small>
         </button>
       </div>
     </div>
     <!-- ══ ESTADO ══ -->
     <div class="screen-scroll" id="s-estado">
-      <div class="card">
+      <div class="card" data-modo="empresa">
         <div class="card-title">Mis dispositivos</div>
         <div class="dev-grid" id="devGrid">
           <div class="dev"><small>Cargando dispositivos…</small></div>
@@ -316,7 +345,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="evento" style="width:100%; text-align:left; background:none; cursor:pointer;" onclick="go('s-contactos')">
           <div class="ev-ic v">📞</div><div><strong>Contactos de emergencia</strong><small id="contactosResumen">Sin contactos configurados</small></div>
         </button>
-        <div class="evento"><div class="ev-ic v">💳</div><div><strong>Facturas y pagos</strong><small>Al día · Próximo pago 05 Ago</small></div></div>
+        <div class="evento" data-modo="empresa"><div class="ev-ic v">💳</div><div><strong>Facturas y pagos</strong><small>Al día · Próximo pago 05 Ago</small></div></div>
       </div>
       <div class="card" id="instalarCard" style="display:none;">
         <div style="display:flex; align-items:center; gap:14px;">
@@ -377,9 +406,11 @@ textarea{min-height:96px;resize:vertical}
   <!-- Bottom nav -->
   <div class="nav" id="bottomNav" style="display:none;">
     <button class="on" data-s="s-inicio"><span class="nic">🏠</span>Inicio</button>
-    <button data-s="s-estado"><span class="nic">📊</span>Estado</button>
+    <button data-s="s-estado" data-modo="empresa"><span class="nic">📊</span>Estado</button>
+    <button data-s="s-contactos" data-modo="familia" style="display:none"><span class="nic">📞</span>Contactos</button>
     <button onclick="abrirSOS()" style="width:auto"><span class="sos-mini">SOS</span></button>
-    <button data-s="s-soporte"><span class="nic">🛠</span>Soporte</button>
+    <button data-s="s-soporte" data-modo="empresa"><span class="nic">🛠</span>Soporte</button>
+    <button data-s="s-chat" data-modo="familia" style="display:none"><span class="nic">💬</span>Chat</button>
     <button data-s="s-mas"><span class="nic">☰</span>Más</button>
   </div>
 </div>
@@ -464,16 +495,18 @@ function entrarAVigil() {
 }
 
 // ══ PERFIL: primer ingreso de un usuario nuevo ══
+let modoSeleccionado = 'empresa';
+
 function verificarPerfilYEntrar(uid) {
   db.collection('usuarios').doc(uid).get().then((doc) => {
     const data = doc.exists ? doc.data() : {};
     if (!data.local) {
-      // Todavía no tiene local/dirección registrados: pedimos que complete su perfil
+      // Todavía no tiene local/dirección registrados: primero elige Familia o Empresa
       document.getElementById('perfilNombre').value = data.nombre || '';
       document.getElementById('perfilLocal').value = '';
       document.getElementById('perfilDireccion').value = '';
       document.getElementById('bottomNav').style.display = 'none';
-      go('s-perfil');
+      go('s-modo');
     } else {
       document.getElementById('bottomNav').style.display = 'flex';
       cargarDatosUsuario(uid);
@@ -487,6 +520,35 @@ function verificarPerfilYEntrar(uid) {
   });
 }
 
+// ══ SELECCIÓN DE MODO: FAMILIA O EMPRESA ══
+function seleccionarModo(modo) {
+  modoSeleccionado = modo;
+  if (modo === 'familia') {
+    document.getElementById('perfilTitulo').textContent = 'Completa los datos de tu familia';
+    document.getElementById('perfilIntro').textContent = 'Necesitamos estos datos para avisar a tus contactos de emergencia y coordinar el SOS.';
+    document.getElementById('perfilLocalLabel').textContent = 'Nombre de tu familia';
+    document.getElementById('perfilLocal').placeholder = 'Ej: Familia Wert';
+    document.getElementById('perfilDireccionLabel').textContent = 'Dirección de tu hogar';
+    document.getElementById('perfilDireccion').placeholder = 'Ej: Los Carrera 220, La Serena';
+  } else {
+    document.getElementById('perfilTitulo').textContent = 'Completa el perfil de tu local';
+    document.getElementById('perfilIntro').textContent = 'Necesitamos estos datos para coordinar visitas técnicas y alertas de tu local.';
+    document.getElementById('perfilLocalLabel').textContent = 'Nombre del local';
+    document.getElementById('perfilLocal').placeholder = 'Ej: Local Balmaceda';
+    document.getElementById('perfilDireccionLabel').textContent = 'Dirección';
+    document.getElementById('perfilDireccion').placeholder = 'Ej: Balmaceda 450, La Serena';
+  }
+  go('s-perfil');
+}
+
+// ══ APLICA EL MODO A LA NAVEGACIÓN Y LOS ACCESOS RÁPIDOS ══
+function aplicarModoNav(modo) {
+  document.querySelectorAll('[data-modo]').forEach((el) => {
+    const visible = el.dataset.modo === modo;
+    el.style.display = visible ? '' : 'none';
+  });
+}
+
 document.getElementById('guardarPerfil').addEventListener('click', () => {
   const user = auth.currentUser;
   if (!user) return;
@@ -497,18 +559,21 @@ document.getElementById('guardarPerfil').addEventListener('click', () => {
   const nombre = document.getElementById('perfilNombre').value.trim() || user.email.split('@')[0];
   const local = document.getElementById('perfilLocal').value.trim();
   const direccion = document.getElementById('perfilDireccion').value.trim();
+  const esFamilia = modoSeleccionado === 'familia';
 
-  if (!local) { errorEl.textContent = 'Ingresa el nombre de tu local.'; return; }
-  if (!direccion) { errorEl.textContent = 'Ingresa la dirección de tu local.'; return; }
+  if (!local) { errorEl.textContent = esFamilia ? 'Ingresa el nombre de tu familia.' : 'Ingresa el nombre de tu local.'; return; }
+  if (!direccion) { errorEl.textContent = esFamilia ? 'Ingresa la dirección de tu hogar.' : 'Ingresa la dirección de tu local.'; return; }
 
   db.collection('usuarios').doc(user.uid).set({
     nombre: nombre,
     local: local,
-    direccion: direccion
+    direccion: direccion,
+    modo: modoSeleccionado
   }, { merge: true }).then(() => {
     document.getElementById('userName').textContent = nombre;
     document.getElementById('accountName').textContent = nombre;
     document.getElementById('bottomNav').style.display = 'flex';
+    aplicarModoNav(modoSeleccionado);
     cargarDatosUsuario(user.uid);
     go('s-inicio');
   }).catch((err) => {
@@ -524,6 +589,8 @@ function cargarDatosUsuario(uid) {
   ref.get().then((doc) => {
     if (doc.exists) {
       const data = doc.data();
+      modoSeleccionado = data.modo || 'empresa'; // Usuarios existentes sin 'modo' quedan como empresa
+      aplicarModoNav(modoSeleccionado);
       if (data.nombre) {
         document.getElementById('userName').textContent = data.nombre;
         document.getElementById('accountName').textContent = data.nombre;
