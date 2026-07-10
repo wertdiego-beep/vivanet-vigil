@@ -731,14 +731,13 @@ function crearAlertaSOS() {
   notificarContactosEmergencia(`🚨 ALERTA SOS: ${user.email} activó el botón de pánico en su local. Se está revisando su ubicación en vivo.`);
 }
 
-// ══ NOTIFICACIÓN TELEGRAM ══
-const TELEGRAM_BOT_TOKEN = '8605654539:AAFKuu5X14aobwoOPZN9Kp-UGiXCcpAFnGs';
-const TELEGRAM_CHAT_ID = '7328672657';
+// ══ NOTIFICACIÓN TELEGRAM (vía función serverless, sin exponer el token) ══
+const TELEGRAM_CHAT_ID = '7328672657'; // chat de la central (no es secreto, solo un identificador)
 function notificarTelegram(texto, chatId) {
-  fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+  fetch('/api/telegram', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId || TELEGRAM_CHAT_ID, text: texto })
+    body: JSON.stringify({ chatId: chatId || TELEGRAM_CHAT_ID, texto: texto })
   }).catch((err) => console.error('Error notificando por Telegram:', err));
 }
 
@@ -784,12 +783,12 @@ function actualizarUbicacionAlerta(lat, lng) {
   }
 }
 
-// ══ UBICACIÓN POR TELEGRAM (mapa en vivo) ══
+// ══ UBICACIÓN POR TELEGRAM (mapa en vivo, vía función serverless) ══
 function notificarUbicacionTelegram(lat, lng, chatId) {
-  fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendLocation`, {
+  fetch('/api/telegram', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId || TELEGRAM_CHAT_ID, latitude: lat, longitude: lng })
+    body: JSON.stringify({ chatId: chatId || TELEGRAM_CHAT_ID, lat: lat, lng: lng })
   }).catch((err) => console.error('Error enviando ubicación por Telegram:', err));
 }
 
