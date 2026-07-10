@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#4B3F9F">
 <title>Vigil — Seguridad y Monitoreo</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vigil">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -310,6 +317,16 @@ textarea{min-height:96px;resize:vertical}
           <div class="ev-ic v">📞</div><div><strong>Contactos de emergencia</strong><small id="contactosResumen">Sin contactos configurados</small></div>
         </button>
         <div class="evento"><div class="ev-ic v">💳</div><div><strong>Facturas y pagos</strong><small>Al día · Próximo pago 05 Ago</small></div></div>
+      </div>
+      <div class="card" id="instalarCard" style="display:none;">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="width:46px; height:46px; background:var(--violeta-suave); color:var(--violeta); border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">⬇️</span>
+          <div>
+            <strong style="font-size:.95rem;">Instalar Vigil en tu celular</strong>
+            <div style="font-size:.8rem; color:var(--gris);">Acceso directo, sin abrir el navegador</div>
+          </div>
+        </div>
+        <button class="btn-full" id="instalarBtn">Instalar app</button>
       </div>
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
@@ -959,6 +976,39 @@ document.getElementById('chatInput').addEventListener('keydown', (e) => {
     e.preventDefault();
     document.getElementById('chatSend').click();
   }
+});
+
+// ══ INSTALAR APP (PWA) ══
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.error('Error registrando service worker:', err);
+    });
+  });
+}
+
+let promptInstalacion = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  promptInstalacion = e;
+  const card = document.getElementById('instalarCard');
+  if (card) card.style.display = 'block';
+});
+
+const btnInstalar = document.getElementById('instalarBtn');
+if (btnInstalar) {
+  btnInstalar.addEventListener('click', async () => {
+    if (!promptInstalacion) return;
+    promptInstalacion.prompt();
+    await promptInstalacion.userChoice;
+    promptInstalacion = null;
+    document.getElementById('instalarCard').style.display = 'none';
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  const card = document.getElementById('instalarCard');
+  if (card) card.style.display = 'none';
 });
 </script>
 </body>
