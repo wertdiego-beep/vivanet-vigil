@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#4B3F9F">
+<title>Vivanet — Plataforma de Servicios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Librerías Mapa y Firebase -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<style>
+:root{
+  --blanco:#FFFFFF; --fondo:#F6F6FB; --tinta:#171530; --gris:#5C5A72;
+  --violeta:#4B3F9F; --violeta-suave:#EEEBFA; --verde:#00C776; --verde-suave:#E6F9F0;
+  --rojo:#E5344B; --rojo-oscuro:#C21F35; --ambar:#F5A623; --linea:#E9E7F2;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Inter',sans-serif;background:#2A2745;color:var(--tinta);display:flex;justify-content:center;min-height:100vh}
+h1,h2,h3,.cp{font-family:'Chakra Petch',sans-serif}
+button{font-family:inherit;border:none;cursor:pointer;background:none}
+.phone{width:100%;max-width:420px;background:var(--blanco);min-height:100vh;position:relative;display:flex;flex-direction:column;overflow:hidden}
+@media(min-width:480px){
+  body{padding:32px 0}
+  .phone{min-height:auto;height:860px;border-radius:38px;box-shadow:0 40px 90px -20px rgba(0,0,0,.55), 0 0 0 10px #17152F}
+}
+.app-head{padding:22px 22px 14px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:10px;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:.03em}
+.brand .mark{width:34px;height:34px;border-radius:9px;background:var(--violeta);color:#fff;display:grid;place-items:center;font-size:1rem}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--violeta-suave);color:var(--violeta);display:grid;place-items:center;font-weight:700;font-size:.9rem;font-family:'Chakra Petch',sans-serif}
+.screens{flex:1;overflow-y:auto;position:relative;background:var(--fondo)}
+.screen{display:none;padding:20px 20px 110px;animation:fadeIn .25s ease;flex-direction:column;justify-content:center}
+.screen.active{display:flex}
+.screen-scroll{display:none;padding:20px 20px 110px;animation:fadeIn .25s ease;flex-direction:column;justify-content:flex-start;overflow-y:auto}
+.screen-scroll.active{display:flex}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.card{background:#fff;border:1px solid var(--linea);border-radius:18px;padding:20px;margin-bottom:16px}
+.card-title{font-family:'Chakra Petch',sans-serif;font-weight:600;font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gris);margin-bottom:14px}
+.estado-row{display:flex;align-items:center;justify-content:space-between}
+.estado-info h2{font-size:1.35rem;margin-bottom:2px}
+.estado-info p{font-size:.85rem;color:var(--gris)}
+.chip{display:inline-flex;align-items:center;gap:7px;border-radius:99px;padding:8px 16px;font-family:'Chakra Petch',sans-serif;font-weight:600;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase}
+.chip.on{background:var(--verde-suave);color:#048A52}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--verde);animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,199,118,.4)}55%{box-shadow:0 0 0 7px rgba(0,199,118,0)}}
+.dev-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dev{border:1px solid var(--linea);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;background:#fff}
+.dev .ic{font-size:1.3rem}
+.dev strong{font-size:.88rem}
+.dev small{font-size:.75rem;font-family:'Chakra Petch',sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.dev.ok small{color:#048A52}
+.dev.warn small{color:var(--ambar)}
+.dev.warn{border-color:#F8DFAE;background:#FFFBF2}
+.sos-wrap{text-align:center;padding:26px 0 10px}
+.sos-hint{font-size:.82rem;color:var(--gris);margin-top:14px}
+.sos-btn{width:190px;height:190px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #FF5B70, var(--rojo) 60%, var(--rojo-oscuro));color:#fff;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1.7rem;letter-spacing:.08em;box-shadow:0 18px 40px -8px rgba(229,52,75,.55), inset 0 -6px 14px rgba(0,0,0,.18);position:relative;transition:transform .15s;user-select:none;-webkit-user-select:none}
+.sos-btn:active{transform:scale(.96)}
+.sos-btn::before{content:"";position:absolute;inset:-14px;border-radius:50%;border:2px solid rgba(229,52,75,.35);animation:sosring 2.2s ease-out infinite}
+@keyframes sosring{0%{transform:scale(.92);opacity:1}100%{transform:scale(1.18);opacity:0}}
+.sos-btn small{display:block;font-size:.68rem;font-weight:600;letter-spacing:.16em;opacity:.85;margin-top:4px}
+.sos-progress{position:absolute;inset:0;border-radius:50%;background:conic-gradient(#fff var(--p,0%), transparent 0);opacity:.25;pointer-events:none}
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.quick{background:#fff;border:1px solid var(--linea);border-radius:16px;padding:18px 16px;text-align:left;display:flex;flex-direction:column;gap:8px;transition:transform .15s, border-color .15s;width:100%}
+.quick:active{transform:scale(.97)}
+.quick .ic{width:40px;height:40px;border-radius:11px;background:var(--violeta-suave);color:var(--violeta);display:grid;place-items:center;font-size:1.15rem}
+.quick strong{font-size:.92rem}
+.quick small{font-size:.78rem;color:var(--gris)}
+.evento{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--linea)}
+.evento:last-child{border-bottom:none;padding-bottom:0}
+.ev-ic{min-width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:1rem}
+.ev-ic.v{background:var(--violeta-suave);color:var(--violeta)}
+.ev-ic.g{background:var(--verde-suave);color:#048A52}
+.ev-ic.a{background:#FFF4E0;color:var(--ambar)}
+.evento strong{font-size:.9rem;display:block}
+.evento small{font-size:.78rem;color:var(--gris)}
+.evento time{margin-left:auto;font-size:.72rem;color:var(--gris);white-space:nowrap;font-family:'Chakra Petch',sans-serif}
+label{font-size:.82rem;font-weight:600;display:block;margin:14px 0 7px;color:var(--tinta)}
+input[type=text],input[type=email],input[type=password],select,textarea{
+  width:100%;padding:13px 14px;border:1.5px solid var(--linea);border-radius:12px;font-family:'Inter',sans-serif;font-size:.92rem;background:#fff;color:var(--tinta);appearance:none
+}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--violeta)}
+textarea{min-height:96px;resize:vertical}
+.equip-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.equip{border:1.5px solid var(--linea);border-radius:13px;padding:14px 8px;text-align:center;background:#fff;display:flex;flex-direction:column;gap:6px;align-items:center;font-size:.78rem;font-weight:600;transition:border-color .15s, background .15s;width:100%}
+.equip .ic{font-size:1.4rem}
+.equip.sel{border-color:var(--violeta);background:var(--violeta-suave);color:var(--violeta)}
+.btn-full{width:100%;padding:16px;border-radius:99px;background:var(--violeta);color:#fff;font-weight:600;font-size:.98rem;margin-top:18px;transition:transform .15s}
+.btn-full:active{transform:scale(.98)}
+.btn-out{width:100%;padding:16px;border-radius:99px;background:transparent;color:var(--rojo);border:1.5px solid var(--rojo);font-weight:600;font-size:.98rem;margin-top:10px;transition:transform .15s}
+.btn-out:active{transform:scale(.98)}
+.foto-drop{border:1.5px dashed var(--linea);border-radius:12px;padding:18px;text-align:center;color:var(--gris);font-size:.85rem;background:#fff}
+.ticket{text-align:center;padding:30px 20px}
+.ticket .big{font-size:3.2rem;margin-bottom:12px}
+.ticket h2{font-size:1.3rem;margin-bottom:8px}
+.ticket p{color:var(--gris);font-size:.9rem;margin-bottom:18px}
+.ticket-num{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1.5rem;color:var(--violeta);background:var(--violeta-suave);border-radius:12px;padding:12px;letter-spacing:.1em;margin-bottom:8px}
+.ticket small{font-size:.78rem;color:var(--gris)}
+.sos-active{position:absolute;inset:0;z-index:50;background:linear-gradient(170deg,#B01B30,#7A0F20);color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;animation:fadeIn .2s ease;overflow-y:auto}
+.sos-active.show{display:flex}
+.sos-active .pulso{width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,.15);display:grid;place-items:center;font-size:3rem;margin-bottom:26px;position:relative}
+.sos-active .pulso::before{content:"";position:absolute;inset:-16px;border-radius:50%;border:2px solid rgba(255,255,255,.4);animation:sosring 1.4s ease-out infinite}
+.sos-active h2{font-size:1.6rem;margin-bottom:10px}
+.sos-active p{opacity:.9;font-size:.95rem;margin-bottom:6px}
+.sos-steps{margin:26px 0;display:grid;gap:12px;text-align:left;width:100%;max-width:300px}
+.sos-step{display:flex;gap:12px;align-items:center;font-size:.9rem;background:rgba(255,255,255,.1);border-radius:12px;padding:12px 16px}
+.sos-step .check{font-size:1rem}
+.map-container{width:100%;max-width:300px;height:200px;background:rgba(0,0,0,.2);border-radius:16px;overflow:hidden;margin:10px 0 20px;position:relative;border:2px solid rgba(255,255,255,.2);flex-shrink:0}
+#mapaVigil{width:100%;height:100%}
+.map-label{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:99px;font-size:.7rem;font-family:'Chakra Petch',sans-serif;letter-spacing:.08em;z-index:999}
+.btn-cancelar{background:#fff;color:var(--rojo-oscuro);padding:15px 40px;border-radius:99px;font-weight:700;font-size:.95rem;margin-top:10px}
+.chat-box{display:grid;gap:12px}
+.msg{max-width:82%;padding:12px 15px;border-radius:16px;font-size:.9rem;line-height:1.45}
+.msg.bot{background:#fff;border:1px solid var(--linea);border-bottom-left-radius:5px}
+.msg.user{background:var(--violeta);color:#fff;margin-left:auto;border-bottom-right-radius:5px}
+.chat-sug{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.sug{border:1.5px solid var(--violeta);color:var(--violeta);border-radius:99px;padding:8px 14px;font-size:.8rem;font-weight:600;background:#fff}
+.nav{position:absolute;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-top:1px solid var(--linea);display:flex;justify-content:space-around;align-items:flex-end;padding:10px 8px calc(14px + env(safe-area-inset-bottom));z-index:40}
+.nav button{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.66rem;font-weight:600;color:var(--gris);font-family:'Chakra Petch',sans-serif;letter-spacing:.04em;width:64px}
+.nav button .nic{font-size:1.25rem}
+.nav button.on{color:var(--violeta)}
+.nav .sos-mini{width:58px;height:58px;border-radius:50%;background:var(--rojo);color:#fff;display:grid;place-items:center;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:.8rem;box-shadow:0 8px 20px rgba(229,52,75,.45);margin-top:-26px;letter-spacing:.06em}
+.pill-demo{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:var(--tinta);color:#fff;font-size:.62rem;font-family:'Chakra Petch',sans-serif;letter-spacing:.16em;padding:4px 12px;border-radius:99px;z-index:60;opacity:.85}
+.error-msg{color:var(--rojo);font-size:.8rem;text-align:center;margin-top:10px;min-height:1rem}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="pill-demo">PROTOTIPO · DEMO</div>
+  <div class="app-head" id="appHead" style="display:none;">
+    <div class="brand"><span class="mark">V</span><span id="brandName">VIGIL</span></div>
+    <div class="avatar" id="userAvatar">JC</div>
+  </div>
+  <div class="screens" id="appScreens">
+    <!-- ══ LOGIN ══ -->
+    <div class="screen active" id="s-login" style="justify-content:center; text-align:center; padding:40px 20px;">
+      <div class="brand" style="justify-content:center; margin-bottom:60px;">
+        <span class="mark" style="background:#2A2745;">V</span>VIVANET
+      </div>
+      <h2 style="font-size:1.8rem; margin-bottom:8px;">Bienvenido</h2>
+      <p style="color:var(--gris); margin-bottom:30px;">Ingresa para gestionar tus servicios.</p>
+
+      <div class="card" style="text-align:left;">
+        <label>Correo electrónico</label>
+        <input type="email" id="emailField" placeholder="ejemplo@vivanet.cl">
+
+        <label>Contraseña</label>
+        <input type="password" id="passField" placeholder="Mínimo 6 caracteres">
+
+        <div class="error-msg" id="authError"></div>
+
+        <button class="btn-full" onclick="loginUser()">Iniciar Sesión</button>
+        <button class="btn-full" onclick="registerUser()" style="background:transparent; color:var(--violeta); border:1.5px solid var(--violeta);">Crear Cuenta</button>
+      </div>
+    </div>
+    <!-- ══ PORTAL VIVANET ══ -->
+    <div class="screen" id="s-vivanet" style="justify-content:center; text-align:center; padding: 40px 20px;">
+      <div class="brand" style="justify-content:center; margin-bottom:50px;">
+        <span class="mark" style="background:#2A2745;">V</span>VIVANET
+      </div>
+      <h2 style="font-size:1.5rem; margin-bottom:8px;">Tu plataforma de servicios</h2>
+      <p style="color:var(--gris); margin-bottom:40px;">Gestiona tus aplicaciones y suscripciones.</p>
+
+      <div class="card" style="text-align:left;">
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
+          <span style="width:50px; height:50px; background:var(--rojo); color:#fff; border-radius:14px; display:grid; place-items:center; font-size:1.6rem;">🛡️</span>
+          <div>
+            <strong style="font-size:1.1rem;">Vigil App</strong>
+            <div style="font-size:.8rem; color:var(--gris);">Seguridad y Monitoreo 24/7</div>
+          </div>
+          <span class="chip on" style="margin-left:auto;"><span class="dot"></span>Activo</span>
+        </div>
+        <button class="btn-full" onclick="entrarAVigil()">Acceder a Vigil</button>
+      </div>
+    </div>
+    <!-- ══ COMPLETAR PERFIL (primer ingreso) ══ -->
+    <div class="screen-scroll" id="s-perfil">
+      <div class="card">
+        <div class="card-title">Completa el perfil de tu local</div>
+        <p style="color:var(--gris); font-size:.85rem; margin-bottom:6px;">Necesitamos estos datos para coordinar visitas técnicas y alertas de tu local.</p>
+        <label>Tu nombre</label>
+        <input type="text" id="perfilNombre" placeholder="Ej: Diego Wert">
+        <label>Nombre del local</label>
+        <input type="text" id="perfilLocal" placeholder="Ej: Local Balmaceda">
+        <label>Dirección</label>
+        <input type="text" id="perfilDireccion" placeholder="Ej: Balmaceda 450, La Serena">
+        <div class="error-msg" id="perfilError"></div>
+        <button class="btn-full" id="guardarPerfil">Guardar y continuar</button>
+      </div>
+    </div>
+    <!-- ══ INICIO VIGIL ══ -->
+    <div class="screen-scroll" id="s-inicio">
+      <div class="card">
+        <div class="estado-row">
+          <div class="estado-info">
+            <h2>Hola, <span id="userName">Usuario</span></h2>
+            <p id="userLocal">Cargando…</p>
+          </div>
+          <span class="chip on"><span class="dot"></span>Protegido</span>
+        </div>
+      </div>
+      <div class="sos-wrap">
+        <button class="sos-btn" id="sosBtn">
+          <span class="sos-progress" id="sosProg"></span>
+          SOS<small>MANTÉN PRESIONADO</small>
+        </button>
+        <p class="sos-hint">Mantén presionado 2 segundos para alertar a la central Vigil</p>
+      </div>
+      <div class="card-title" style="margin:22px 0 12px">Accesos rápidos</div>
+      <div class="quick-grid">
+        <button class="quick" onclick="go('s-soporte')">
+          <span class="ic">🛠</span><strong>Reportar falla</strong><small>Cámara, sensor, alarma…</small>
+        </button>
+        <button class="quick" onclick="go('s-estado')">
+          <span class="ic">📊</span><strong>Mi sistema</strong><small>Estado y eventos</small>
+        </button>
+        <button class="quick" onclick="go('s-chat')">
+          <span class="ic">💬</span><strong>Asistente Vigil</strong><small>Respuesta inmediata</small>
+        </button>
+        <button class="quick" onclick="alert('Demo: aquí se integraría Mercado Pago / Webpay para pagar la mantención mensual.')">
+          <span class="ic">💳</span><strong>Pagos</strong><small>Facturas y mantención</small>
+        </button>
+      </div>
+    </div>
+    <!-- ══ ESTADO ══ -->
+    <div class="screen-scroll" id="s-estado">
+      <div class="card">
+        <div class="card-title">Mis dispositivos</div>
+        <div class="dev-grid" id="devGrid">
+          <div class="dev"><small>Cargando dispositivos…</small></div>
+        </div>
+        <button class="btn-full" onclick="go('s-soporte')" style="background:#FFF4E0;color:#B57500">⚠ Reportar cámara sin señal</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Últimos eventos</div>
+        <div id="eventosList">
+          <div class="evento"><div><strong>Cargando eventos…</strong></div></div>
+        </div>
+      </div>
+    </div>
+    <!-- ══ SOPORTE ══ -->
+    <div class="screen-scroll" id="s-soporte">
+      <div class="card">
+        <div class="card-title">¿Necesitas ayuda inmediata?</div>
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="width:46px; height:46px; background:var(--verde-suave); color:#048A52; border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">📞</span>
+          <div>
+            <strong style="font-size:.95rem;">Técnico de guardia</strong>
+            <div style="font-size:.8rem; color:var(--gris);">Línea directa · Disponible ahora</div>
+          </div>
+        </div>
+        <a href="tel:+56942759901" class="btn-full" style="display:block; text-align:center; text-decoration:none;">Llamar ahora</a>
+      </div>
+      <div class="card" id="formFalla">
+        <div class="card-title">Reportar una falla</div>
+        <label>¿Qué equipo presenta problemas?</label>
+        <div class="equip-grid">
+          <button class="equip" data-eq="Cámara"><span class="ic">📹</span>Cámara</button>
+          <button class="equip" data-eq="Alarma"><span class="ic">🚨</span>Alarma</button>
+          <button class="equip" data-eq="Sensor"><span class="ic">🚪</span>Sensor</button>
+          <button class="equip" data-eq="Radio"><span class="ic">📡</span>Radio</button>
+          <button class="equip" data-eq="Teclado"><span class="ic">⌨️</span>Teclado</button>
+          <button class="equip" data-eq="Otro"><span class="ic">🔧</span>Otro</button>
+        </div>
+        <label>¿Qué está pasando?</label>
+        <textarea id="descFalla" placeholder="Ej: La cámara de la bodega dejó de mostrar imagen desde ayer en la tarde…"></textarea>
+        <label>Adjuntar foto o video (opcional)</label>
+        <div class="foto-drop">📷 Toca para subir una foto del equipo</div>
+        <button class="btn-full" id="enviarFalla">Crear ticket de soporte</button>
+      </div>
+      <div class="card ticket" id="ticketOk" style="display:none">
+        <div class="big">✅</div>
+        <h2>Ticket creado</h2>
+        <p>Nuestro equipo técnico ya recibió tu reporte y te contactará para coordinar la visita.</p>
+        <div class="ticket-num" id="ticketNum">VGL-1043</div>
+        <small>Recibirás notificaciones con cada avance</small>
+        <button class="btn-full" onclick="resetFalla()">Reportar otra falla</button>
+      </div>
+      <div class="card" id="formCita">
+        <div class="card-title">Agendar visita técnica</div>
+        <label>Fecha</label>
+        <input type="date" id="citaFecha">
+        <label>Horario preferido</label>
+        <select id="citaHorario">
+          <option value="10:00">10:00 hrs</option>
+          <option value="12:00">12:00 hrs</option>
+          <option value="16:00">16:00 hrs</option>
+          <option value="18:00">18:00 hrs</option>
+        </select>
+        <button class="btn-full" id="agendarCita">Confirmar cita</button>
+      </div>
+      <div class="card ticket" id="citaOk" style="display:none">
+        <div class="big">📅</div>
+        <h2>Visita agendada</h2>
+        <p>Un técnico llegará a tu local en el horario coordinado.</p>
+        <div class="ticket-num" id="citaResumen">—</div>
+        <small>Te avisaremos si hay algún cambio</small>
+        <button class="btn-full" onclick="resetCita()">Agendar otra visita</button>
+      </div>
+    </div>
+    <!-- ══ CHAT ══ -->
+    <div class="screen-scroll" id="s-chat">
+      <div class="card">
+        <div class="card-title">Asistente Vigil · IA</div>
+        <div class="chat-box" id="chatBox">
+          <div class="msg bot">¡Hola! 👋 Soy el asistente de Vigil. Puedo ayudarte con dudas de tu sistema, coordinar soporte o avisar a la central. ¿En qué te ayudo?</div>
+          <div class="chat-sug">
+            <button class="sug" onclick="enviarMensajeChat('¿Cómo armo la alarma al cerrar?')">¿Cómo armo la alarma?</button>
+            <button class="sug" onclick="enviarMensajeChat('Mi cámara no da señal')">Cámara sin señal</button>
+            <button class="sug" onclick="enviarMensajeChat('Quiero agendar mantención')">Agendar mantención</button>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:14px;">
+          <input type="text" id="chatInput" placeholder="Escribe tu pregunta…" style="flex:1;">
+          <button id="chatSend" style="width:auto; padding:0 22px; border-radius:99px; background:var(--violeta); color:#fff; font-weight:600;">Enviar</button>
+        </div>
+      </div>
+    </div>
+    <!-- ══ MÁS ══ -->
+    <div class="screen-scroll" id="s-mas">
+      <div class="card">
+        <div class="card-title">Mi cuenta</div>
+        <div class="evento"><div class="ev-ic v">👤</div><div><strong id="accountName">Usuario</strong><small id="accountEmail">correo@vivanet.cl</small></div></div>
+        <div class="evento"><div class="ev-ic v">📍</div><div><strong id="accountLocal">Cargando…</strong><small id="accountDireccion">—</small></div></div>
+        <div class="evento"><div class="ev-ic v">📞</div><div><strong>Contactos de emergencia</strong><small>2 personas configuradas</small></div></div>
+        <div class="evento"><div class="ev-ic v">💳</div><div><strong>Facturas y pagos</strong><small>Al día · Próximo pago 05 Ago</small></div></div>
+      </div>
+      <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
+    </div>
+  </div>
+  <!-- Pantalla SOS activa con Mapa -->
+  <div class="sos-active" id="sosActive">
+    <div class="pulso">🚨</div>
+    <h2 class="cp">ALERTA ENVIADA</h2>
+    <p>La central Vigil recibió tu emergencia</p>
+    <div class="map-container">
+      <div class="map-label">📍 SEGUIMIENTO EN VIVO</div>
+      <div id="mapaVigil"></div>
+    </div>
+    <div class="sos-steps">
+      <div class="sos-step"><span class="check">✅</span>Central de monitoreo notificada</div>
+      <div class="sos-step"><span class="check">✅</span>Ubicación GPS compartida</div>
+      <div class="sos-step"><span class="check">🚗</span>Móvil de reacción en camino</div>
+      <div class="sos-step"><span class="check">📞</span>Te llamaremos en segundos</div>
+    </div>
+    <button class="btn-cancelar" onclick="cerrarSOS()">Cancelar — falsa alarma</button>
+  </div>
+  <!-- Bottom nav -->
+  <div class="nav" id="bottomNav" style="display:none;">
+    <button class="on" data-s="s-inicio"><span class="nic">🏠</span>Inicio</button>
+    <button data-s="s-estado"><span class="nic">📊</span>Estado</button>
+    <button onclick="abrirSOS()" style="width:auto"><span class="sos-mini">SOS</span></button>
+    <button data-s="s-soporte"><span class="nic">🛠</span>Soporte</button>
+    <button data-s="s-mas"><span class="nic">☰</span>Más</button>
+  </div>
+</div>
+<script>
+// ══ CONFIGURACIÓN FIREBASE ══
+// Config real del proyecto "vivanet" (vivanet-f8ac2)
+const firebaseConfig = {
+  apiKey: "AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g",
+  authDomain: "vivanet-f8ac2.firebaseapp.com",
+  projectId: "vivanet-f8ac2",
+  storageBucket: "vivanet-f8ac2.firebasestorage.app",
+  messagingSenderId: "553479199763",
+  appId: "1:553479199763:web:d7004add8e769bbc2b73e6",
+  measurementId: "G-B9C1DMPFW2"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+// ══ LÓGICA DE AUTENTICACIÓN ══
+function loginUser() {
+  const email = document.getElementById('emailField').value;
+  const pass = document.getElementById('passField').value;
+  const errorEl = document.getElementById('authError');
+  errorEl.textContent = '';
+  auth.signInWithEmailAndPassword(email, pass)
+    .catch((error) => {
+      errorEl.textContent = "Error: " + traducirError(error.code);
+    });
+}
+function registerUser() {
+  const email = document.getElementById('emailField').value;
+  const pass = document.getElementById('passField').value;
+  const errorEl = document.getElementById('authError');
+  errorEl.textContent = '';
+  auth.createUserWithEmailAndPassword(email, pass)
+    .catch((error) => {
+      errorEl.textContent = "Error: " + traducirError(error.code);
+    });
+}
+function cerrarSesion() {
+  auth.signOut();
+  volverAVivanet(); // Opcional: vuelve al portal antes de mostrar el login
+}
+function traducirError(code) {
+  if(code === 'auth/invalid-email') return 'El correo no es válido.';
+  if(code === 'auth/missing-password') return 'Falta la contraseña.';
+  if(code === 'auth/weak-password') return 'La contraseña debe tener al menos 6 caracteres.';
+  if(code === 'auth/email-already-in-use') return 'Este correo ya está registrado.';
+  if(code === 'auth/invalid-credential' || code === 'auth/wrong-password') return 'Correo o contraseña incorrectos.';
+  return 'Ocurrió un error inesperado.';
+}
+// Observador de estado de autenticación (Se ejecuta solo cuando abres la app)
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    // Usuario logueado: Mostrar Portal Vivanet
+    document.getElementById('userAvatar').textContent = user.email.substring(0,2).toUpperCase();
+    go('s-vivanet');
+  } else {
+    // Usuario NO logueado: Mostrar Login
+    document.getElementById('appHead').style.display = 'none';
+    document.getElementById('bottomNav').style.display = 'none';
+    go('s-login');
+  }
+});
+// ══ NAVEGACIÓN ══
+function entrarAVigil() {
+  const user = auth.currentUser;
+  document.getElementById('appHead').style.display = 'flex';
+
+  if (!user) {
+    document.getElementById('bottomNav').style.display = 'flex';
+    go('s-inicio');
+    return;
+  }
+
+  const name = user.email.split('@')[0]; // Extrae el nombre del correo (se sobreescribe si hay datos reales)
+  document.getElementById('userName').textContent = name;
+  document.getElementById('accountName').textContent = name;
+  document.getElementById('accountEmail').textContent = user.email;
+
+  verificarPerfilYEntrar(user.uid);
+}
+
+// ══ PERFIL: primer ingreso de un usuario nuevo ══
+function verificarPerfilYEntrar(uid) {
+  db.collection('usuarios').doc(uid).get().then((doc) => {
+    const data = doc.exists ? doc.data() : {};
+    if (!data.local) {
+      // Todavía no tiene local/dirección registrados: pedimos que complete su perfil
+      document.getElementById('perfilNombre').value = data.nombre || '';
+      document.getElementById('perfilLocal').value = '';
+      document.getElementById('perfilDireccion').value = '';
+      document.getElementById('bottomNav').style.display = 'none';
+      go('s-perfil');
+    } else {
+      document.getElementById('bottomNav').style.display = 'flex';
+      cargarDatosUsuario(uid);
+      go('s-inicio');
+    }
+  }).catch((err) => {
+    console.error('Error verificando perfil:', err);
+    document.getElementById('bottomNav').style.display = 'flex';
+    cargarDatosUsuario(uid);
+    go('s-inicio');
+  });
+}
+
+document.getElementById('guardarPerfil').addEventListener('click', () => {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const errorEl = document.getElementById('perfilError');
+  errorEl.textContent = '';
+
+  const nombre = document.getElementById('perfilNombre').value.trim() || user.email.split('@')[0];
+  const local = document.getElementById('perfilLocal').value.trim();
+  const direccion = document.getElementById('perfilDireccion').value.trim();
+
+  if (!local) { errorEl.textContent = 'Ingresa el nombre de tu local.'; return; }
+  if (!direccion) { errorEl.textContent = 'Ingresa la dirección de tu local.'; return; }
+
+  db.collection('usuarios').doc(user.uid).set({
+    nombre: nombre,
+    local: local,
+    direccion: direccion
+  }, { merge: true }).then(() => {
+    document.getElementById('userName').textContent = nombre;
+    document.getElementById('accountName').textContent = nombre;
+    document.getElementById('bottomNav').style.display = 'flex';
+    cargarDatosUsuario(user.uid);
+    go('s-inicio');
+  }).catch((err) => {
+    console.error('Error guardando perfil:', err);
+    errorEl.textContent = 'No pudimos guardar tu perfil. Intenta de nuevo.';
+  });
+});
+
+// ══ DATOS REALES DESDE FIRESTORE ══
+function cargarDatosUsuario(uid) {
+  const ref = db.collection('usuarios').doc(uid);
+
+  ref.get().then((doc) => {
+    if (doc.exists) {
+      const data = doc.data();
+      if (data.nombre) {
+        document.getElementById('userName').textContent = data.nombre;
+        document.getElementById('accountName').textContent = data.nombre;
+      }
+      document.getElementById('userLocal').textContent = (data.local || '') + (data.direccion ? ' · ' + data.direccion : '');
+      document.getElementById('accountLocal').textContent = data.local || 'Sin local registrado';
+      document.getElementById('accountDireccion').textContent = data.direccion || '—';
+    } else {
+      document.getElementById('userLocal').textContent = 'Aún no tienes un local registrado';
+      document.getElementById('accountLocal').textContent = 'Sin local registrado';
+    }
+  }).catch((err) => {
+    console.error('Error cargando perfil:', err);
+    document.getElementById('userLocal').textContent = 'No se pudo cargar tu local';
+  });
+
+  const iconosDispositivo = { camara:'📹', alarma:'🚨', sensor:'🚪' };
+  ref.collection('dispositivos').get().then((snap) => {
+    const grid = document.getElementById('devGrid');
+    if (snap.empty) {
+      grid.innerHTML = '<div class="dev"><small>Sin dispositivos registrados</small></div>';
+      return;
+    }
+    grid.innerHTML = '';
+    snap.forEach((d) => {
+      const dev = d.data();
+      const ok = !(dev.estado || '').includes('sin_senal') && !(dev.estado || '').includes('sin_señal');
+      const ic = iconosDispositivo[dev.tipo] || '🔧';
+      const div = document.createElement('div');
+      div.className = 'dev ' + (ok ? 'ok' : 'warn');
+      div.innerHTML = `<span class="ic">${ic}</span><strong>${dev.nombre || 'Dispositivo'}</strong><small>${ok ? '●' : '⚠'} ${(dev.estado || '').replace(/_/g,' ')}</small>`;
+      grid.appendChild(div);
+    });
+  }).catch((err) => console.error('Error cargando dispositivos:', err));
+
+  ref.collection('eventos').get().then(renderEventos).catch((err) => console.error('Error cargando eventos:', err));
+}
+
+function renderEventos(snap) {
+  const list = document.getElementById('eventosList');
+  if (snap.empty) {
+    list.innerHTML = '<div class="evento"><div><strong>Sin eventos recientes</strong></div></div>';
+    return;
+  }
+  list.innerHTML = '';
+  snap.forEach((d) => {
+    const ev = d.data();
+    const div = document.createElement('div');
+    div.className = 'evento';
+    div.innerHTML = `<div class="ev-ic v">•</div><div><strong>${ev.titulo || 'Evento'}</strong><small>${ev.descripcion || ''}</small></div>`;
+    list.appendChild(div);
+  });
+}
+function volverAVivanet() {
+  document.getElementById('appHead').style.display = 'none';
+  document.getElementById('bottomNav').style.display = 'none';
+  go('s-vivanet');
+}
+function go(id){
+  document.querySelectorAll('.screen, .screen-scroll').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav button[data-s]').forEach(b=>b.classList.toggle('on', b.dataset.s===id));
+  document.getElementById('appScreens').scrollTop = 0;
+}
+document.querySelectorAll('.nav button[data-s]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.s)));
+// ══ BOTÓN SOS Y MAPA ══
+let map = null, marker = null, watchID = null, alertaActualId = null;
+const sosBtn = document.getElementById('sosBtn');
+const sosProg = document.getElementById('sosProg');
+let sosTimer=null, sosStart=0;
+function startSOS(e){
+  e.preventDefault();
+  sosStart = Date.now();
+  sosTimer = setInterval(()=>{
+    const p = Math.min(100,(Date.now()-sosStart)/2000*100);
+    sosProg.style.setProperty('--p', p+'%');
+    if(p>=100){ stopSOS(); abrirSOS(); if(navigator.vibrate) navigator.vibrate([80,40,80]); }
+  },30);
+}
+function stopSOS(){
+  clearInterval(sosTimer); sosTimer=null;
+  sosProg.style.setProperty('--p','0%');
+}
+sosBtn.addEventListener('mousedown',startSOS);
+sosBtn.addEventListener('touchstart',startSOS,{passive:false});
+['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>sosBtn.addEventListener(ev,stopSOS));
+function abrirSOS(){
+  document.getElementById('sosActive').classList.add('show');
+  crearAlertaSOS();
+  iniciarSeguimientoVivo();
+}
+function cerrarSOS(){
+  document.getElementById('sosActive').classList.remove('show');
+  detenerSeguimientoVivo();
+  cancelarAlertaSOS();
+}
+
+// ══ ALERTA SOS EN FIRESTORE ══
+function crearAlertaSOS() {
+  const user = auth.currentUser;
+  if (!user) return;
+  db.collection('usuarios').doc(user.uid).collection('alertas').add({
+    estado: 'activa',
+    creadaEn: firebase.firestore.FieldValue.serverTimestamp(),
+    ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
+  }).then((docRef) => {
+    alertaActualId = docRef.id;
+  }).catch((err) => console.error('Error creando alerta SOS:', err));
+
+  notificarTelegram(`🚨 ALERTA SOS activada por ${user.email}. Revisando ubicación en vivo…`);
+}
+
+// ══ NOTIFICACIÓN TELEGRAM ══
+const TELEGRAM_BOT_TOKEN = '8605654539:AAFKuu5X14aobwoOPZN9Kp-UGiXCcpAFnGs';
+const TELEGRAM_CHAT_ID = '7328672657';
+function notificarTelegram(texto) {
+  fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: texto })
+  }).catch((err) => console.error('Error notificando por Telegram:', err));
+}
+
+function actualizarUbicacionAlerta(lat, lng) {
+  const user = auth.currentUser;
+  if (!user || !alertaActualId) return;
+  db.collection('usuarios').doc(user.uid).collection('alertas').doc(alertaActualId).update({
+    ubicacion: { lat: lat, lng: lng },
+    ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch((err) => console.error('Error actualizando ubicación de alerta:', err));
+}
+
+function cancelarAlertaSOS() {
+  const user = auth.currentUser;
+  if (!user || !alertaActualId) return;
+  db.collection('usuarios').doc(user.uid).collection('alertas').doc(alertaActualId).update({
+    estado: 'cancelada',
+    canceladaEn: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch((err) => console.error('Error cancelando alerta:', err));
+  notificarTelegram(`✅ Alerta cancelada por ${user.email} (falsa alarma).`);
+  alertaActualId = null;
+}
+
+function iniciarSeguimientoVivo() {
+  if (!navigator.geolocation) { alert("Tu dispositivo no soporta geolocalización."); return; }
+  if (!map) {
+    map = L.map('mapaVigil').setView([-33.0472, -71.6127], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'Vigil App', maxZoom: 19 }).addTo(map);
+    marker = L.marker([-33.0472, -71.6127]).addTo(map).bindPopup('Ubicación actual').openPopup();
+  }
+  watchID = navigator.geolocation.watchPosition(
+    (position) => {
+      const lat = position.coords.latitude, lon = position.coords.longitude;
+      const newLatLng = new L.LatLng(lat, lon);
+      marker.setLatLng(newLatLng);
+      map.setView(newLatLng, 17);
+      actualizarUbicacionAlerta(lat, lon);
+    },
+    (error) => { alert("No pudimos acceder a tu GPS. Revisa los permisos de ubicación."); },
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+  );
+}
+function detenerSeguimientoVivo() {
+  if (watchID !== null) { navigator.geolocation.clearWatch(watchID); watchID = null; }
+}
+// ══ SOPORTE Y CHAT ══
+let equipoSel = null;
+document.querySelectorAll('.equip').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.equip').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel'); equipoSel = b.dataset.eq;
+  });
+});
+document.getElementById('enviarFalla').addEventListener('click',()=>{
+  if(!equipoSel){ alert('Selecciona el equipo con problemas 🙂'); return; }
+  const n = 1043 + Math.floor(Math.random()*20);
+  const numeroTicket = 'VGL-'+n;
+  const user = auth.currentUser;
+  const descripcion = document.getElementById('descFalla').value;
+
+  if (user) {
+    db.collection('usuarios').doc(user.uid).collection('tickets').add({
+      numero: numeroTicket,
+      equipo: equipoSel,
+      descripcion: descripcion,
+      estado: 'abierto',
+      creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch((err) => console.error('Error guardando ticket:', err));
+  }
+
+  document.getElementById('ticketNum').textContent = numeroTicket;
+  document.getElementById('formFalla').style.display='none';
+  document.getElementById('ticketOk').style.display='block';
+});
+function resetFalla(){
+  document.getElementById('formFalla').style.display='block';
+  document.getElementById('ticketOk').style.display='none';
+  document.querySelectorAll('.equip').forEach(x=>x.classList.remove('sel'));
+  document.getElementById('descFalla').value=''; equipoSel=null;
+}
+
+// ══ AGENDAR VISITA TÉCNICA ══
+document.getElementById('agendarCita').addEventListener('click', () => {
+  const fecha = document.getElementById('citaFecha').value;
+  const horario = document.getElementById('citaHorario').value;
+  if (!fecha) { alert('Selecciona una fecha para la visita 🙂'); return; }
+
+  const user = auth.currentUser;
+  const resumen = `${fecha} a las ${horario}`;
+
+  if (user) {
+    const userRef = db.collection('usuarios').doc(user.uid);
+    userRef.collection('citas').add({
+      fecha: fecha,
+      horario: horario,
+      estado: 'agendada',
+      creadaEn: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch((err) => console.error('Error guardando cita:', err));
+
+    userRef.get().then((doc) => {
+      const data = doc.exists ? doc.data() : {};
+      const nombreCliente = data.nombre || user.email;
+      const local = data.local || 'Local sin nombre registrado';
+      const direccion = data.direccion || 'Dirección no registrada';
+      notificarTelegram(
+        `📅 Nueva visita técnica agendada\n` +
+        `Cliente: ${nombreCliente} (${user.email})\n` +
+        `Local: ${local}\n` +
+        `Dirección: ${direccion}\n` +
+        `Cuándo: ${resumen}`
+      );
+    }).catch((err) => {
+      console.error('Error obteniendo datos del usuario para la notificación:', err);
+      notificarTelegram(`📅 ${user.email} agendó una visita técnica para el ${resumen}.`);
+    });
+  }
+
+  document.getElementById('citaResumen').textContent = resumen;
+  document.getElementById('formCita').style.display = 'none';
+  document.getElementById('citaOk').style.display = 'block';
+});
+
+function resetCita(){
+  document.getElementById('formCita').style.display = 'block';
+  document.getElementById('citaOk').style.display = 'none';
+  document.getElementById('citaFecha').value = '';
+}
+// ══ CHAT CON IA REAL (Gemini vía función serverless en Vercel) ══
+async function enviarMensajeChat(texto) {
+  texto = (texto || '').trim();
+  if (!texto) return;
+
+  const box = document.getElementById('chatBox');
+  const sug = box.querySelector('.chat-sug'); if (sug) sug.remove();
+
+  const u = document.createElement('div'); u.className = 'msg user'; u.textContent = texto;
+  box.appendChild(u);
+  box.scrollTop = box.scrollHeight;
+
+  const pensando = document.createElement('div');
+  pensando.className = 'msg bot';
+  pensando.textContent = 'Escribiendo…';
+  box.appendChild(pensando);
+  box.scrollTop = box.scrollHeight;
+
+  // Contexto real del local del usuario, para que la IA responda con datos concretos
+  let contexto = '';
+  const user = auth.currentUser;
+  try {
+    if (user) {
+      const doc = await db.collection('usuarios').doc(user.uid).get();
+      if (doc.exists) {
+        const data = doc.data();
+        contexto = `Local: ${data.local || 'sin nombre'}. Dirección: ${data.direccion || 'sin dirección'}.`;
+      }
+    }
+  } catch (err) {
+    console.error('Error obteniendo contexto del usuario para el chat:', err);
+  }
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensaje: texto, contexto: contexto })
+    });
+    const data = await resp.json();
+    pensando.textContent = data.respuesta || 'No pude generar una respuesta, intenta de nuevo en un momento.';
+  } catch (err) {
+    console.error('Error llamando al asistente IA:', err);
+    pensando.textContent = 'Hubo un problema conectando con el asistente. Intenta de nuevo en un momento.';
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+document.getElementById('chatSend').addEventListener('click', () => {
+  const input = document.getElementById('chatInput');
+  const texto = input.value;
+  input.value = '';
+  enviarMensajeChat(texto);
+});
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('chatSend').click();
+  }
+});
+</script>
+</body>
+</html>
