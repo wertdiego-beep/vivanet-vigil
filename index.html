@@ -375,6 +375,18 @@ textarea{min-height:96px;resize:vertical}
         <button class="btn-full" id="guardarTelefono">Guardar teléfono</button>
         <div class="error-msg" id="telefonoInfo" style="color:#048A52;"></div>
       </div>
+      <div class="card" data-modo="familia" style="display:none;">
+        <div class="card-title">Código de familia</div>
+        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Comparte este código con los demás integrantes de tu familia para que se sumen a tu mismo plan, con los mismos contactos de emergencia. Cuando cualquiera presione SOS, la alerta indicará quién fue.</p>
+        <div class="evento"><div class="ev-ic v">🔑</div><div><strong id="miCodigoFamilia">—</strong><small>Tu código (compártelo)</small></div></div>
+      </div>
+      <div class="card" data-modo="familia" style="display:none;">
+        <div class="card-title">Unirme a una familia</div>
+        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Si otro integrante de tu familia ya tiene un plan, ingresa aquí el código que te compartió.</p>
+        <input type="text" id="codigoFamiliaInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase;">
+        <button class="btn-full" id="unirseFamiliaBtn">Unirme</button>
+        <div class="error-msg" id="unirseFamiliaInfo"></div>
+      </div>
       <div class="card" id="instalarCard" style="display:none;">
         <div style="display:flex; align-items:center; gap:14px;">
           <span style="width:46px; height:46px; background:var(--violeta-suave); color:var(--violeta); border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">⬇️</span>
@@ -1059,6 +1071,45 @@ if (guardarEditPerfilBtn) {
   });
 }
 
+// ══ UNIRSE A UNA FAMILIA (código compartido) ══
+const unirseFamiliaBtn = document.getElementById('unirseFamiliaBtn');
+if (unirseFamiliaBtn) {
+  unirseFamiliaBtn.addEventListener('click', () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const info = document.getElementById('unirseFamiliaInfo');
+    const codigo = document.getElementById('codigoFamiliaInput').value.trim().toUpperCase();
+    info.style.color = 'var(--rojo)';
+    info.textContent = '';
+    if (!codigo) { info.textContent = 'Ingresa el código de familia.'; return; }
+    unirseFamiliaBtn.disabled = true;
+    unirseFamiliaBtn.textContent = 'Uniendo…';
+    user.getIdToken().then((idToken) => {
+      return fetch('/api/familia-unir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, codigo })
+      });
+    }).then((r) => r.json()).then((data) => {
+      unirseFamiliaBtn.disabled = false;
+      unirseFamiliaBtn.textContent = 'Unirme';
+      if (data.ok) {
+        info.style.color = '#048A52';
+        info.textContent = `Listo, te uniste a ${data.familiaNombre || 'la familia'}.`;
+        document.getElementById('codigoFamiliaInput').value = '';
+        cargarContactos(user.uid);
+      } else {
+        info.textContent = data.error || 'No pudimos unirte a esa familia.';
+      }
+    }).catch((err) => {
+      console.error('Error uniéndose a familia:', err);
+      unirseFamiliaBtn.disabled = false;
+      unirseFamiliaBtn.textContent = 'Unirme';
+      info.textContent = 'No pudimos unirte a esa familia.';
+    });
+  });
+}
+
 // ══ TELÉFONO DE CONTACTO (editable desde Mi cuenta) ══
 const guardarTelefonoBtn = document.getElementById('guardarTelefono');
 if (guardarTelefonoBtn) {
@@ -1099,6 +1150,15 @@ function cargarDatosUsuario(uid) {
       document.getElementById('editLocal').value = data.local || '';
       document.getElementById('editDireccion').value = data.direccion || '';
       aplicarEtiquetasEditPerfil(modoSeleccionado);
+      if (modoSeleccionado === 'familia') {
+        if (data.codigoFamilia) {
+          document.getElementById('miCodigoFamilia').textContent = data.codigoFamilia;
+        } else {
+          const codigo = uid.slice(0, 6).toUpperCase();
+          ref.set({ codigoFamilia: codigo }, { merge: true }).catch((err) => console.error('Error generando código de familia:', err));
+          document.getElementById('miCodigoFamilia').textContent = codigo;
+        }
+      }
     } else {
       document.getElementById('userLocal').textContent = 'Aún no tienes un local registrado';
       document.getElementById('accountLocal').textContent = 'Sin local registrado';
