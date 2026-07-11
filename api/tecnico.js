@@ -1,15 +1,15 @@
-// Función serverless de Vercel: /api/operador-citas
-// Devuelve, solo para la cuenta central (Diego), todas las visitas técnicas
-// agendadas por los clientes (colección "citas" bajo cada usuario) junto con
-// la lista de técnicos disponibles (usuarios con rolEmpresa === 'tecnico'),
-// para poder asignar quién va a cada visita. Usa la cuenta de servicio para
-// leer Firestore vía REST, sin depender de las reglas de seguridad del
-// cliente (mismo patrón que /api/operador-datos).
+// Función serverless de Vercel: /api/tecnico
+// Combina en un solo endpoint lo que necesita el panel del técnico: listar
+// sus visitas asignadas, marcarlas "en camino" y completarlas con comentario
+// y foto (base64, ya comprimida en el navegador). Se combinó en un solo
+// archivo (en vez de dos) para no superar el límite de 12 funciones
+// serverless del plan gratuito de Vercel. Usa la cuenta de servicio para
+// leer/escribir en Firestore vía REST, sin depender de las reglas de
+// seguridad del cliente.
 
 import crypto from 'crypto';
 
 const PROJECT_ID = 'vivanet-f8ac2';
-const CENTRAL_UID = 'ziDCZASJ7GaMoBhUDw7uPbKmFgE2';
 const FIREBASE_API_KEY = 'AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g';
 
 function base64url(input) {
@@ -51,7 +51,7 @@ async function obtenerAccessToken() {
   return data.access_token;
 }
 
-async function verificarOperador(idToken) {
+async function verificarUsuario(idToken) {
   const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -62,12 +62,19 @@ async function verificarOperador(idToken) {
   return data.users[0].localId;
 }
 
-async function listarCitas(accessToken) {
+async function listarCitasTecnico(accessToken, tecnicoUid) {
   const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
   const body = {
     structuredQuery: {
       from: [{ collectionId: 'citas', allDescendants: true }],
-      limit: 200
+      where: {
+        fieldFilter: {
+          field: { fieldPath: 'tecnicoUid' },
+          op: 'EQUAL',
+          value: { stringValue: tecnicoUid }
+        }
+      },
+      limit: 100
     }
   };
   const resp = await fetch(url, {
@@ -91,15 +98,9 @@ async function listarCitas(accessToken) {
         citaId,
         fecha: f.fecha?.stringValue || '',
         horario: f.horario?.stringValue || '',
-        estado: f.estado?.stringValue || 'agendada',
-        tecnicoUid: f.tecnicoUid?.stringValue || '',
-        tecnicoNombre: f.tecnicoNombre?.stringValue || '',
-        comentarioTecnico: f.comentarioTecnico?.stringValue || '',
-        fotoBase64: f.fotoBase64?.stringValue || '',
-        creadaEn: f.creadaEn?.timestampValue || null
+        estado: f.estado?.stringValue || 'agendada'
       };
-    })
-    .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
+    });
 }
 
 async function obtenerCliente(accessToken, uid) {
@@ -108,73 +109,84 @@ async function obtenerCliente(accessToken, uid) {
   if (!resp.ok) return null;
   const doc = await resp.json();
   const f = doc.fields || {};
-  return { nombre: f.nombre?.stringValue || '', local: f.local?.stringValue || '' };
-}
-
-async function listarTecnicos(accessToken) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
-  const body = {
-    structuredQuery: {
-      from: [{ collectionId: 'usuarios' }],
-      where: {
-        fieldFilter: {
-          field: { fieldPath: 'rolEmpresa' },
-          op: 'EQUAL',
-          value: { stringValue: 'tecnico' }
-        }
-      },
-      limit: 100
-    }
+  return {
+    nombre: f.nombre?.stringValue || '',
+    local: f.local?.stringValue || '',
+    direccion: f.direccion?.stringValue || ''
   };
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) return [];
-  const data = await resp.json();
-  return (data || [])
-    .filter((r) => r.document)
-    .map((r) => {
-      const doc = r.document;
-      const uid = doc.name.split('/').pop();
-      const f = doc.fields || {};
-      return { uid, nombre: f.nombre?.stringValue || '' };
-    });
 }
 
-async function obtenerNombreTecnico(accessToken, tecnicoUid) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${tecnicoUid}`;
+async function obtenerCita(accessToken, clienteUid, citaId) {
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/citas/${citaId}`;
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!resp.ok) return '';
+  if (!resp.ok) return null;
   const doc = await resp.json();
-  return doc.fields?.nombre?.stringValue || '';
+  const f = doc.fields || {};
+  return { tecnicoUid: f.tecnicoUid?.stringValue || '' };
 }
 
-async function asignar(res, accessToken, { clienteUid, citaId, tecnicoUid }) {
-  if (!clienteUid || !citaId || !tecnicoUid) {
-    res.status(400).json({ error: 'Faltan datos' });
+async function listar(res, accessToken, uid) {
+  const citas = await listarCitasTecnico(accessToken, uid);
+  const clientesCache = {};
+  for (const c of citas) {
+    if (!clientesCache[c.clienteUid]) {
+      clientesCache[c.clienteUid] = await obtenerCliente(accessToken, c.clienteUid);
+    }
+    const info = clientesCache[c.clienteUid] || {};
+    c.clienteNombre = info.nombre || '';
+    c.clienteLocal = info.local || '';
+    c.clienteDireccion = info.direccion || '';
+  }
+  const citasPropias = citas.filter((c) => ['asignada', 'en_camino', 'completada'].includes(c.estado));
+  res.status(200).json({ ok: true, citas: citasPropias });
+}
+
+async function actualizar(res, accessToken, uid, { clienteUid, citaId, accion, comentario, fotoBase64 }) {
+  if (!clienteUid || !citaId) {
+    res.status(400).json({ error: 'Faltan datos de la visita' });
     return;
   }
-  const tecnicoNombre = await obtenerNombreTecnico(accessToken, tecnicoUid);
+  const cita = await obtenerCita(accessToken, clienteUid, citaId);
+  if (!cita) {
+    res.status(404).json({ error: 'Visita no encontrada' });
+    return;
+  }
+  if (cita.tecnicoUid !== uid) {
+    res.status(403).json({ error: 'Esta visita no está asignada a tu cuenta' });
+    return;
+  }
+
+  const fieldPaths = ['estado'];
+  const fields = {};
+
+  if (accion === 'en_camino') {
+    fields.estado = { stringValue: 'en_camino' };
+  } else {
+    fields.estado = { stringValue: 'completada' };
+    fieldPaths.push('completadaEn');
+    fields.completadaEn = { timestampValue: new Date().toISOString() };
+    if (comentario) {
+      fieldPaths.push('comentarioTecnico');
+      fields.comentarioTecnico = { stringValue: String(comentario).slice(0, 2000) };
+    }
+    if (fotoBase64) {
+      fieldPaths.push('fotoBase64');
+      fields.fotoBase64 = { stringValue: fotoBase64 };
+    }
+  }
+
   const url =
     `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/citas/${citaId}` +
-    `?updateMask.fieldPaths=tecnicoUid&updateMask.fieldPaths=tecnicoNombre&updateMask.fieldPaths=estado`;
+    `?` + fieldPaths.map((p) => `updateMask.fieldPaths=${p}`).join('&');
   const resp = await fetch(url, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fields: {
-        tecnicoUid: { stringValue: tecnicoUid },
-        tecnicoNombre: { stringValue: tecnicoNombre },
-        estado: { stringValue: 'asignada' }
-      }
-    })
+    body: JSON.stringify({ fields })
   });
   if (!resp.ok) {
     const data = await resp.json();
-    console.error('Error asignando técnico:', data);
-    res.status(502).json({ error: 'No se pudo asignar el técnico' });
+    console.error('Error actualizando cita:', data);
+    res.status(502).json({ error: 'No se pudo actualizar la visita' });
     return;
   }
   res.status(200).json({ ok: true });
@@ -191,33 +203,22 @@ export default async function handler(req, res) {
     return;
   }
   try {
-    const uid = await verificarOperador(idToken);
-    if (!uid || uid !== CENTRAL_UID) {
+    const uid = await verificarUsuario(idToken);
+    if (!uid) {
       res.status(403).json({ error: 'No autorizado' });
       return;
     }
     const accessToken = await obtenerAccessToken();
 
-    if (accion === 'asignar') {
-      await asignar(res, accessToken, req.body || {});
-      return;
+    if (!accion || accion === 'listar') {
+      await listar(res, accessToken, uid);
+    } else if (['en_camino', 'completar'].includes(accion)) {
+      await actualizar(res, accessToken, uid, req.body || {});
+    } else {
+      res.status(400).json({ error: 'Acción no válida' });
     }
-
-    const [citas, tecnicos] = await Promise.all([listarCitas(accessToken), listarTecnicos(accessToken)]);
-
-    const clientesCache = {};
-    for (const c of citas) {
-      if (!clientesCache[c.clienteUid]) {
-        clientesCache[c.clienteUid] = await obtenerCliente(accessToken, c.clienteUid);
-      }
-      const info = clientesCache[c.clienteUid] || {};
-      c.clienteNombre = info.nombre || '';
-      c.clienteLocal = info.local || '';
-    }
-
-    res.status(200).json({ ok: true, citas, tecnicos });
   } catch (err) {
-    console.error('Error en citas del operador:', err);
+    console.error('Error en panel técnico:', err);
     res.status(500).json({ error: err.message || 'Error interno del servidor' });
   }
 }
