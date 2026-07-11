@@ -860,7 +860,8 @@ function renderClienteOperadorContactos(contactos) {
   cont.innerHTML = contactos.map((c) => `
     <div class="evento">
       <div class="ev-ic v">📞</div>
-      <div><strong>${c.nombre || 'Contacto'}</strong><small>${c.telefono || 'Sin teléfono'} ${c.activo === false ? '· Silenciado' : ''}</small></div>
+      <div style="flex:1;"><strong>${c.nombre || 'Contacto'}</strong><small>${c.telefono || 'Sin teléfono'} ${c.activo === false ? '· Silenciado' : ''}</small></div>
+      ${c.telefono ? `<a href="tel:${c.telefono}" class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem; text-decoration:none; display:inline-block;">Llamar</a>` : ''}
     </div>`).join('');
 }
 
