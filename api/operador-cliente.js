@@ -89,6 +89,7 @@ async function obtenerCliente(accessToken, clienteUid) {
     nombre: f.nombre?.stringValue || '',
     local: f.local?.stringValue || '',
     direccion: f.direccion?.stringValue || '',
+    telefono: f.telefono?.stringValue || '',
     modo: f.modo?.stringValue || 'empresa'
   };
 }
