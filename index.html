@@ -375,20 +375,25 @@ textarea{min-height:96px;resize:vertical}
         <button class="btn-full" id="guardarTelefono">Guardar teléfono</button>
         <div class="error-msg" id="telefonoInfo" style="color:#048A52;"></div>
       </div>
-      <div class="card" data-modo="familia" style="display:none;">
-        <div class="card-title">Código de familia</div>
-        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Comparte este código con los demás integrantes de tu familia para que se sumen a tu mismo plan, con los mismos contactos de emergencia. Cuando cualquiera presione SOS, la alerta indicará quién fue.</p>
-        <div class="evento"><div class="ev-ic v">🔑</div><div><strong id="miCodigoFamilia">—</strong><small>Tu código (compártelo)</small></div></div>
+      <div class="card">
+        <div class="card-title" id="codigoGrupoTitulo">Código de familia</div>
+        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;" id="codigoGrupoIntro">Comparte este código con los demás integrantes de tu familia para que se sumen a tu mismo plan, con los mismos contactos de emergencia. Cuando cualquiera presione SOS, la alerta indicará quién fue.</p>
+        <div class="evento"><div class="ev-ic v">🔑</div><div><strong id="miCodigoFamilia">—</strong><small id="miRolEmpresa"></small></div></div>
         <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
           <input type="checkbox" id="recibirAlertasFamilia" checked style="width:auto; margin:0;">
-          <span style="font-weight:600; font-size:.85rem; margin:0;">Avisarme cuando otro familiar active el SOS</span>
+          <span style="font-weight:600; font-size:.85rem; margin:0;" id="recibirAlertasLabel">Avisarme cuando otro familiar active el SOS</span>
         </label>
         <div class="error-msg" id="alertasFamiliaInfo" style="color:#048A52;"></div>
       </div>
-      <div class="card" data-modo="familia" style="display:none;">
-        <div class="card-title">Unirme a una familia</div>
-        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Si otro integrante de tu familia ya tiene un plan, ingresa aquí el código que te compartió.</p>
+      <div class="card">
+        <div class="card-title" id="unirseGrupoTitulo">Unirme a una familia</div>
+        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;" id="unirseGrupoIntro">Si otro integrante de tu familia ya tiene un plan, ingresa aquí el código que te compartió.</p>
         <input type="text" id="codigoFamiliaInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase;">
+        <label id="rolEmpresaLabel" style="display:none;">Tu cargo en la empresa</label>
+        <select id="rolEmpresaInput" style="display:none;">
+          <option value="gerente">Gerente</option>
+          <option value="empleado" selected>Empleado</option>
+        </select>
         <button class="btn-full" id="unirseFamiliaBtn">Unirme</button>
         <div class="error-msg" id="unirseFamiliaInfo"></div>
       </div>
@@ -893,9 +898,11 @@ async function verClienteOperador(clienteUid) {
 }
 
 function renderClienteOperadorInfo(c) {
+  const rolTexto = { jefe: 'Jefe/a', gerente: 'Gerente', empleado: 'Empleado/a' };
+  const rolLinea = c.rolEmpresa ? `<small>${rolTexto[c.rolEmpresa] || c.rolEmpresa}${c.grupoFamiliarId ? ' · vinculado a un equipo' : ''}</small>` : (c.grupoFamiliarId ? '<small>Vinculado a otra familia/equipo</small>' : '');
   document.getElementById('clienteOperadorInfo').innerHTML = `
     <div class="evento"><div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div><div><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.modo === 'familia' ? 'Familia' : 'Empresa'}</small></div></div>
-    <div class="evento"><div class="ev-ic v">👤</div><div><strong>${c.nombre || '—'}</strong><small>Nombre de contacto</small></div></div>
+    <div class="evento"><div class="ev-ic v">👤</div><div><strong>${c.nombre || '—'}</strong>${rolLinea || '<small>Nombre de contacto</small>'}</div></div>
     <div class="evento"><div class="ev-ic v">📍</div><div><strong>${c.direccion || '—'}</strong><small>Dirección</small></div></div>
     <div class="evento">
       <div class="ev-ic v">📞</div>
@@ -1009,6 +1016,35 @@ function aplicarEtiquetasEditPerfil(modo) {
   }
 }
 
+// Ajusta las tarjetas de "código de grupo" (familia o equipo de empresa) según el modo
+function aplicarEtiquetasGrupo(modo) {
+  const titulo = document.getElementById('codigoGrupoTitulo');
+  const intro = document.getElementById('codigoGrupoIntro');
+  const unirseTitulo = document.getElementById('unirseGrupoTitulo');
+  const unirseIntro = document.getElementById('unirseGrupoIntro');
+  const recibirLabel = document.getElementById('recibirAlertasLabel');
+  const rolLabel = document.getElementById('rolEmpresaLabel');
+  const rolInput = document.getElementById('rolEmpresaInput');
+  if (!titulo) return;
+  if (modo === 'empresa') {
+    titulo.textContent = 'Código de equipo';
+    intro.textContent = 'Comparte este código con gerentes y empleados de tu local para que se sumen a tu mismo plan, con los mismos contactos de emergencia. Cuando cualquiera presione SOS, la alerta indicará quién fue.';
+    unirseTitulo.textContent = 'Unirme a un equipo';
+    unirseIntro.textContent = 'Si tu jefe o gerente ya tiene un plan, ingresa aquí el código que te compartió.';
+    recibirLabel.textContent = 'Avisarme cuando otro integrante del equipo active el SOS';
+    rolLabel.style.display = '';
+    rolInput.style.display = '';
+  } else {
+    titulo.textContent = 'Código de familia';
+    intro.textContent = 'Comparte este código con los demás integrantes de tu familia para que se sumen a tu mismo plan, con los mismos contactos de emergencia. Cuando cualquiera presione SOS, la alerta indicará quién fue.';
+    unirseTitulo.textContent = 'Unirme a una familia';
+    unirseIntro.textContent = 'Si otro integrante de tu familia ya tiene un plan, ingresa aquí el código que te compartió.';
+    recibirLabel.textContent = 'Avisarme cuando otro familiar active el SOS';
+    rolLabel.style.display = 'none';
+    rolInput.style.display = 'none';
+  }
+}
+
 // ══ APLICA EL MODO A LA NAVEGACIÓN Y LOS ACCESOS RÁPIDOS ══
 function aplicarModoNav(modo) {
   document.querySelectorAll('[data-modo]').forEach((el) => {
@@ -1105,14 +1141,16 @@ if (unirseFamiliaBtn) {
     const codigo = document.getElementById('codigoFamiliaInput').value.trim().toUpperCase();
     info.style.color = 'var(--rojo)';
     info.textContent = '';
-    if (!codigo) { info.textContent = 'Ingresa el código de familia.'; return; }
+    if (!codigo) { info.textContent = 'Ingresa el código.'; return; }
+    const rolInput = document.getElementById('rolEmpresaInput');
+    const rol = (modoSeleccionado === 'empresa' && rolInput) ? rolInput.value : null;
     unirseFamiliaBtn.disabled = true;
     unirseFamiliaBtn.textContent = 'Uniendo…';
     user.getIdToken().then((idToken) => {
       return fetch('/api/familia-unir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken, codigo })
+        body: JSON.stringify({ idToken, codigo, rol })
       });
     }).then((r) => r.json()).then((data) => {
       unirseFamiliaBtn.disabled = false;
@@ -1174,15 +1212,28 @@ function cargarDatosUsuario(uid) {
       document.getElementById('editLocal').value = data.local || '';
       document.getElementById('editDireccion').value = data.direccion || '';
       aplicarEtiquetasEditPerfil(modoSeleccionado);
-      if (modoSeleccionado === 'familia') {
-        if (data.codigoFamilia) {
-          document.getElementById('miCodigoFamilia').textContent = data.codigoFamilia;
+      aplicarEtiquetasGrupo(modoSeleccionado);
+
+      if (data.codigoFamilia) {
+        document.getElementById('miCodigoFamilia').textContent = data.codigoFamilia;
+      } else {
+        const codigo = uid.slice(0, 6).toUpperCase();
+        ref.set({ codigoFamilia: codigo }, { merge: true }).catch((err) => console.error('Error generando código:', err));
+        document.getElementById('miCodigoFamilia').textContent = codigo;
+      }
+      document.getElementById('recibirAlertasFamilia').checked = data.recibirAlertasFamilia !== false;
+
+      if (modoSeleccionado === 'empresa') {
+        const rolTexto = { jefe: 'Jefe/a', gerente: 'Gerente', empleado: 'Empleado/a' };
+        if (!data.rolEmpresa && !data.grupoFamiliarId) {
+          // Quien genera el código (no se unió con uno de otro) es el jefe por defecto.
+          ref.set({ rolEmpresa: 'jefe' }, { merge: true }).catch((err) => console.error('Error asignando rol:', err));
+          document.getElementById('miRolEmpresa').textContent = 'Tu código (compártelo) · Jefe/a';
         } else {
-          const codigo = uid.slice(0, 6).toUpperCase();
-          ref.set({ codigoFamilia: codigo }, { merge: true }).catch((err) => console.error('Error generando código de familia:', err));
-          document.getElementById('miCodigoFamilia').textContent = codigo;
+          document.getElementById('miRolEmpresa').textContent = 'Tu código (compártelo)' + (data.rolEmpresa ? ' · ' + (rolTexto[data.rolEmpresa] || data.rolEmpresa) : '');
         }
-        document.getElementById('recibirAlertasFamilia').checked = data.recibirAlertasFamilia !== false;
+      } else {
+        document.getElementById('miRolEmpresa').textContent = 'Tu código (compártelo)';
       }
     } else {
       document.getElementById('userLocal').textContent = 'Aún no tienes un local registrado';
