@@ -150,6 +150,63 @@ async function listarAlertasActivas(accessToken) {
     });
 }
 
+// Trae hasta 300 alertas recientes (de cualquier estado, de cualquier
+// cliente) sin filtro, para armar el historial general y las estadísticas.
+// No usamos "where"/"orderBy" combinados para evitar depender de un índice
+// compuesto en Firestore; ordenamos y filtramos acá mismo, en JS.
+async function listarAlertasRecientes(accessToken) {
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId: 'alertas', allDescendants: true }],
+      limit: 300
+    }
+  };
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) return [];
+  const data = await resp.json();
+  return (data || [])
+    .filter((r) => r.document)
+    .map((r) => {
+      const doc = r.document;
+      const parts = doc.name.split('/');
+      const alertaId = parts.pop();
+      parts.pop(); // 'alertas'
+      const uid = parts.pop();
+      const f = doc.fields || {};
+      return {
+        clienteUid: uid,
+        alertaId,
+        estado: f.estado?.stringValue || '',
+        creadaEn: f.creadaEn?.timestampValue || null,
+        atendidaEn: f.atendidaEn?.timestampValue || null,
+        canceladaEn: f.canceladaEn?.timestampValue || null
+      };
+    })
+    .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
+}
+
+function calcularStats(alertasRecientes) {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const alertasHoy = alertasRecientes.filter((a) => a.creadaEn && new Date(a.creadaEn) >= hoy).length;
+
+  const tiempos = alertasRecientes
+    .filter((a) => a.creadaEn && a.atendidaEn)
+    .map((a) => (new Date(a.atendidaEn) - new Date(a.creadaEn)) / 60000)
+    .filter((min) => min >= 0 && min < 24 * 60);
+
+  const tiempoPromedioResp = tiempos.length
+    ? Math.round((tiempos.reduce((a, b) => a + b, 0) / tiempos.length) * 10) / 10
+    : null;
+
+  return { alertasHoy, tiempoPromedioResp };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Método no permitido' });
@@ -170,12 +227,19 @@ export default async function handler(req, res) {
     }
 
     const accessToken = await obtenerAccessToken();
-    const [clientes, alertas] = await Promise.all([
+    const [clientes, alertas, alertasRecientes] = await Promise.all([
       listarClientes(accessToken),
-      listarAlertasActivas(accessToken)
+      listarAlertasActivas(accessToken),
+      listarAlertasRecientes(accessToken)
     ]);
 
-    res.status(200).json({ ok: true, clientes, alertas });
+    const stats = calcularStats(alertasRecientes);
+    stats.totalActivas = alertas.length;
+    stats.totalClientes = clientes.length;
+
+    const historial = alertasRecientes.slice(0, 20);
+
+    res.status(200).json({ ok: true, clientes, alertas, historial, stats });
   } catch (err) {
     console.error('Error en panel operador:', err);
     res.status(500).json({ error: err.message || 'Error interno del servidor' });
