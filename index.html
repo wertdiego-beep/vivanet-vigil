@@ -358,6 +358,17 @@ textarea{min-height:96px;resize:vertical}
         <div class="evento" data-modo="empresa"><div class="ev-ic v">💳</div><div><strong>Facturas y pagos</strong><small>Al día · Próximo pago 05 Ago</small></div></div>
       </div>
       <div class="card">
+        <div class="card-title">Editar mi información</div>
+        <label>Nombre</label>
+        <input type="text" id="editNombre" placeholder="Ej: Diego Wert">
+        <label id="editLocalLabel">Nombre del local</label>
+        <input type="text" id="editLocal" placeholder="Ej: Local Balmaceda">
+        <label id="editDireccionLabel">Dirección</label>
+        <input type="text" id="editDireccion" placeholder="Ej: Balmaceda 450, La Serena">
+        <button class="btn-full" id="guardarEditPerfil">Guardar cambios</button>
+        <div class="error-msg" id="editPerfilInfo" style="color:#048A52;"></div>
+      </div>
+      <div class="card">
         <div class="card-title">Teléfono de contacto</div>
         <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Para que la central pueda llamarte directo si es necesario.</p>
         <input type="text" id="accountTelefono" placeholder="Ej: +56912345678">
@@ -967,6 +978,20 @@ function seleccionarModo(modo) {
   go('s-perfil');
 }
 
+// Ajusta las etiquetas de la tarjeta "Editar mi información" según el modo (familia/empresa)
+function aplicarEtiquetasEditPerfil(modo) {
+  const localLabel = document.getElementById('editLocalLabel');
+  const direccionLabel = document.getElementById('editDireccionLabel');
+  if (!localLabel || !direccionLabel) return;
+  if (modo === 'familia') {
+    localLabel.textContent = 'Nombre de tu familia';
+    direccionLabel.textContent = 'Dirección de tu hogar';
+  } else {
+    localLabel.textContent = 'Nombre del local';
+    direccionLabel.textContent = 'Dirección';
+  }
+}
+
 // ══ APLICA EL MODO A LA NAVEGACIÓN Y LOS ACCESOS RÁPIDOS ══
 function aplicarModoNav(modo) {
   document.querySelectorAll('[data-modo]').forEach((el) => {
@@ -1010,6 +1035,30 @@ document.getElementById('guardarPerfil').addEventListener('click', () => {
   });
 });
 
+// ══ EDITAR NOMBRE / LOCAL / DIRECCIÓN (desde Mi cuenta) ══
+const guardarEditPerfilBtn = document.getElementById('guardarEditPerfil');
+if (guardarEditPerfilBtn) {
+  guardarEditPerfilBtn.addEventListener('click', () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const info = document.getElementById('editPerfilInfo');
+    info.textContent = '';
+    info.style.color = '#048A52';
+    const nombre = document.getElementById('editNombre').value.trim();
+    const local = document.getElementById('editLocal').value.trim();
+    const direccion = document.getElementById('editDireccion').value.trim();
+    if (!nombre) { info.style.color = 'var(--rojo)'; info.textContent = 'Ingresa tu nombre.'; return; }
+    db.collection('usuarios').doc(user.uid).set({ nombre: nombre, local: local, direccion: direccion }, { merge: true }).then(() => {
+      info.textContent = 'Datos actualizados.';
+      cargarDatosUsuario(user.uid);
+    }).catch((err) => {
+      console.error('Error actualizando perfil:', err);
+      info.style.color = 'var(--rojo)';
+      info.textContent = 'No pudimos guardar los cambios.';
+    });
+  });
+}
+
 // ══ TELÉFONO DE CONTACTO (editable desde Mi cuenta) ══
 const guardarTelefonoBtn = document.getElementById('guardarTelefono');
 if (guardarTelefonoBtn) {
@@ -1046,6 +1095,10 @@ function cargarDatosUsuario(uid) {
       document.getElementById('accountLocal').textContent = data.local || 'Sin local registrado';
       document.getElementById('accountDireccion').textContent = data.direccion || '—';
       if (data.telefono) document.getElementById('accountTelefono').value = data.telefono;
+      document.getElementById('editNombre').value = data.nombre || '';
+      document.getElementById('editLocal').value = data.local || '';
+      document.getElementById('editDireccion').value = data.direccion || '';
+      aplicarEtiquetasEditPerfil(modoSeleccionado);
     } else {
       document.getElementById('userLocal').textContent = 'Aún no tienes un local registrado';
       document.getElementById('accountLocal').textContent = 'Sin local registrado';
