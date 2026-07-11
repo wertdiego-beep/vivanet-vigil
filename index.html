@@ -839,10 +839,10 @@ function asignarTecnicoCita(clienteUid, citaId, tecnicoUid) {
   const user = auth.currentUser;
   if (!user || !tecnicoUid) { if (!tecnicoUid) alert('Elige un técnico primero.'); return; }
   user.getIdToken().then((idToken) => {
-    return fetch('/api/operador-asignar-tecnico', {
+    return fetch('/api/operador-citas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken, clienteUid, citaId, tecnicoUid })
+      body: JSON.stringify({ idToken, accion: 'asignar', clienteUid, citaId, tecnicoUid })
     });
   }).then((r) => r.json()).then((data) => {
     if (data.ok) {
@@ -909,10 +909,10 @@ async function cargarPanelTecnico() {
   if (!user) return;
   try {
     const idToken = await user.getIdToken();
-    const resp = await fetch('/api/tecnico-citas', {
+    const resp = await fetch('/api/tecnico', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken })
+      body: JSON.stringify({ idToken, accion: 'listar' })
     });
     const data = await resp.json();
     if (!data.ok) {
@@ -976,7 +976,7 @@ function marcarEnCamino(clienteUid, citaId) {
   const user = auth.currentUser;
   if (!user) return;
   user.getIdToken().then((idToken) => {
-    return fetch('/api/tecnico-actualizar-cita', {
+    return fetch('/api/tecnico', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ idToken, clienteUid, citaId, accion: 'en_camino' })
@@ -1029,7 +1029,7 @@ function completarVisita(clienteUid, citaId, i) {
 
   procesarFoto.then((fotoBase64) => {
     return user.getIdToken().then((idToken) => {
-      return fetch('/api/tecnico-actualizar-cita', {
+      return fetch('/api/tecnico', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken, clienteUid, citaId, accion: 'completar', comentario, fotoBase64 })
