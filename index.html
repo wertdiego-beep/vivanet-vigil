@@ -390,8 +390,8 @@ textarea{min-height:96px;resize:vertical}
     <div class="screen-scroll" id="s-contactos">
       <div class="card">
         <div class="card-title">Contactos de emergencia</div>
-        <p style="color:var(--gris); font-size:.85rem; margin-bottom:14px;">Cuando presiones el botón SOS, además de avisarle a la central, cada contacto que agregues aquí recibirá un mensaje de Telegram y, si dejas su teléfono, también una <strong>llamada real</strong> que suena como alarma (por ejemplo, tus padres o algún familiar).</p>
-        <p style="color:var(--gris); font-size:.78rem; margin-bottom:14px; background:var(--violeta-suave); padding:10px 12px; border-radius:10px;">Para el mensaje de Telegram, el contacto debe escribirle primero cualquier cosa a <strong>@Vigil_alertas_bot</strong>. El teléfono es opcional, y solo se usa para la llamada de alarma.</p>
+        <p style="color:var(--gris); font-size:.85rem; margin-bottom:14px;">Cuando presiones el botón SOS, además de avisarle a la central, cada contacto que agregues aquí recibirá un mensaje de Telegram con tu ubicación en vivo (por ejemplo, tus padres o algún familiar).</p>
+        <p style="color:var(--gris); font-size:.78rem; margin-bottom:14px; background:var(--violeta-suave); padding:10px 12px; border-radius:10px;">Para el mensaje de Telegram, el contacto debe escribirle primero cualquier cosa a <strong>@Vigil_alertas_bot</strong>. Si dejas su teléfono, además vas a poder llamarlo directo desde aquí con un toque.</p>
         <div id="contactosList">
           <div class="evento"><div><strong>Cargando contactos…</strong></div></div>
         </div>
@@ -1101,6 +1101,15 @@ function cargarContactos(uid) {
       btnToggle.onclick = () => toggleContacto(uid, d.id, !activo);
       div.appendChild(btnToggle);
 
+      if (c.telefono) {
+        const btnLlamar = document.createElement('a');
+        btnLlamar.href = `tel:${c.telefono}`;
+        btnLlamar.textContent = '📞';
+        btnLlamar.title = `Llamar a ${c.nombre || 'este contacto'}`;
+        btnLlamar.style.cssText = 'font-size:1.1rem; padding:6px 8px; text-decoration:none;';
+        div.appendChild(btnLlamar);
+      }
+
       const btnBorrar = document.createElement('button');
       btnBorrar.textContent = '✕';
       btnBorrar.style.cssText = 'color:var(--rojo); font-weight:700; font-size:1rem; padding:6px 10px;';
@@ -1284,21 +1293,8 @@ function notificarContactosEmergencia(texto) {
       const c = d.data();
       if (c.activo === false) return; // este contacto está silenciado, no se le avisa
       if (c.chatId) notificarTelegram(texto, c.chatId);
-      if (c.telefono) llamarContactoEmergencia(c.telefono, user.email);
     });
   }).catch((err) => console.error('Error notificando a contactos de emergencia:', err));
-}
-
-// Llamada real (Twilio, vía función serverless) que suena como alarma en el teléfono del contacto
-function llamarContactoEmergencia(telefono, emailUsuario) {
-  fetch('/api/call', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      telefono: telefono,
-      mensaje: `Alerta de pánico activada por ${emailUsuario ? emailUsuario.split('@')[0] : 'un usuario'} en la aplicación Vigil. Por favor revisa de inmediato.`
-    })
-  }).catch((err) => console.error('Error iniciando llamada de alarma:', err));
 }
 
 function actualizarUbicacionAlerta(lat, lng) {
