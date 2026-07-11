@@ -1156,16 +1156,26 @@ function cerrarSOS(){
 }
 
 // ══ ALERTA SOS EN FIRESTORE ══
+let ubicacionPendiente = null; // guarda la ubicación si llega antes de que exista alertaActualId
 function crearAlertaSOS() {
   const user = auth.currentUser;
   if (!user) return;
   ubicacionEnviada = false;
+  ubicacionPendiente = null;
+  alertaActualId = null;
   db.collection('usuarios').doc(user.uid).collection('alertas').add({
     estado: 'activa',
     creadaEn: firebase.firestore.FieldValue.serverTimestamp(),
     ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
   }).then((docRef) => {
     alertaActualId = docRef.id;
+    // Si el GPS ya había entregado una ubicación antes de que la alerta
+    // terminara de crearse en Firestore, la aplicamos ahora (evita perderla).
+    if (ubicacionPendiente) {
+      const { lat, lng } = ubicacionPendiente;
+      ubicacionPendiente = null;
+      actualizarUbicacionAlerta(lat, lng);
+    }
   }).catch((err) => console.error('Error creando alerta SOS:', err));
 
   notificarTelegram(`🚨 ALERTA SOS activada por ${user.email}. Revisando ubicación en vivo…`);
@@ -1233,7 +1243,13 @@ function llamarContactoEmergencia(telefono, emailUsuario) {
 
 function actualizarUbicacionAlerta(lat, lng) {
   const user = auth.currentUser;
-  if (!user || !alertaActualId) return;
+  if (!user) return;
+  if (!alertaActualId) {
+    // La alerta todavía no termina de crearse en Firestore: guardamos la
+    // ubicación y la aplicamos apenas tengamos el ID (ver crearAlertaSOS).
+    ubicacionPendiente = { lat, lng };
+    return;
+  }
   db.collection('usuarios').doc(user.uid).collection('alertas').doc(alertaActualId).update({
     ubicacion: { lat: lat, lng: lng },
     ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
