@@ -87,7 +87,8 @@ async function obtenerUsuario(accessToken, uid) {
     uid,
     nombre: f.nombre?.stringValue || '',
     fcmToken: f.fcmToken?.stringValue || null,
-    grupoFamiliarId: f.grupoFamiliarId?.stringValue || null
+    grupoFamiliarId: f.grupoFamiliarId?.stringValue || null,
+    recibirAlertasFamilia: f.recibirAlertasFamilia?.booleanValue !== false
   };
 }
 
@@ -120,7 +121,12 @@ async function listarIntegrantesGrupo(accessToken, grupoId) {
       const doc = r.document;
       const uid = doc.name.split('/').pop();
       const f = doc.fields || {};
-      return { uid, nombre: f.nombre?.stringValue || '', fcmToken: f.fcmToken?.stringValue || null };
+      return {
+        uid,
+        nombre: f.nombre?.stringValue || '',
+        fcmToken: f.fcmToken?.stringValue || null,
+        recibirAlertasFamilia: f.recibirAlertasFamilia?.booleanValue !== false
+      };
     });
 }
 
@@ -177,7 +183,9 @@ export default async function handler(req, res) {
     const hijos = await listarIntegrantesGrupo(accessToken, grupoId);
     integrantes.push(...hijos);
 
-    const destinatarios = integrantes.filter((p) => p.uid !== uid && p.fcmToken);
+    // Solo se avisa a quienes tengan token push Y no hayan desactivado las
+    // notificaciones familiares desde "Mi cuenta" (activadas por defecto).
+    const destinatarios = integrantes.filter((p) => p.uid !== uid && p.fcmToken && p.recibirAlertasFamilia !== false);
 
     const nombre = nombreUsuario || yo.nombre || 'Un familiar';
     const resultados = [];
