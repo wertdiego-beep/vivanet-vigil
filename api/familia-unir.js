@@ -186,14 +186,21 @@ async function listarIntegrantesGrupo(accessToken, grupoId) {
     });
 }
 
-async function marcarGrupoFamiliar(accessToken, uid, grupoFamiliarId) {
+async function marcarGrupoFamiliar(accessToken, uid, grupoFamiliarId, rol) {
+  const rolValido = ['jefe', 'gerente', 'empleado'].includes(rol) ? rol : null;
+  const fieldPaths = ['grupoFamiliarId'];
+  const fields = { grupoFamiliarId: { stringValue: grupoFamiliarId } };
+  if (rolValido) {
+    fieldPaths.push('rolEmpresa');
+    fields.rolEmpresa = { stringValue: rolValido };
+  }
   const url =
     `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}` +
-    `?updateMask.fieldPaths=grupoFamiliarId`;
+    `?` + fieldPaths.map((p) => `updateMask.fieldPaths=${p}`).join('&');
   await fetch(url, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: { grupoFamiliarId: { stringValue: grupoFamiliarId } } })
+    body: JSON.stringify({ fields })
   });
 }
 
@@ -203,7 +210,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { idToken, codigo } = req.body || {};
+  const { idToken, codigo, rol } = req.body || {};
   if (!idToken || !codigo) {
     res.status(400).json({ error: 'Faltan datos (idToken o código)' });
     return;
@@ -235,7 +242,7 @@ export default async function handler(req, res) {
     const integrantesExistentes = [titularCompleto, ...hermanosExistentes].filter(Boolean);
     const yo = await obtenerUsuarioCompleto(accessToken, uid);
 
-    await marcarGrupoFamiliar(accessToken, uid, titular.uid);
+    await marcarGrupoFamiliar(accessToken, uid, titular.uid, rol);
 
     // Copia los contactos externos que el titular ya tenía configurados (abuela, vecino, etc.)
     const contactosExternos = await listarContactos(accessToken, titular.uid);

@@ -97,7 +97,9 @@ async function listarClientes(accessToken) {
         local: f.local?.stringValue || '',
         direccion: f.direccion?.stringValue || '',
         telefono: f.telefono?.stringValue || '',
-        modo: f.modo?.stringValue || 'empresa'
+        modo: f.modo?.stringValue || 'empresa',
+        rolEmpresa: f.rolEmpresa?.stringValue || '',
+        grupoFamiliarId: f.grupoFamiliarId?.stringValue || ''
       };
     })
     .filter((c) => c.uid !== CENTRAL_UID);
