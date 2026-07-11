@@ -206,6 +206,8 @@ textarea{min-height:96px;resize:vertical}
         <input type="text" id="perfilLocal" placeholder="Ej: Local Balmaceda">
         <label id="perfilDireccionLabel">Dirección</label>
         <input type="text" id="perfilDireccion" placeholder="Ej: Balmaceda 450, La Serena">
+        <label>Teléfono de contacto (opcional)</label>
+        <input type="text" id="perfilTelefono" placeholder="Ej: +56912345678">
         <div class="error-msg" id="perfilError"></div>
         <button class="btn-full" id="guardarPerfil">Guardar y continuar</button>
       </div>
@@ -354,6 +356,13 @@ textarea{min-height:96px;resize:vertical}
           <div class="ev-ic v">📞</div><div><strong>Contactos de emergencia</strong><small id="contactosResumen">Sin contactos configurados</small></div>
         </button>
         <div class="evento" data-modo="empresa"><div class="ev-ic v">💳</div><div><strong>Facturas y pagos</strong><small>Al día · Próximo pago 05 Ago</small></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Teléfono de contacto</div>
+        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Para que la central pueda llamarte directo si es necesario.</p>
+        <input type="text" id="accountTelefono" placeholder="Ej: +56912345678">
+        <button class="btn-full" id="guardarTelefono">Guardar teléfono</button>
+        <div class="error-msg" id="telefonoInfo" style="color:#048A52;"></div>
       </div>
       <div class="card" id="instalarCard" style="display:none;">
         <div style="display:flex; align-items:center; gap:14px;">
@@ -848,7 +857,12 @@ function renderClienteOperadorInfo(c) {
   document.getElementById('clienteOperadorInfo').innerHTML = `
     <div class="evento"><div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div><div><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.modo === 'familia' ? 'Familia' : 'Empresa'}</small></div></div>
     <div class="evento"><div class="ev-ic v">👤</div><div><strong>${c.nombre || '—'}</strong><small>Nombre de contacto</small></div></div>
-    <div class="evento"><div class="ev-ic v">📍</div><div><strong>${c.direccion || '—'}</strong><small>Dirección</small></div></div>`;
+    <div class="evento"><div class="ev-ic v">📍</div><div><strong>${c.direccion || '—'}</strong><small>Dirección</small></div></div>
+    <div class="evento">
+      <div class="ev-ic v">📞</div>
+      <div style="flex:1;"><strong>${c.telefono || 'Sin teléfono registrado'}</strong><small>Teléfono del cliente</small></div>
+      ${c.telefono ? `<a href="tel:${c.telefono}" class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem; text-decoration:none; display:inline-block;">Llamar</a>` : ''}
+    </div>`;
 }
 
 function renderClienteOperadorContactos(contactos) {
@@ -960,6 +974,7 @@ document.getElementById('guardarPerfil').addEventListener('click', () => {
   const nombre = document.getElementById('perfilNombre').value.trim() || user.email.split('@')[0];
   const local = document.getElementById('perfilLocal').value.trim();
   const direccion = document.getElementById('perfilDireccion').value.trim();
+  const telefono = document.getElementById('perfilTelefono').value.trim();
   const esFamilia = modoSeleccionado === 'familia';
 
   if (!local) { errorEl.textContent = esFamilia ? 'Ingresa el nombre de tu familia.' : 'Ingresa el nombre de tu local.'; return; }
@@ -969,6 +984,7 @@ document.getElementById('guardarPerfil').addEventListener('click', () => {
     nombre: nombre,
     local: local,
     direccion: direccion,
+    telefono: telefono,
     modo: modoSeleccionado
   }, { merge: true }).then(() => {
     document.getElementById('userName').textContent = nombre;
@@ -982,6 +998,25 @@ document.getElementById('guardarPerfil').addEventListener('click', () => {
     errorEl.textContent = 'No pudimos guardar tu perfil. Intenta de nuevo.';
   });
 });
+
+// ══ TELÉFONO DE CONTACTO (editable desde Mi cuenta) ══
+const guardarTelefonoBtn = document.getElementById('guardarTelefono');
+if (guardarTelefonoBtn) {
+  guardarTelefonoBtn.addEventListener('click', () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const telefono = document.getElementById('accountTelefono').value.trim();
+    const info = document.getElementById('telefonoInfo');
+    info.textContent = '';
+    db.collection('usuarios').doc(user.uid).set({ telefono: telefono }, { merge: true }).then(() => {
+      info.textContent = 'Teléfono guardado.';
+    }).catch((err) => {
+      console.error('Error guardando teléfono:', err);
+      info.style.color = 'var(--rojo)';
+      info.textContent = 'No pudimos guardar tu teléfono.';
+    });
+  });
+}
 
 // ══ DATOS REALES DESDE FIRESTORE ══
 function cargarDatosUsuario(uid) {
@@ -999,6 +1034,7 @@ function cargarDatosUsuario(uid) {
       document.getElementById('userLocal').textContent = (data.local || '') + (data.direccion ? ' · ' + data.direccion : '');
       document.getElementById('accountLocal').textContent = data.local || 'Sin local registrado';
       document.getElementById('accountDireccion').textContent = data.direccion || '—';
+      if (data.telefono) document.getElementById('accountTelefono').value = data.telefono;
     } else {
       document.getElementById('userLocal').textContent = 'Aún no tienes un local registrado';
       document.getElementById('accountLocal').textContent = 'Sin local registrado';
