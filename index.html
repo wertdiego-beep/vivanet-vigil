@@ -208,6 +208,10 @@ textarea{min-height:96px;resize:vertical}
         <input type="text" id="perfilDireccion" placeholder="Ej: Balmaceda 450, La Serena">
         <label>Teléfono de contacto (opcional)</label>
         <input type="text" id="perfilTelefono" placeholder="Ej: +56912345678">
+        <label id="perfilTecnicoWrap" style="display:none; align-items:center; gap:8px; margin-top:14px;">
+          <input type="checkbox" id="perfilEsTecnico" style="width:auto; margin:0;">
+          <span style="font-weight:600; font-size:.85rem; margin:0;">Soy técnico de Vigil (recibiré visitas asignadas por la central, no un cliente)</span>
+        </label>
         <div class="error-msg" id="perfilError"></div>
         <button class="btn-full" id="guardarPerfil">Guardar y continuar</button>
       </div>
@@ -1251,6 +1255,7 @@ function seleccionarModo(modo) {
     document.getElementById('perfilLocal').placeholder = 'Ej: Familia Wert';
     document.getElementById('perfilDireccionLabel').textContent = 'Dirección de tu hogar';
     document.getElementById('perfilDireccion').placeholder = 'Ej: Los Carrera 220, La Serena';
+    document.getElementById('perfilTecnicoWrap').style.display = 'none';
   } else {
     document.getElementById('perfilTitulo').textContent = 'Completa el perfil de tu local';
     document.getElementById('perfilIntro').textContent = 'Necesitamos estos datos para coordinar visitas técnicas y alertas de tu local.';
@@ -1258,6 +1263,7 @@ function seleccionarModo(modo) {
     document.getElementById('perfilLocal').placeholder = 'Ej: Local Balmaceda';
     document.getElementById('perfilDireccionLabel').textContent = 'Dirección';
     document.getElementById('perfilDireccion').placeholder = 'Ej: Balmaceda 450, La Serena';
+    document.getElementById('perfilTecnicoWrap').style.display = 'flex';
   }
   go('s-perfil');
 }
@@ -1325,19 +1331,34 @@ document.getElementById('guardarPerfil').addEventListener('click', () => {
   const direccion = document.getElementById('perfilDireccion').value.trim();
   const telefono = document.getElementById('perfilTelefono').value.trim();
   const esFamilia = modoSeleccionado === 'familia';
+  const esTecnicoChk = document.getElementById('perfilEsTecnico');
+  const esTecnico = !esFamilia && esTecnicoChk && esTecnicoChk.checked;
 
-  if (!local) { errorEl.textContent = esFamilia ? 'Ingresa el nombre de tu familia.' : 'Ingresa el nombre de tu local.'; return; }
-  if (!direccion) { errorEl.textContent = esFamilia ? 'Ingresa la dirección de tu hogar.' : 'Ingresa la dirección de tu local.'; return; }
+  if (!esTecnico) {
+    if (!local) { errorEl.textContent = esFamilia ? 'Ingresa el nombre de tu familia.' : 'Ingresa el nombre de tu local.'; return; }
+    if (!direccion) { errorEl.textContent = esFamilia ? 'Ingresa la dirección de tu hogar.' : 'Ingresa la dirección de tu local.'; return; }
+  }
 
-  db.collection('usuarios').doc(user.uid).set({
+  const datos = {
     nombre: nombre,
     local: local,
     direccion: direccion,
     telefono: telefono,
     modo: modoSeleccionado
-  }, { merge: true }).then(() => {
+  };
+  if (esTecnico) datos.rolEmpresa = 'tecnico';
+
+  db.collection('usuarios').doc(user.uid).set(datos, { merge: true }).then(() => {
     document.getElementById('userName').textContent = nombre;
     document.getElementById('accountName').textContent = nombre;
+    if (esTecnico) {
+      document.getElementById('bottomNav').style.display = 'none';
+      go('s-tecnico');
+      cargarPanelTecnico();
+      if (tecnicoInterval) clearInterval(tecnicoInterval);
+      tecnicoInterval = setInterval(cargarPanelTecnico, 15000);
+      return;
+    }
     document.getElementById('bottomNav').style.display = 'flex';
     aplicarModoNav(modoSeleccionado);
     cargarDatosUsuario(user.uid);
