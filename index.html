@@ -399,6 +399,29 @@ textarea{min-height:96px;resize:vertical}
         <button class="btn-full" id="agregarContacto">Agregar contacto</button>
       </div>
     </div>
+    <!-- ══ PANEL OPERADOR (solo la cuenta central) ══ -->
+    <div class="screen-scroll" id="s-operador">
+      <div class="card">
+        <div class="card-title">Panel operador</div>
+        <div class="evento">
+          <div class="ev-ic v">👁️</div>
+          <div><strong>Vista de la central</strong><small>Alertas y clientes en tiempo real</small></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Alertas activas</div>
+        <div id="operadorAlertas">
+          <div class="evento"><div><strong>Cargando alertas…</strong></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Clientes</div>
+        <div id="operadorClientes">
+          <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
+        </div>
+      </div>
+      <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
+    </div>
   </div>
   <!-- Pantalla SOS activa con Mapa -->
   <div class="sos-active" id="sosActive">
@@ -441,6 +464,10 @@ const firebaseConfig = {
   measurementId: "G-B9C1DMPFW2"
 };
 firebase.initializeApp(firebaseConfig);
+// UID de la cuenta central (Diego, el operador): esta cuenta ve el panel
+// de operador (alertas de todos los clientes + lista de clientes) en vez
+// de la app normal de cliente.
+const CENTRAL_UID = 'ziDCZASJ7GaMoBhUDw7uPbKmFgE2';
 const auth = firebase.auth();
 const db = firebase.firestore();
 // ══ LÓGICA DE AUTENTICACIÓN ══
@@ -469,6 +496,7 @@ function registerUser() {
     });
 }
 function cerrarSesion() {
+  if (operadorInterval) { clearInterval(operadorInterval); operadorInterval = null; }
   auth.signOut();
   volverAlLogin();
 }
@@ -532,7 +560,99 @@ function entrarAVigil() {
   document.getElementById('accountName').textContent = name;
   document.getElementById('accountEmail').textContent = user.email;
 
+  // La cuenta central (Diego) ve el panel operador en vez de la app de cliente.
+  if (user.uid === CENTRAL_UID) {
+    document.getElementById('bottomNav').style.display = 'none';
+    go('s-operador');
+    cargarPanelOperador();
+    if (operadorInterval) clearInterval(operadorInterval);
+    operadorInterval = setInterval(cargarPanelOperador, 10000);
+    return;
+  }
+
   verificarPerfilYEntrar(user.uid);
+}
+
+// ══ PANEL OPERADOR (solo cuenta central) ══
+let operadorInterval = null;
+
+function formatearHoraOperador(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+async function cargarPanelOperador() {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const idToken = await user.getIdToken();
+    const resp = await fetch('/api/operador-datos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      document.getElementById('operadorAlertas').innerHTML = '<div class="evento"><div><strong>No se pudieron cargar los datos.</strong></div></div>';
+      return;
+    }
+    renderOperadorAlertas(data.alertas, data.clientes);
+    renderOperadorClientes(data.clientes);
+  } catch (err) {
+    console.error('Error cargando panel operador:', err);
+  }
+}
+
+function renderOperadorAlertas(alertas, clientes) {
+  const cont = document.getElementById('operadorAlertas');
+  if (!alertas || alertas.length === 0) {
+    cont.innerHTML = '<div class="evento"><div><strong>Sin alertas activas</strong><small>Todo tranquilo por ahora</small></div></div>';
+    return;
+  }
+  cont.innerHTML = alertas.map((a) => {
+    const cliente = clientes.find((c) => c.uid === a.clienteUid);
+    const nombreCliente = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
+    const mapaLink = a.ubicacion ? `https://www.google.com/maps?q=${a.ubicacion.lat},${a.ubicacion.lng}` : null;
+    return `
+      <div class="evento">
+        <div class="ev-ic a">🚨</div>
+        <div style="flex:1;">
+          <strong>${nombreCliente}</strong>
+          <small>${formatearHoraOperador(a.creadaEn)}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
+        </div>
+        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="atenderAlertaOperador('${a.clienteUid}','${a.alertaId}')">Atender</button>
+      </div>`;
+  }).join('');
+}
+
+function renderOperadorClientes(clientes) {
+  const cont = document.getElementById('operadorClientes');
+  if (!clientes || clientes.length === 0) {
+    cont.innerHTML = '<div class="evento"><div><strong>Sin clientes registrados</strong></div></div>';
+    return;
+  }
+  cont.innerHTML = clientes.map((c) => `
+    <div class="evento">
+      <div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div>
+      <div><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || ''} · ${c.modo === 'familia' ? 'Familia' : 'Empresa'}</small></div>
+    </div>`).join('');
+}
+
+async function atenderAlertaOperador(clienteUid, alertaId) {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const idToken = await user.getIdToken();
+    await fetch('/api/operador-atender', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, clienteUid, alertaId })
+    });
+    cargarPanelOperador();
+  } catch (err) {
+    console.error('Error marcando alerta como atendida:', err);
+  }
 }
 
 // ══ PERFIL: primer ingreso de un usuario nuevo ══
