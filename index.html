@@ -393,6 +393,7 @@ textarea{min-height:96px;resize:vertical}
         <select id="rolEmpresaInput" style="display:none;">
           <option value="gerente">Gerente</option>
           <option value="empleado" selected>Empleado</option>
+          <option value="tecnico">Técnico</option>
         </select>
         <button class="btn-full" id="unirseFamiliaBtn">Unirme</button>
         <div class="error-msg" id="unirseFamiliaInfo"></div>
@@ -494,9 +495,31 @@ textarea{min-height:96px;resize:vertical}
         </div>
       </div>
       <div class="card">
+        <div class="card-title">Visitas técnicas</div>
+        <div id="operadorCitas">
+          <div class="evento"><div><strong>Cargando visitas…</strong></div></div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-title">Historial reciente</div>
         <div id="operadorHistorial">
           <div class="evento"><div><strong>Cargando historial…</strong></div></div>
+        </div>
+      </div>
+      <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
+    </div>
+    <!-- ══ PANEL TÉCNICO (rolEmpresa === 'tecnico') ══ -->
+    <div class="screen-scroll" id="s-tecnico">
+      <div class="card">
+        <div class="card-title">Mis visitas asignadas</div>
+        <div class="evento">
+          <div class="ev-ic v">🛠</div>
+          <div><strong>Panel técnico</strong><small>Visitas que te asignó la central</small></div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="tecnicoCitas">
+          <div class="evento"><div><strong>Cargando visitas…</strong></div></div>
         </div>
       </div>
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
@@ -599,6 +622,7 @@ function registerUser() {
 }
 function cerrarSesion() {
   if (operadorInterval) { clearInterval(operadorInterval); operadorInterval = null; }
+  if (tecnicoInterval) { clearInterval(tecnicoInterval); tecnicoInterval = null; }
   operadorAlertaIdsConocidas = null;
   auth.signOut();
   volverAlLogin();
@@ -673,7 +697,22 @@ function entrarAVigil() {
     return;
   }
 
-  verificarPerfilYEntrar(user.uid);
+  // Si es técnico (rolEmpresa === 'tecnico'), ve su panel de visitas asignadas.
+  db.collection('usuarios').doc(user.uid).get().then((doc) => {
+    const data = doc.exists ? doc.data() : {};
+    if (data.rolEmpresa === 'tecnico') {
+      document.getElementById('bottomNav').style.display = 'none';
+      go('s-tecnico');
+      cargarPanelTecnico();
+      if (tecnicoInterval) clearInterval(tecnicoInterval);
+      tecnicoInterval = setInterval(cargarPanelTecnico, 15000);
+    } else {
+      verificarPerfilYEntrar(user.uid);
+    }
+  }).catch((err) => {
+    console.error('Error verificando rol de técnico:', err);
+    verificarPerfilYEntrar(user.uid);
+  });
 }
 
 // ══ PANEL OPERADOR (solo cuenta central) ══
@@ -681,6 +720,8 @@ let operadorInterval = null;
 let operadorAlertaIdsConocidas = null; // null = primera carga (no suena)
 let operadorMapa = null;
 let operadorMarcadores = [];
+let tecnicoInterval = null;
+const ROL_TEXTO_CORTO = { jefe: 'Jefe/a', gerente: 'Gerente', empleado: 'Empleado/a', tecnico: 'Técnico' };
 
 function formatearHoraOperador(iso) {
   if (!iso) return '';
@@ -740,6 +781,79 @@ async function cargarPanelOperador() {
   } catch (err) {
     console.error('Error cargando panel operador:', err);
   }
+
+  cargarCitasOperador();
+}
+
+async function cargarCitasOperador() {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const idToken = await user.getIdToken();
+    const resp = await fetch('/api/operador-citas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      document.getElementById('operadorCitas').innerHTML = '<div class="evento"><div><strong>No se pudieron cargar las visitas.</strong></div></div>';
+      return;
+    }
+    renderOperadorCitas(data.citas || [], data.tecnicos || []);
+  } catch (err) {
+    console.error('Error cargando citas del operador:', err);
+  }
+}
+
+function renderOperadorCitas(citas, tecnicos) {
+  const cont = document.getElementById('operadorCitas');
+  if (!citas.length) {
+    cont.innerHTML = '<div class="evento"><div><strong>Sin visitas agendadas</strong></div></div>';
+    return;
+  }
+  const estadoTexto = { agendada: 'Agendada', asignada: 'Asignada', en_camino: 'Técnico en camino', completada: 'Completada', cancelada: 'Cancelada' };
+  cont.innerHTML = citas.map((c, i) => {
+    const opciones = tecnicos.map((t) => `<option value="${t.uid}" ${c.tecnicoUid === t.uid ? 'selected' : ''}>${t.nombre || t.uid}</option>`).join('');
+    const asignar = (c.estado === 'agendada' || !c.tecnicoUid) ? `
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <select id="tecnicoSelect${i}" style="flex:1; margin:0;"><option value="">Elegir técnico…</option>${opciones}</select>
+        <button style="width:auto; padding:8px 14px; font-size:.75rem;" onclick="asignarTecnicoCita('${c.clienteUid}','${c.citaId}', document.getElementById('tecnicoSelect${i}').value)">Asignar</button>
+      </div>` : '';
+    const foto = c.fotoBase64 ? `<img src="data:image/jpeg;base64,${c.fotoBase64}" style="width:100%; border-radius:12px; margin-top:8px;">` : '';
+    const comentario = c.comentarioTecnico ? `<p style="font-size:.8rem; color:var(--gris); margin-top:6px;"><strong>Nota del técnico:</strong> ${c.comentarioTecnico}</p>` : '';
+    return `
+    <div class="evento" style="flex-direction:column; align-items:stretch;">
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="ev-ic v">📅</div>
+        <div style="flex:1;"><strong>${c.clienteLocal || c.clienteNombre || 'Cliente'}</strong><small>${c.fecha || ''} ${c.horario || ''} · ${estadoTexto[c.estado] || c.estado}${c.tecnicoNombre ? ' · ' + c.tecnicoNombre : ''}</small></div>
+      </div>
+      ${asignar}
+      ${comentario}
+      ${foto}
+    </div>`;
+  }).join('');
+}
+
+function asignarTecnicoCita(clienteUid, citaId, tecnicoUid) {
+  const user = auth.currentUser;
+  if (!user || !tecnicoUid) { if (!tecnicoUid) alert('Elige un técnico primero.'); return; }
+  user.getIdToken().then((idToken) => {
+    return fetch('/api/operador-asignar-tecnico', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, clienteUid, citaId, tecnicoUid })
+    });
+  }).then((r) => r.json()).then((data) => {
+    if (data.ok) {
+      cargarCitasOperador();
+    } else {
+      alert(data.error || 'No se pudo asignar el técnico.');
+    }
+  }).catch((err) => {
+    console.error('Error asignando técnico:', err);
+    alert('No se pudo asignar el técnico.');
+  });
 }
 
 function renderOperadorStats(stats) {
@@ -787,6 +901,152 @@ function renderOperadorMapa(alertas, clientes) {
     operadorMapa.fitBounds(puntos, { padding: [20, 20] });
   }
   setTimeout(() => operadorMapa.invalidateSize(), 100);
+}
+
+// ══ PANEL TÉCNICO (rolEmpresa === 'tecnico') ══
+async function cargarPanelTecnico() {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const idToken = await user.getIdToken();
+    const resp = await fetch('/api/tecnico-citas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      document.getElementById('tecnicoCitas').innerHTML = '<div class="evento"><div><strong>No se pudieron cargar tus visitas.</strong></div></div>';
+      return;
+    }
+    renderTecnicoCitas(data.citas || []);
+  } catch (err) {
+    console.error('Error cargando panel técnico:', err);
+  }
+}
+
+function renderTecnicoCitas(citas) {
+  const cont = document.getElementById('tecnicoCitas');
+  const pendientes = citas.filter((c) => c.estado === 'asignada' || c.estado === 'en_camino');
+  const completadas = citas.filter((c) => c.estado === 'completada');
+
+  if (!pendientes.length && !completadas.length) {
+    cont.innerHTML = '<div class="evento"><div><strong>No tienes visitas asignadas</strong></div></div>';
+    return;
+  }
+
+  const estadoTexto = { asignada: 'Asignada', en_camino: 'En camino' };
+  let html = pendientes.map((c, i) => {
+    const enCaminoBtn = c.estado === 'asignada'
+      ? `<button class="btn-full" style="width:auto; margin:6px 0 0; padding:8px 14px; font-size:.8rem;" onclick="marcarEnCamino('${c.clienteUid}','${c.citaId}')">Marcar en camino</button>`
+      : '';
+    const completarForm = c.estado === 'en_camino' ? `
+      <div style="margin-top:10px;">
+        <label style="font-size:.8rem;">Comentario de la visita</label>
+        <textarea id="comentarioTec${i}" placeholder="Qué se revisó/arregló…"></textarea>
+        <label style="font-size:.8rem;">Foto (opcional)</label>
+        <input type="file" accept="image/*" id="fotoTec${i}">
+        <button class="btn-full" style="margin-top:8px;" onclick="completarVisita('${c.clienteUid}','${c.citaId}', ${i})">Completar visita</button>
+        <div class="error-msg" id="completarInfo${i}"></div>
+      </div>` : '';
+    return `
+    <div class="evento" style="flex-direction:column; align-items:stretch;">
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="ev-ic v">📍</div>
+        <div style="flex:1;"><strong>${c.clienteLocal || c.clienteNombre || 'Cliente'}</strong><small>${c.clienteDireccion || ''} · ${c.fecha || ''} ${c.horario || ''} · ${estadoTexto[c.estado] || c.estado}</small></div>
+      </div>
+      ${enCaminoBtn}
+      ${completarForm}
+    </div>`;
+  }).join('');
+
+  if (completadas.length) {
+    html += `<div style="font-weight:700; font-size:.8rem; color:var(--gris); margin:16px 0 6px;">Completadas</div>`;
+    html += completadas.map((c) => `
+      <div class="evento">
+        <div class="ev-ic g">✅</div>
+        <div><strong>${c.clienteLocal || c.clienteNombre || 'Cliente'}</strong><small>${c.fecha || ''} ${c.horario || ''}</small></div>
+      </div>`).join('');
+  }
+
+  cont.innerHTML = html;
+}
+
+function marcarEnCamino(clienteUid, citaId) {
+  const user = auth.currentUser;
+  if (!user) return;
+  user.getIdToken().then((idToken) => {
+    return fetch('/api/tecnico-actualizar-cita', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, clienteUid, citaId, accion: 'en_camino' })
+    });
+  }).then((r) => r.json()).then((data) => {
+    if (data.ok) cargarPanelTecnico();
+    else alert(data.error || 'No se pudo actualizar la visita.');
+  }).catch((err) => {
+    console.error('Error marcando en camino:', err);
+    alert('No se pudo actualizar la visita.');
+  });
+}
+
+// Comprime la foto en el navegador (máx 800px de ancho, JPEG calidad 0.6) antes de subirla,
+// para no depender de Firebase Storage ni superar el límite de tamaño de un documento de Firestore.
+function comprimirFoto(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxAncho = 800;
+        const escala = Math.min(1, maxAncho / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * escala;
+        canvas.height = img.height * escala;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        resolve(dataUrl.split(',')[1]); // solo el base64, sin el prefijo "data:image/jpeg;base64,"
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function completarVisita(clienteUid, citaId, i) {
+  const user = auth.currentUser;
+  if (!user) return;
+  const comentario = document.getElementById(`comentarioTec${i}`).value.trim();
+  const fotoInput = document.getElementById(`fotoTec${i}`);
+  const info = document.getElementById(`completarInfo${i}`);
+  info.textContent = '';
+
+  const archivo = fotoInput.files && fotoInput.files[0];
+  const procesarFoto = archivo ? comprimirFoto(archivo) : Promise.resolve(null);
+
+  procesarFoto.then((fotoBase64) => {
+    return user.getIdToken().then((idToken) => {
+      return fetch('/api/tecnico-actualizar-cita', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, clienteUid, citaId, accion: 'completar', comentario, fotoBase64 })
+      });
+    });
+  }).then((r) => r.json()).then((data) => {
+    if (data.ok) {
+      cargarPanelTecnico();
+    } else {
+      info.style.color = 'var(--rojo)';
+      info.textContent = data.error || 'No se pudo completar la visita.';
+    }
+  }).catch((err) => {
+    console.error('Error completando visita:', err);
+    info.style.color = 'var(--rojo)';
+    info.textContent = 'No se pudo completar la visita.';
+  });
 }
 
 function renderOperadorHistorial(historial, clientes) {
@@ -898,7 +1158,7 @@ async function verClienteOperador(clienteUid) {
 }
 
 function renderClienteOperadorInfo(c) {
-  const rolTexto = { jefe: 'Jefe/a', gerente: 'Gerente', empleado: 'Empleado/a' };
+  const rolTexto = { jefe: 'Jefe/a', gerente: 'Gerente', empleado: 'Empleado/a', tecnico: 'Técnico' };
   const rolLinea = c.rolEmpresa ? `<small>${rolTexto[c.rolEmpresa] || c.rolEmpresa}${c.grupoFamiliarId ? ' · vinculado a un equipo' : ''}</small>` : (c.grupoFamiliarId ? '<small>Vinculado a otra familia/equipo</small>' : '');
   document.getElementById('clienteOperadorInfo').innerHTML = `
     <div class="evento"><div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div><div><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.modo === 'familia' ? 'Familia' : 'Empresa'}</small></div></div>
@@ -1224,7 +1484,7 @@ function cargarDatosUsuario(uid) {
       document.getElementById('recibirAlertasFamilia').checked = data.recibirAlertasFamilia !== false;
 
       if (modoSeleccionado === 'empresa') {
-        const rolTexto = { jefe: 'Jefe/a', gerente: 'Gerente', empleado: 'Empleado/a' };
+        const rolTexto = { jefe: 'Jefe/a', gerente: 'Gerente', empleado: 'Empleado/a', tecnico: 'Técnico' };
         if (!data.rolEmpresa && !data.grupoFamiliarId) {
           // Quien genera el código (no se unió con uno de otro) es el jefe por defecto.
           ref.set({ rolEmpresa: 'jefe' }, { merge: true }).catch((err) => console.error('Error asignando rol:', err));
