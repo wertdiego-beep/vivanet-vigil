@@ -422,6 +422,28 @@ textarea{min-height:96px;resize:vertical}
       </div>
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
+    <!-- ══ DETALLE DE CLIENTE (panel operador) ══ -->
+    <div class="screen-scroll" id="s-operador-cliente">
+      <button style="background:none; border:none; color:var(--violeta); font-weight:600; font-size:.85rem; text-align:left; padding:0 0 14px; cursor:pointer;" onclick="go('s-operador')">← Volver al panel</button>
+      <div class="card">
+        <div class="card-title">Cliente</div>
+        <div id="clienteOperadorInfo">
+          <div class="evento"><div><strong>Cargando…</strong></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Contactos de emergencia</div>
+        <div id="clienteOperadorContactos">
+          <div class="evento"><div><strong>Cargando…</strong></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Historial de alertas</div>
+        <div id="clienteOperadorAlertas">
+          <div class="evento"><div><strong>Cargando…</strong></div></div>
+        </div>
+      </div>
+    </div>
   </div>
   <!-- Pantalla SOS activa con Mapa -->
   <div class="sos-active" id="sosActive">
@@ -633,9 +655,72 @@ function renderOperadorClientes(clientes) {
     return;
   }
   cont.innerHTML = clientes.map((c) => `
-    <div class="evento">
+    <button class="evento" style="width:100%; text-align:left; background:none; cursor:pointer;" onclick="verClienteOperador('${c.uid}')">
       <div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div>
       <div><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || ''} · ${c.modo === 'familia' ? 'Familia' : 'Empresa'}</small></div>
+    </button>`).join('');
+}
+
+// ══ DETALLE DE CLIENTE (panel operador) ══
+async function verClienteOperador(clienteUid) {
+  go('s-operador-cliente');
+  document.getElementById('clienteOperadorInfo').innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
+  document.getElementById('clienteOperadorContactos').innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
+  document.getElementById('clienteOperadorAlertas').innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
+
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const idToken = await user.getIdToken();
+    const resp = await fetch('/api/operador-cliente', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, clienteUid })
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      document.getElementById('clienteOperadorInfo').innerHTML = '<div class="evento"><div><strong>No se pudo cargar el cliente.</strong></div></div>';
+      return;
+    }
+    renderClienteOperadorInfo(data.cliente);
+    renderClienteOperadorContactos(data.contactos);
+    renderClienteOperadorAlertas(data.alertas);
+  } catch (err) {
+    console.error('Error cargando detalle de cliente:', err);
+  }
+}
+
+function renderClienteOperadorInfo(c) {
+  document.getElementById('clienteOperadorInfo').innerHTML = `
+    <div class="evento"><div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div><div><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.modo === 'familia' ? 'Familia' : 'Empresa'}</small></div></div>
+    <div class="evento"><div class="ev-ic v">👤</div><div><strong>${c.nombre || '—'}</strong><small>Nombre de contacto</small></div></div>
+    <div class="evento"><div class="ev-ic v">📍</div><div><strong>${c.direccion || '—'}</strong><small>Dirección</small></div></div>`;
+}
+
+function renderClienteOperadorContactos(contactos) {
+  const cont = document.getElementById('clienteOperadorContactos');
+  if (!contactos || contactos.length === 0) {
+    cont.innerHTML = '<div class="evento"><div><strong>Sin contactos configurados</strong></div></div>';
+    return;
+  }
+  cont.innerHTML = contactos.map((c) => `
+    <div class="evento">
+      <div class="ev-ic v">📞</div>
+      <div><strong>${c.nombre || 'Contacto'}</strong><small>${c.telefono || 'Sin teléfono'} ${c.activo === false ? '· Silenciado' : ''}</small></div>
+    </div>`).join('');
+}
+
+function renderClienteOperadorAlertas(alertas) {
+  const cont = document.getElementById('clienteOperadorAlertas');
+  if (!alertas || alertas.length === 0) {
+    cont.innerHTML = '<div class="evento"><div><strong>Sin alertas registradas</strong></div></div>';
+    return;
+  }
+  const iconos = { activa: '🚨', atendida: '✅', cancelada: '⚪' };
+  cont.innerHTML = alertas.map((a) => `
+    <div class="evento">
+      <div class="ev-ic ${a.estado === 'activa' ? 'a' : 'g'}">${iconos[a.estado] || '📍'}</div>
+      <div><strong>${a.estado ? a.estado.charAt(0).toUpperCase() + a.estado.slice(1) : 'Alerta'}</strong><small>${formatearHoraOperador(a.creadaEn)}</small></div>
     </div>`).join('');
 }
 
