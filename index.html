@@ -1380,6 +1380,7 @@ function crearAlertaSOS() {
   notificarTelegram(`🚨 ALERTA SOS activada por ${user.email}. Revisando ubicación en vivo…`);
   notificarContactosEmergencia(`🚨 ALERTA SOS: ${user.email} activó el botón de pánico en su local. Se está revisando su ubicación en vivo.`);
   enviarPushSOS(user.email);
+  notificarFamiliaPush(user.email);
 }
 
 // ══ NOTIFICACIÓN PUSH (vía función serverless, además de Telegram) ══
@@ -1402,6 +1403,20 @@ function enviarPushSOS(emailUsuario) {
       })
     }).catch((err) => console.error('Error enviando push de SOS:', err));
   }).catch((err) => console.error('Error obteniendo token propio para push:', err));
+}
+
+// Avisa por notificación push a los DEMÁS integrantes de la misma familia
+// (código de familia), si tienen notificaciones push activadas.
+function notificarFamiliaPush(emailUsuario) {
+  const user = auth.currentUser;
+  if (!user) return;
+  user.getIdToken().then((idToken) => {
+    return fetch('/api/familia-alerta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, nombreUsuario: emailUsuario })
+    });
+  }).catch((err) => console.error('Error notificando a la familia:', err));
 }
 
 // ══ NOTIFICACIÓN TELEGRAM (vía función serverless, sin exponer el token) ══
