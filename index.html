@@ -426,8 +426,14 @@ textarea{min-height:96px;resize:vertical}
         </div>
       </div>
       <div class="card">
-        <div class="card-title">Clientes</div>
-        <div id="operadorClientes">
+        <div class="card-title">Clientes empresa 🏪</div>
+        <div id="operadorClientesEmpresa">
+          <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Clientes familia 👨‍👩‍👧</div>
+        <div id="operadorClientesFamilia">
           <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
         </div>
       </div>
@@ -767,15 +773,22 @@ function renderOperadorAlertas(alertas, clientes) {
 }
 
 function renderOperadorClientes(clientes) {
-  const cont = document.getElementById('operadorClientes');
-  if (!clientes || clientes.length === 0) {
-    cont.innerHTML = '<div class="evento"><div><strong>Sin clientes registrados</strong></div></div>';
+  const empresa = (clientes || []).filter((c) => c.modo !== 'familia');
+  const familia = (clientes || []).filter((c) => c.modo === 'familia');
+  renderListaClientesOperador('operadorClientesEmpresa', empresa, '🏪');
+  renderListaClientesOperador('operadorClientesFamilia', familia, '👨‍👩‍👧');
+}
+
+function renderListaClientesOperador(contId, lista, icono) {
+  const cont = document.getElementById(contId);
+  if (!lista || lista.length === 0) {
+    cont.innerHTML = '<div class="evento"><div><strong>Sin clientes en esta categoría</strong></div></div>';
     return;
   }
-  cont.innerHTML = clientes.map((c) => `
+  cont.innerHTML = lista.map((c) => `
     <button class="evento" style="width:100%; text-align:left; background:none; cursor:pointer;" onclick="verClienteOperador('${c.uid}')">
-      <div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div>
-      <div><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || ''} · ${c.modo === 'familia' ? 'Familia' : 'Empresa'}</small></div>
+      <div class="ev-ic v">${icono}</div>
+      <div><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || ''}</small></div>
     </button>`).join('');
 }
 
