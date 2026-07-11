@@ -426,6 +426,10 @@ textarea{min-height:96px;resize:vertical}
         </div>
       </div>
       <div class="card">
+        <div class="card-title">Buscar cliente</div>
+        <input type="text" id="operadorBuscarCliente" placeholder="Nombre, local o dirección…">
+      </div>
+      <div class="card">
         <div class="card-title">Clientes empresa 🏪</div>
         <div id="operadorClientesEmpresa">
           <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
@@ -772,17 +776,36 @@ function renderOperadorAlertas(alertas, clientes) {
   }).join('');
 }
 
+let operadorClientesData = [];
+let operadorBusqueda = '';
+
 function renderOperadorClientes(clientes) {
-  const empresa = (clientes || []).filter((c) => c.modo !== 'familia');
-  const familia = (clientes || []).filter((c) => c.modo === 'familia');
+  operadorClientesData = clientes || [];
+  aplicarBusquedaOperador();
+}
+
+function aplicarBusquedaOperador() {
+  const q = operadorBusqueda.trim().toLowerCase();
+  const filtrados = !q ? operadorClientesData : operadorClientesData.filter((c) => {
+    const texto = `${c.local || ''} ${c.nombre || ''} ${c.direccion || ''}`.toLowerCase();
+    return texto.includes(q);
+  });
+  const empresa = filtrados.filter((c) => c.modo !== 'familia');
+  const familia = filtrados.filter((c) => c.modo === 'familia');
   renderListaClientesOperador('operadorClientesEmpresa', empresa, '🏪');
   renderListaClientesOperador('operadorClientesFamilia', familia, '👨‍👩‍👧');
 }
 
+document.getElementById('operadorBuscarCliente').addEventListener('input', (e) => {
+  operadorBusqueda = e.target.value;
+  aplicarBusquedaOperador();
+});
+
 function renderListaClientesOperador(contId, lista, icono) {
   const cont = document.getElementById(contId);
   if (!lista || lista.length === 0) {
-    cont.innerHTML = '<div class="evento"><div><strong>Sin clientes en esta categoría</strong></div></div>';
+    const msg = operadorBusqueda.trim() ? 'Sin resultados para tu búsqueda' : 'Sin clientes en esta categoría';
+    cont.innerHTML = `<div class="evento"><div><strong>${msg}</strong></div></div>`;
     return;
   }
   cont.innerHTML = lista.map((c) => `
