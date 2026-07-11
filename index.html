@@ -379,6 +379,11 @@ textarea{min-height:96px;resize:vertical}
         <div class="card-title">Código de familia</div>
         <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Comparte este código con los demás integrantes de tu familia para que se sumen a tu mismo plan, con los mismos contactos de emergencia. Cuando cualquiera presione SOS, la alerta indicará quién fue.</p>
         <div class="evento"><div class="ev-ic v">🔑</div><div><strong id="miCodigoFamilia">—</strong><small>Tu código (compártelo)</small></div></div>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+          <input type="checkbox" id="recibirAlertasFamilia" checked style="width:auto; margin:0;">
+          <span style="font-weight:600; font-size:.85rem; margin:0;">Avisarme cuando otro familiar active el SOS</span>
+        </label>
+        <div class="error-msg" id="alertasFamiliaInfo" style="color:#048A52;"></div>
       </div>
       <div class="card" data-modo="familia" style="display:none;">
         <div class="card-title">Unirme a una familia</div>
@@ -1071,6 +1076,25 @@ if (guardarEditPerfilBtn) {
   });
 }
 
+// ══ RECIBIR (O NO) ALERTAS DE LA FAMILIA ══
+const recibirAlertasFamiliaChk = document.getElementById('recibirAlertasFamilia');
+if (recibirAlertasFamiliaChk) {
+  recibirAlertasFamiliaChk.addEventListener('change', () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const info = document.getElementById('alertasFamiliaInfo');
+    const valor = recibirAlertasFamiliaChk.checked;
+    db.collection('usuarios').doc(user.uid).set({ recibirAlertasFamilia: valor }, { merge: true }).then(() => {
+      info.style.color = '#048A52';
+      info.textContent = valor ? 'Vas a recibir avisos de tu familia.' : 'Notificaciones familiares desactivadas.';
+    }).catch((err) => {
+      console.error('Error guardando preferencia de alertas familiares:', err);
+      info.style.color = 'var(--rojo)';
+      info.textContent = 'No pudimos guardar el cambio.';
+    });
+  });
+}
+
 // ══ UNIRSE A UNA FAMILIA (código compartido) ══
 const unirseFamiliaBtn = document.getElementById('unirseFamiliaBtn');
 if (unirseFamiliaBtn) {
@@ -1158,6 +1182,7 @@ function cargarDatosUsuario(uid) {
           ref.set({ codigoFamilia: codigo }, { merge: true }).catch((err) => console.error('Error generando código de familia:', err));
           document.getElementById('miCodigoFamilia').textContent = codigo;
         }
+        document.getElementById('recibirAlertasFamilia').checked = data.recibirAlertasFamilia !== false;
       }
     } else {
       document.getElementById('userLocal').textContent = 'Aún no tienes un local registrado';
