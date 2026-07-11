@@ -187,7 +187,7 @@ async function listarIntegrantesGrupo(accessToken, grupoId) {
 }
 
 async function marcarGrupoFamiliar(accessToken, uid, grupoFamiliarId, rol) {
-  const rolValido = ['jefe', 'gerente', 'empleado'].includes(rol) ? rol : null;
+  const rolValido = ['jefe', 'gerente', 'empleado', 'tecnico'].includes(rol) ? rol : null;
   const fieldPaths = ['grupoFamiliarId'];
   const fields = { grupoFamiliarId: { stringValue: grupoFamiliarId } };
   if (rolValido) {
