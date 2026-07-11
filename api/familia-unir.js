@@ -144,6 +144,48 @@ async function copiarContacto(accessToken, uidDestino, campos) {
   });
 }
 
+async function obtenerUsuarioCompleto(accessToken, uid) {
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!resp.ok) return null;
+  const doc = await resp.json();
+  const f = doc.fields || {};
+  return { uid, nombre: f.nombre?.stringValue || '', telefono: f.telefono?.stringValue || '' };
+}
+
+// Devuelve todos los usuarios ya vinculados a un grupo familiar (hijos existentes del titular)
+async function listarIntegrantesGrupo(accessToken, grupoId) {
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId: 'usuarios' }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: 'grupoFamiliarId' },
+          op: 'EQUAL',
+          value: { stringValue: grupoId }
+        }
+      },
+      limit: 50
+    }
+  };
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) return [];
+  const data = await resp.json();
+  return (data || [])
+    .filter((r) => r.document)
+    .map((r) => {
+      const doc = r.document;
+      const uid = doc.name.split('/').pop();
+      const f = doc.fields || {};
+      return { uid, nombre: f.nombre?.stringValue || '', telefono: f.telefono?.stringValue || '' };
+    });
+}
+
 async function marcarGrupoFamiliar(accessToken, uid, grupoFamiliarId) {
   const url =
     `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}` +
@@ -186,11 +228,37 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Integrantes que ya estaban en el grupo ANTES de que este nuevo se una
+    // (titular + hermanos ya vinculados), para armar los contactos cruzados.
+    const hermanosExistentes = await listarIntegrantesGrupo(accessToken, titular.uid);
+    const titularCompleto = await obtenerUsuarioCompleto(accessToken, titular.uid);
+    const integrantesExistentes = [titularCompleto, ...hermanosExistentes].filter(Boolean);
+    const yo = await obtenerUsuarioCompleto(accessToken, uid);
+
     await marcarGrupoFamiliar(accessToken, uid, titular.uid);
 
-    const contactos = await listarContactos(accessToken, titular.uid);
-    for (const c of contactos) {
+    // Copia los contactos externos que el titular ya tenía configurados (abuela, vecino, etc.)
+    const contactosExternos = await listarContactos(accessToken, titular.uid);
+    for (const c of contactosExternos) {
       await copiarContacto(accessToken, uid, c);
+    }
+
+    // Cada integrante existente (titular + hermanos) queda como contacto de
+    // emergencia del que se une, y viceversa, para que se puedan avisar/llamar
+    // entre ellos directamente cuando alguno active el SOS.
+    for (const m of integrantesExistentes) {
+      await copiarContacto(accessToken, uid, {
+        nombre: { stringValue: m.nombre || 'Familiar' },
+        telefono: { stringValue: m.telefono || '' },
+        chatId: { stringValue: '' },
+        activo: { booleanValue: true }
+      });
+      await copiarContacto(accessToken, m.uid, {
+        nombre: { stringValue: (yo && yo.nombre) || 'Familiar' },
+        telefono: { stringValue: (yo && yo.telefono) || '' },
+        chatId: { stringValue: '' },
+        activo: { booleanValue: true }
+      });
     }
 
     res.status(200).json({ ok: true, familiaNombre: titular.local || titular.nombre || 'la familia' });
