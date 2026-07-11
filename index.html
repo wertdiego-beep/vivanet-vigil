@@ -384,6 +384,16 @@ textarea{min-height:96px;resize:vertical}
         </div>
         <button class="btn-full" id="pushBtn">Activar notificaciones</button>
       </div>
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="width:46px; height:46px; background:var(--violeta-suave); color:var(--violeta); border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">🧪</span>
+          <div>
+            <strong style="font-size:.95rem;">Probar botón SOS</strong>
+            <div style="font-size:.8rem; color:var(--gris);">Simula la pantalla de alarma sin avisar a la central ni a tus contactos</div>
+          </div>
+        </div>
+        <button class="btn-full" onclick="abrirSOS(true)">Iniciar prueba</button>
+      </div>
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
     <!-- ══ CONTACTOS DE EMERGENCIA ══ -->
@@ -483,9 +493,10 @@ textarea{min-height:96px;resize:vertical}
   </div>
   <!-- Pantalla SOS activa con Mapa -->
   <div class="sos-active" id="sosActive">
+    <div id="sosPruebaBanner" style="display:none; background:#FFC107; color:#3a2e00; font-weight:700; font-size:.8rem; padding:8px 14px; border-radius:10px; margin-bottom:10px;">🧪 MODO PRUEBA — No se envió ninguna alerta real</div>
     <div class="pulso">🚨</div>
-    <h2 class="cp">ALERTA ENVIADA</h2>
-    <p>La central Vigil recibió tu emergencia</p>
+    <h2 class="cp" id="sosTitulo">ALERTA ENVIADA</h2>
+    <p id="sosSubtitulo">La central Vigil recibió tu emergencia</p>
     <div class="map-container">
       <div class="map-label">📍 SEGUIMIENTO EN VIVO</div>
       <div id="mapaVigil"></div>
@@ -1213,15 +1224,21 @@ function stopSOS(){
 sosBtn.addEventListener('mousedown',startSOS);
 sosBtn.addEventListener('touchstart',startSOS,{passive:false});
 ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>sosBtn.addEventListener(ev,stopSOS));
-function abrirSOS(){
+let sosModoPrueba = false;
+function abrirSOS(prueba){
+  sosModoPrueba = !!prueba;
+  document.getElementById('sosPruebaBanner').style.display = sosModoPrueba ? 'block' : 'none';
+  document.getElementById('sosTitulo').textContent = sosModoPrueba ? 'PRUEBA DE ALARMA' : 'ALERTA ENVIADA';
+  document.getElementById('sosSubtitulo').textContent = sosModoPrueba ? 'Así se ve tu pantalla si activas el SOS de verdad' : 'La central Vigil recibió tu emergencia';
   document.getElementById('sosActive').classList.add('show');
-  crearAlertaSOS();
+  if (!sosModoPrueba) crearAlertaSOS();
   iniciarSeguimientoVivo();
 }
 function cerrarSOS(){
   document.getElementById('sosActive').classList.remove('show');
   detenerSeguimientoVivo();
-  cancelarAlertaSOS();
+  if (!sosModoPrueba) cancelarAlertaSOS();
+  sosModoPrueba = false;
 }
 
 // ══ ALERTA SOS EN FIRESTORE ══
@@ -1365,7 +1382,7 @@ function iniciarSeguimientoVivo() {
       const newLatLng = new L.LatLng(lat, lon);
       marker.setLatLng(newLatLng);
       map.setView(newLatLng, 17);
-      actualizarUbicacionAlerta(lat, lon);
+      if (!sosModoPrueba) actualizarUbicacionAlerta(lat, lon);
     },
     (error) => { alert("No pudimos acceder a tu GPS. Revisa los permisos de ubicación."); },
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
