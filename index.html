@@ -473,6 +473,7 @@ textarea{min-height:96px;resize:vertical}
           <div id="operadorCodigoTecnico" style="font-size:1.4rem; font-weight:700; letter-spacing:2px; background:rgba(255,255,255,.06); padding:8px 14px; border-radius:10px;">------</div>
           <button class="btn-full" id="copiarCodigoTecnico" style="width:auto; margin:0; padding:8px 14px;">Copiar</button>
         </div>
+        <div class="error-msg" id="operadorCodigoError" style="margin-top:8px;"></div>
       </div>
       <div class="card" id="operadorMapaCard" style="display:none;">
         <div class="card-title">Mapa de alertas activas</div>
@@ -766,6 +767,8 @@ function reproducirBeepAlerta() {
 function cargarCodigoOperador(uid) {
   const user = auth.currentUser;
   if (!user) return;
+  const errEl = document.getElementById('operadorCodigoError');
+  if (errEl) errEl.textContent = '';
   user.getIdToken().then((idToken) => {
     return fetch('/api/operador-datos', {
       method: 'POST',
@@ -775,8 +778,13 @@ function cargarCodigoOperador(uid) {
   }).then((r) => r.json()).then((data) => {
     if (data.ok && data.codigo) {
       document.getElementById('operadorCodigoTecnico').textContent = data.codigo;
+    } else if (errEl) {
+      errEl.textContent = data.error || 'No se pudo obtener el código.';
     }
-  }).catch((err) => console.error('Error cargando código de operador:', err));
+  }).catch((err) => {
+    console.error('Error cargando código de operador:', err);
+    if (errEl) errEl.textContent = 'Error de conexión al pedir el código.';
+  });
 }
 
 const copiarCodigoTecnicoBtn = document.getElementById('copiarCodigoTecnico');
