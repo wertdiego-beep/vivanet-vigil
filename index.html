@@ -532,6 +532,7 @@ textarea{min-height:96px;resize:vertical}
           <div><strong>Panel técnico</strong><small>Visitas que te asignó la central</small></div>
         </div>
         <p style="color:var(--gris); font-size:.7rem; margin-top:8px;">Tu ID: <span id="tecnicoMiId">—</span> (si tus visitas no aparecen, comparte este ID con la central para revisar)</p>
+        <p style="color:var(--gris); font-size:.65rem; margin-top:4px; word-break:break-all;" id="tecnicoDebug"></p>
       </div>
       <div class="card">
         <div id="tecnicoCitas">
@@ -1054,6 +1055,8 @@ async function cargarPanelTecnico() {
       return;
     }
     renderTecnicoCitas(data.citas || []);
+    const debugEl = document.getElementById('tecnicoDebug');
+    if (debugEl) debugEl.textContent = data.debug ? JSON.stringify(data.debug) : '';
   } catch (err) {
     console.error('Error cargando panel técnico:', err);
   }
