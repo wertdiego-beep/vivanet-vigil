@@ -238,7 +238,11 @@ export default async function handler(req, res) {
           const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/ziDCZASJ7GaMoBhUDw7uPbKmFgE2`;
           const docResp = await fetch(docUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
           const docData = await docResp.json();
-          debugInfo = ` [debug: status=${docResp.status}, codigoFamilia=${JSON.stringify(docData.fields?.codigoFamilia)}]`;
+          if (docResp.ok) {
+            debugInfo = ` [debug: status=${docResp.status}, codigoFamilia=${JSON.stringify(docData.fields?.codigoFamilia)}]`;
+          } else {
+            debugInfo = ` [debug: status=${docResp.status}, body=${JSON.stringify(docData).slice(0, 300)}]`;
+          }
         } catch (e) {
           debugInfo = ` [debug error: ${e.message}]`;
         }
