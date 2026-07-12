@@ -205,16 +205,20 @@ async function obtenerOGenerarCodigoOperador(accessToken, uid) {
   if (resp.ok) {
     const doc = await resp.json();
     const codigoExistente = doc.fields?.codigoFamilia?.stringValue;
-    if (codigoExistente) return codigoExistente;
+    if (codigoExistente) return { codigo: codigoExistente, creado: false };
   }
   const codigo = uid.slice(0, 6).toUpperCase();
   const patchUrl = `${url}?updateMask.fieldPaths=codigoFamilia`;
-  await fetch(patchUrl, {
+  const patchResp = await fetch(patchUrl, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: { codigoFamilia: { stringValue: codigo } } })
   });
-  return codigo;
+  if (!patchResp.ok) {
+    const errData = await patchResp.json().catch(() => ({}));
+    throw new Error('No se pudo guardar el código: ' + (errData.error?.message || patchResp.status));
+  }
+  return { codigo, creado: true };
 }
 
 function calcularStats(alertasRecientes) {
@@ -256,8 +260,8 @@ export default async function handler(req, res) {
     const accessToken = await obtenerAccessToken();
 
     if (accion === 'codigo') {
-      const codigo = await obtenerOGenerarCodigoOperador(accessToken, uid);
-      res.status(200).json({ ok: true, codigo });
+      const resultado = await obtenerOGenerarCodigoOperador(accessToken, uid);
+      res.status(200).json({ ok: true, codigo: resultado.codigo, creado: resultado.creado });
       return;
     }
 
