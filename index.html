@@ -531,6 +531,7 @@ textarea{min-height:96px;resize:vertical}
           <div class="ev-ic v">🛠</div>
           <div><strong>Panel técnico</strong><small>Visitas que te asignó la central</small></div>
         </div>
+        <p style="color:var(--gris); font-size:.7rem; margin-top:8px;">Tu ID: <span id="tecnicoMiId">—</span> (si tus visitas no aparecen, comparte este ID con la central para revisar)</p>
       </div>
       <div class="card">
         <div id="tecnicoCitas">
@@ -719,6 +720,8 @@ function entrarAVigil() {
     if (data.rolEmpresa === 'tecnico') {
       document.getElementById('bottomNav').style.display = 'none';
       go('s-tecnico');
+      const idEl = document.getElementById('tecnicoMiId');
+      if (idEl) idEl.textContent = user.uid.slice(-6).toUpperCase();
       cargarPanelTecnico();
       if (tecnicoInterval) clearInterval(tecnicoInterval);
       tecnicoInterval = setInterval(cargarPanelTecnico, INTERVALO_POLLING_MS);
@@ -931,7 +934,7 @@ function renderAgendaTecnicos(citas, tecnicos) {
       : '<div style="color:var(--gris); font-size:.8rem; padding:6px 0;">Sin visitas asignadas esta semana.</div>';
     return `
       <div style="margin-bottom:14px;">
-        <div style="font-weight:700; margin-bottom:4px;">👷 ${t.nombre || t.uid}</div>
+        <div style="font-weight:700; margin-bottom:4px;">👷 ${t.nombre || t.uid} <span style="font-weight:400; color:var(--gris); font-size:.75rem;">(ID ${t.uid.slice(-6).toUpperCase()})</span></div>
         ${items}
       </div>`;
   }).join('');
@@ -945,7 +948,7 @@ function renderOperadorCitas(citas, tecnicos) {
   }
   const estadoTexto = { agendada: 'Agendada', asignada: 'Asignada', en_camino: 'Técnico en camino', completada: 'Completada', cancelada: 'Cancelada' };
   cont.innerHTML = citas.map((c, i) => {
-    const opciones = tecnicos.map((t) => `<option value="${t.uid}" ${c.tecnicoUid === t.uid ? 'selected' : ''}>${t.nombre || t.uid}</option>`).join('');
+    const opciones = tecnicos.map((t) => `<option value="${t.uid}" ${c.tecnicoUid === t.uid ? 'selected' : ''}>${t.nombre || t.uid} (ID ${t.uid.slice(-6).toUpperCase()})</option>`).join('');
     const asignar = (c.estado === 'agendada' || !c.tecnicoUid) ? `
       <div style="display:flex; gap:6px; margin-top:8px;">
         <select id="tecnicoSelect${i}" style="flex:1; margin:0;"><option value="">Elegir técnico…</option>${opciones}</select>
