@@ -703,7 +703,7 @@ function entrarAVigil() {
     cargarCodigoOperador(user.uid);
     cargarPanelOperador();
     if (operadorInterval) clearInterval(operadorInterval);
-    operadorInterval = setInterval(cargarPanelOperador, 10000);
+    operadorInterval = setInterval(cargarPanelOperador, INTERVALO_POLLING_MS);
     return;
   }
 
@@ -715,7 +715,7 @@ function entrarAVigil() {
       go('s-tecnico');
       cargarPanelTecnico();
       if (tecnicoInterval) clearInterval(tecnicoInterval);
-      tecnicoInterval = setInterval(cargarPanelTecnico, 15000);
+      tecnicoInterval = setInterval(cargarPanelTecnico, INTERVALO_POLLING_MS);
     } else {
       verificarPerfilYEntrar(user.uid);
     }
@@ -726,11 +726,28 @@ function entrarAVigil() {
 }
 
 // ══ PANEL OPERADOR (solo cuenta central) ══
+// Cada actualización del panel consume varias lecturas de Firestore
+// (clientes + alertas activas + historial). Un intervalo corto (antes 10s)
+// multiplicado por horas de uso agota rápido la cuota gratuita diaria, así
+// que lo espaciamos y además lo pausamos por completo si la pestaña queda en
+// segundo plano (nadie la está mirando, no hace falta seguir consultando).
+const INTERVALO_POLLING_MS = 45000;
 let operadorInterval = null;
 let operadorAlertaIdsConocidas = null; // null = primera carga (no suena)
 let operadorMapa = null;
 let operadorMarcadores = [];
 let tecnicoInterval = null;
+let pollPausadoOperador = false;
+let pollPausadoTecnico = false;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (operadorInterval) { clearInterval(operadorInterval); operadorInterval = null; pollPausadoOperador = true; }
+    if (tecnicoInterval) { clearInterval(tecnicoInterval); tecnicoInterval = null; pollPausadoTecnico = true; }
+  } else {
+    if (pollPausadoOperador) { pollPausadoOperador = false; cargarPanelOperador(); operadorInterval = setInterval(cargarPanelOperador, INTERVALO_POLLING_MS); }
+    if (pollPausadoTecnico) { pollPausadoTecnico = false; cargarPanelTecnico(); tecnicoInterval = setInterval(cargarPanelTecnico, INTERVALO_POLLING_MS); }
+  }
+});
 const ROL_TEXTO_CORTO = { jefe: 'Jefe/a', gerente: 'Gerente', empleado: 'Empleado/a', tecnico: 'Técnico' };
 
 function formatearHoraOperador(iso) {
