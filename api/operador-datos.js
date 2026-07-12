@@ -193,6 +193,30 @@ async function listarAlertasRecientes(accessToken) {
     .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
 }
 
+// Obtiene el código de equipo de la central (Diego) vía la cuenta de
+// servicio, generándolo y guardándolo si todavía no existe. Se hace acá (en
+// vez de con el SDK del cliente) porque las reglas de seguridad de Firestore
+// no le permiten a la cuenta central escribir su propio documento desde el
+// navegador, por lo que un .set() directo desde el cliente fallaba en
+// silencio y mostraba un código que nunca quedaba realmente guardado.
+async function obtenerOGenerarCodigoOperador(accessToken, uid) {
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (resp.ok) {
+    const doc = await resp.json();
+    const codigoExistente = doc.fields?.codigoFamilia?.stringValue;
+    if (codigoExistente) return codigoExistente;
+  }
+  const codigo = uid.slice(0, 6).toUpperCase();
+  const patchUrl = `${url}?updateMask.fieldPaths=codigoFamilia`;
+  await fetch(patchUrl, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { codigoFamilia: { stringValue: codigo } } })
+  });
+  return codigo;
+}
+
 function calcularStats(alertasRecientes) {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
@@ -216,7 +240,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { idToken } = req.body || {};
+  const { idToken, accion } = req.body || {};
   if (!idToken) {
     res.status(400).json({ error: 'Falta idToken' });
     return;
@@ -230,6 +254,13 @@ export default async function handler(req, res) {
     }
 
     const accessToken = await obtenerAccessToken();
+
+    if (accion === 'codigo') {
+      const codigo = await obtenerOGenerarCodigoOperador(accessToken, uid);
+      res.status(200).json({ ok: true, codigo });
+      return;
+    }
+
     const [clientes, alertas, alertasRecientes] = await Promise.all([
       listarClientes(accessToken),
       listarAlertasActivas(accessToken),
