@@ -228,26 +228,7 @@ export default async function handler(req, res) {
     const titular = await buscarTitularPorCodigo(accessToken, codigoNormalizado);
 
     if (!titular) {
-      // Diagnóstico temporal: si el código es el de la central, revisamos
-      // directamente su documento (sin pasar por la query) para saber si el
-      // problema es que el campo nunca se guardó, o que la query no lo
-      // encuentra por alguna otra razón.
-      let debugInfo = '';
-      if (codigoNormalizado === 'ZIDCZA') {
-        try {
-          const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/ziDCZASJ7GaMoBhUDw7uPbKmFgE2`;
-          const docResp = await fetch(docUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-          const docData = await docResp.json();
-          if (docResp.ok) {
-            debugInfo = ` [debug: status=${docResp.status}, codigoFamilia=${JSON.stringify(docData.fields?.codigoFamilia)}]`;
-          } else {
-            debugInfo = ` [debug: status=${docResp.status}, body=${JSON.stringify(docData).slice(0, 300)}]`;
-          }
-        } catch (e) {
-          debugInfo = ` [debug error: ${e.message}]`;
-        }
-      }
-      res.status(404).json({ error: 'No encontramos ninguna familia con ese código' + debugInfo });
+      res.status(404).json({ error: 'No encontramos ninguna familia con ese código' });
       return;
     }
     if (titular.uid === uid) {
