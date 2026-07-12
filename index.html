@@ -759,17 +759,22 @@ function reproducirBeepAlerta() {
 }
 
 // Muestra (y genera si hace falta) el código de equipo de la central, para que
-// Diego se lo entregue directamente a sus técnicos.
+// Diego se lo entregue directamente a sus técnicos. Se pide al servidor (con
+// la cuenta de servicio) en vez de escribirlo directo desde el navegador,
+// porque las reglas de seguridad de Firestore no dejan que la cuenta central
+// escriba su propio documento desde el cliente.
 function cargarCodigoOperador(uid) {
-  const ref = db.collection('usuarios').doc(uid);
-  ref.get().then((doc) => {
-    const data = doc.exists ? doc.data() : {};
-    if (data.codigoFamilia) {
-      document.getElementById('operadorCodigoTecnico').textContent = data.codigoFamilia;
-    } else {
-      const codigo = uid.slice(0, 6).toUpperCase();
-      ref.set({ codigoFamilia: codigo }, { merge: true }).catch((err) => console.error('Error generando código de operador:', err));
-      document.getElementById('operadorCodigoTecnico').textContent = codigo;
+  const user = auth.currentUser;
+  if (!user) return;
+  user.getIdToken().then((idToken) => {
+    return fetch('/api/operador-datos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, accion: 'codigo' })
+    });
+  }).then((r) => r.json()).then((data) => {
+    if (data.ok && data.codigo) {
+      document.getElementById('operadorCodigoTecnico').textContent = data.codigo;
     }
   }).catch((err) => console.error('Error cargando código de operador:', err));
 }
