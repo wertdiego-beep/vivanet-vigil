@@ -510,6 +510,12 @@ textarea{min-height:96px;resize:vertical}
         </div>
       </div>
       <div class="card">
+        <div class="card-title">Agenda de técnicos (esta semana)</div>
+        <div id="operadorAgendaTecnicos">
+          <div class="evento"><div><strong>Cargando agenda…</strong></div></div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-title">Historial reciente</div>
         <div id="operadorHistorial">
           <div class="evento"><div><strong>Cargando historial…</strong></div></div>
@@ -869,9 +875,66 @@ async function cargarCitasOperador() {
       return;
     }
     renderOperadorCitas(data.citas || [], data.tecnicos || []);
+    renderAgendaTecnicos(data.citas || [], data.tecnicos || []);
   } catch (err) {
     console.error('Error cargando citas del operador:', err);
   }
+}
+
+// Agenda semanal por técnico: reutiliza los mismos datos de citas que ya
+// trae cargarCitasOperador() (misma llamada, sin lecturas extra a Firestore)
+// y arma, para cada técnico, la lista de sus visitas de la semana actual
+// (lunes a domingo) ordenadas por día y horario.
+function inicioSemana(fecha) {
+  const d = new Date(fecha);
+  d.setHours(0, 0, 0, 0);
+  const dia = d.getDay(); // 0=domingo .. 6=sábado
+  const offset = dia === 0 ? -6 : 1 - dia; // retrocede hasta el lunes
+  d.setDate(d.getDate() + offset);
+  return d;
+}
+function formatoFechaISO(d) {
+  return d.toISOString().slice(0, 10);
+}
+function renderAgendaTecnicos(citas, tecnicos) {
+  const cont = document.getElementById('operadorAgendaTecnicos');
+  if (!cont) return;
+
+  const lunes = inicioSemana(new Date());
+  const domingo = new Date(lunes);
+  domingo.setDate(domingo.getDate() + 6);
+  const lunesISO = formatoFechaISO(lunes);
+  const domingoISO = formatoFechaISO(domingo);
+
+  const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  const estadoTexto = { agendada: 'Agendada', asignada: 'Asignada', en_camino: 'En camino', completada: 'Completada', cancelada: 'Cancelada' };
+
+  const citasSemana = citas
+    .filter((c) => c.fecha && c.fecha >= lunesISO && c.fecha <= domingoISO && c.tecnicoUid)
+    .sort((a, b) => (a.fecha + a.horario).localeCompare(b.fecha + b.horario));
+
+  if (!tecnicos.length) {
+    cont.innerHTML = '<div class="evento"><div><strong>No hay técnicos registrados aún.</strong></div></div>';
+    return;
+  }
+
+  cont.innerHTML = tecnicos.map((t) => {
+    const citasTecnico = citasSemana.filter((c) => c.tecnicoUid === t.uid);
+    const items = citasTecnico.length
+      ? citasTecnico.map((c) => {
+          const d = new Date(c.fecha + 'T00:00:00');
+          const nombreDia = diasSemana[(d.getDay() + 6) % 7];
+          return `<div class="evento" style="padding:8px 0;">
+            <div style="flex:1;"><strong>${nombreDia} ${c.fecha} · ${c.horario}</strong><small>${c.clienteLocal || c.clienteNombre || 'Cliente'} · ${estadoTexto[c.estado] || c.estado}</small></div>
+          </div>`;
+        }).join('')
+      : '<div style="color:var(--gris); font-size:.8rem; padding:6px 0;">Sin visitas asignadas esta semana.</div>';
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="font-weight:700; margin-bottom:4px;">👷 ${t.nombre || t.uid}</div>
+        ${items}
+      </div>`;
+  }).join('');
 }
 
 function renderOperadorCitas(citas, tecnicos) {
