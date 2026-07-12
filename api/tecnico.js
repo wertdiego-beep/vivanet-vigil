@@ -83,15 +83,12 @@ async function listarCitasTecnico(accessToken, tecnicoUid) {
     body: JSON.stringify(body)
   });
   if (!resp.ok) {
-    // DIAGNÓSTICO TEMPORAL: si la consulta falla (ej: falta un índice de
-    // Firestore para este filtro en una collection group query), devolvemos
-    // el motivo en vez de tragárnoslo en silencio, para poder ver por qué el
-    // técnico no ve sus visitas asignadas.
     const errText = await resp.text().catch(() => '');
-    return { citas: [], debug: { status: resp.status, error: errText.slice(0, 500) } };
+    console.error('Error listando citas del técnico (Firestore):', resp.status, errText.slice(0, 500));
+    return [];
   }
   const data = await resp.json();
-  const citas = (data || [])
+  return (data || [])
     .filter((r) => r.document)
     .map((r) => {
       const doc = r.document;
@@ -108,7 +105,6 @@ async function listarCitasTecnico(accessToken, tecnicoUid) {
         estado: f.estado?.stringValue || 'agendada'
       };
     });
-  return { citas, debug: { status: resp.status, encontradas: citas.length } };
 }
 
 async function obtenerCliente(accessToken, uid) {
@@ -134,7 +130,7 @@ async function obtenerCita(accessToken, clienteUid, citaId) {
 }
 
 async function listar(res, accessToken, uid) {
-  const { citas, debug } = await listarCitasTecnico(accessToken, uid);
+  const citas = await listarCitasTecnico(accessToken, uid);
   const clientesCache = {};
   for (const c of citas) {
     if (!clientesCache[c.clienteUid]) {
@@ -146,7 +142,7 @@ async function listar(res, accessToken, uid) {
     c.clienteDireccion = info.direccion || '';
   }
   const citasPropias = citas.filter((c) => ['asignada', 'en_camino', 'completada'].includes(c.estado));
-  res.status(200).json({ ok: true, citas: citasPropias, debug });
+  res.status(200).json({ ok: true, citas: citasPropias });
 }
 
 async function actualizar(res, accessToken, uid, { clienteUid, citaId, accion, comentario, fotoBase64 }) {
