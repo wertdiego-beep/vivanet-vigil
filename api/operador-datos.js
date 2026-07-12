@@ -153,8 +153,12 @@ async function listarAlertasActivas(accessToken) {
     });
 }
 
-// Trae hasta 300 alertas recientes (de cualquier estado, de cualquier
+// Trae hasta 60 alertas recientes (de cualquier estado, de cualquier
 // cliente) sin filtro, para armar el historial general y las estadísticas.
+// Antes traía 300, pero como este endpoint se consulta en cada actualización
+// del panel operador, ese límite alto multiplicaba mucho las lecturas de
+// Firestore y agotaba la cuota gratuita diaria. 60 alcanza de sobra para el
+// historial visible (20) y las estadísticas del día a esta escala de uso.
 // No usamos "where"/"orderBy" combinados para evitar depender de un índice
 // compuesto en Firestore; ordenamos y filtramos acá mismo, en JS.
 async function listarAlertasRecientes(accessToken) {
@@ -162,7 +166,7 @@ async function listarAlertasRecientes(accessToken) {
   const body = {
     structuredQuery: {
       from: [{ collectionId: 'alertas', allDescendants: true }],
-      limit: 300
+      limit: 60
     }
   };
   const resp = await fetch(url, {
