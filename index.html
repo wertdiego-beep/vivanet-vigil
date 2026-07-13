@@ -37,6 +37,17 @@ button{font-family:inherit;border:none;cursor:pointer;background:none}
   body{padding:32px 0}
   .phone{min-height:auto;height:860px;border-radius:38px;box-shadow:0 40px 90px -20px rgba(0,0,0,.55), 0 0 0 10px #17152F}
 }
+/* Panel de control (central): en pantallas grandes se ve como una app de
+   escritorio normal, en vez del recuadro angosto tipo celular que usan las
+   pantallas de cliente/técnico. Se activa agregando la clase "modo-operador"
+   al body cuando se entra a #s-operador (ver función go()). */
+body.modo-operador{padding:0}
+@media(min-width:900px){
+  body.modo-operador .phone{max-width:1280px;height:auto;min-height:100vh;border-radius:0;box-shadow:none}
+  body.modo-operador #s-operador{display:grid;grid-template-columns:repeat(auto-fill, minmax(360px,1fr));align-items:start;gap:16px}
+  body.modo-operador #s-operador .card{margin-bottom:0}
+  body.modo-operador #s-operador .card:first-child{grid-column:1 / -1}
+}
 .app-head{padding:22px 22px 14px;display:flex;align-items:center;justify-content:space-between}
 .brand{display:flex;align-items:center;gap:10px;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:.03em}
 .brand .mark{width:34px;height:34px;border-radius:9px;background:var(--violeta);color:#fff;display:grid;place-items:center;font-size:1rem}
@@ -1862,6 +1873,7 @@ function go(id){
   document.getElementById(id).classList.add('active');
   document.querySelectorAll('.nav button[data-s]').forEach(b=>b.classList.toggle('on', b.dataset.s===id));
   document.getElementById('appScreens').scrollTop = 0;
+  document.body.classList.toggle('modo-operador', id === 's-operador');
 }
 document.querySelectorAll('.nav button[data-s]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.s)));
 // ══ BOTÓN SOS Y MAPA ══
