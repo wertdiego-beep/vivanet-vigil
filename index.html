@@ -137,6 +137,12 @@ textarea{min-height:96px;resize:vertical}
 .map-container{width:100%;max-width:300px;height:200px;background:rgba(0,0,0,.2);border-radius:16px;overflow:hidden;margin:10px 0 20px;position:relative;border:2px solid rgba(255,255,255,.2);flex-shrink:0}
 #mapaVigil{width:100%;height:100%}
 .map-label{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:99px;font-size:.7rem;font-family:'Chakra Petch',sans-serif;letter-spacing:.08em;z-index:999}
+/* Pins del mapa de la central */
+.op-pin{width:14px;height:14px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.35);position:relative}
+.op-pin.sos{background:var(--rojo)}
+.op-pin.sos::after{content:'';position:absolute;inset:-4px;border-radius:50%;background:rgba(229,52,75,.45);animation:opPing 1.6s infinite;z-index:-1}
+@keyframes opPing{0%{transform:scale(1);opacity:.8}80%,100%{transform:scale(2.8);opacity:0}}
+.op-pin.cliente{background:var(--verde)}
 .btn-cancelar{background:#fff;color:var(--rojo-oscuro);padding:15px 40px;border-radius:99px;font-weight:700;font-size:.95rem;margin-top:10px}
 .chat-box{display:grid;gap:12px}
 .msg{max-width:82%;padding:12px 15px;border-radius:16px;font-size:.9rem;line-height:1.45}
@@ -486,9 +492,13 @@ textarea{min-height:96px;resize:vertical}
       <div class="operador-cols">
         <div class="operador-col">
           <div class="operador-col-title">Monitoreo y clientes</div>
-          <div class="card" id="operadorMapaCard" style="display:none;">
-            <div class="card-title">Mapa de alertas activas</div>
-            <div class="map-container" style="max-width:none; height:180px; margin:0;">
+          <div class="card" id="operadorMapaCard">
+            <div class="card-title">Mapa de la central</div>
+            <div style="font-size:.72rem; color:var(--gris); margin:2px 0 10px;">
+              <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
+              <span style="color:var(--verde);">●</span> Cliente protegido
+            </div>
+            <div class="map-container" style="max-width:none; height:260px; margin:0;">
               <div id="mapaOperador" style="width:100%; height:100%; border-radius:16px;"></div>
             </div>
           </div>
@@ -782,6 +792,14 @@ let operadorInterval = null;
 let operadorAlertaIdsConocidas = null; // null = primera carga (no suena)
 let operadorMapa = null;
 let operadorMarcadores = [];
+let operadorMarcadoresClientes = {}; // uid -> marker (clientes geocodificados)
+let operadorMapaAjustado = false;    // ya se hizo el encuadre inicial
+const MAPA_CENTRO_DEFECTO = [-29.9045, -71.2489]; // La Serena
+const MAPA_CIUDAD_CONTEXTO = 'La Serena, Chile';  // se agrega a direcciones sin ciudad
+const GEO_CACHE_KEY = 'vigilGeoCache_v1';
+const geoEnProceso = new Set();
+let geoCola = [];
+let geoColaActiva = false;
 let tecnicoInterval = null;
 let pollPausadoOperador = false;
 let pollPausadoTecnico = false;
@@ -1126,37 +1144,125 @@ function renderOperadorStats(stats) {
     <div class="stat-box"><strong>${tiempoTxt}</strong><small>Resp. prom.</small></div>`;
 }
 
+// ── Geocodificación de direcciones de clientes (Nominatim/OSM, gratis) ──
+// Resultados en caché (localStorage) para no repetir consultas; la cola
+// procesa 1 consulta por segundo, que es el límite de uso de Nominatim.
+function leerGeoCache() {
+  try { return JSON.parse(localStorage.getItem(GEO_CACHE_KEY)) || {}; } catch { return {}; }
+}
+function guardarEnGeoCache(clave, valor) {
+  const cache = leerGeoCache();
+  cache[clave] = valor; // {lat,lng} o null si no se encontró
+  try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache)); } catch {}
+}
+
+async function consultarNominatim(q) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&q=${encodeURIComponent(q)}`;
+  const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  if (!data || !data[0]) return null;
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+}
+
+async function procesarColaGeo() {
+  if (geoColaActiva) return;
+  geoColaActiva = true;
+  while (geoCola.length > 0) {
+    const { clave, direccion, cliente } = geoCola.shift();
+    try {
+      // Primero la dirección tal cual; si no hay resultado, con la ciudad de la central
+      let coords = await consultarNominatim(direccion);
+      if (!coords && !/serena|coquimbo|chile/i.test(direccion)) {
+        coords = await consultarNominatim(`${direccion}, ${MAPA_CIUDAD_CONTEXTO}`);
+      }
+      guardarEnGeoCache(clave, coords);
+      if (coords && operadorMapa) agregarMarcadorCliente(cliente, coords);
+    } catch (e) {
+      console.warn('Geocodificación falló para:', direccion, e);
+    }
+    geoEnProceso.delete(clave);
+    await new Promise((r) => setTimeout(r, 1100)); // respeta límite de Nominatim
+  }
+  geoColaActiva = false;
+  ajustarEncuadreInicial();
+}
+
+function agregarMarcadorCliente(cliente, coords) {
+  if (operadorMarcadoresClientes[cliente.uid]) return;
+  const icono = L.divIcon({ className: '', html: '<div class="op-pin cliente"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+  const emoji = cliente.modo === 'familia' ? '👨‍👩‍👧' : '🏪';
+  const nombre = cliente.local || cliente.nombre || 'Cliente';
+  const marker = L.marker([coords.lat, coords.lng], { icon: icono })
+    .addTo(operadorMapa)
+    .bindPopup(`${emoji} <b>${nombre}</b><br><span style="color:#5C5A72">${cliente.direccion || ''}</span>`);
+  operadorMarcadoresClientes[cliente.uid] = marker;
+}
+
+function actualizarMarcadoresClientes(clientes) {
+  const cache = leerGeoCache();
+  (clientes || []).forEach((c) => {
+    if (operadorMarcadoresClientes[c.uid]) return;
+    const direccion = (c.direccion || '').trim();
+    if (!direccion) return;
+    const clave = direccion.toLowerCase();
+    if (clave in cache) {
+      if (cache[clave]) agregarMarcadorCliente(c, cache[clave]);
+      return; // null en caché = dirección no encontrada, no reintentar
+    }
+    if (geoEnProceso.has(clave)) return;
+    geoEnProceso.add(clave);
+    geoCola.push({ clave, direccion, cliente: c });
+  });
+  procesarColaGeo();
+}
+
+// Encuadre inicial: prioriza alertas; si no hay, encuadra los clientes.
+function ajustarEncuadreInicial() {
+  if (operadorMapaAjustado || !operadorMapa) return;
+  const marcadores = Object.values(operadorMarcadoresClientes);
+  if (operadorMarcadores.length > 0) return; // las alertas ya mandan el encuadre
+  if (marcadores.length === 0) return;
+  operadorMapaAjustado = true;
+  const grupo = L.featureGroup(marcadores);
+  operadorMapa.fitBounds(grupo.getBounds().pad(0.25), { maxZoom: 15 });
+}
+
 function renderOperadorMapa(alertas, clientes) {
   const card = document.getElementById('operadorMapaCard');
-  const conUbicacion = (alertas || []).filter((a) => a.ubicacion);
-
-  if (conUbicacion.length === 0) {
-    card.style.display = 'none';
-    return;
-  }
   card.style.display = 'block';
 
   if (!operadorMapa) {
-    operadorMapa = L.map('mapaOperador');
+    operadorMapa = L.map('mapaOperador').setView(MAPA_CENTRO_DEFECTO, 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'Vigil App', maxZoom: 19 }).addTo(operadorMapa);
   }
 
+  // Marcadores de alertas SOS (rojos, pulsantes)
   operadorMarcadores.forEach((m) => operadorMapa.removeLayer(m));
   operadorMarcadores = [];
 
   const puntos = [];
+  const conUbicacion = (alertas || []).filter((a) => a.ubicacion);
   conUbicacion.forEach((a) => {
     const cliente = clientes.find((c) => c.uid === a.clienteUid);
     const nombre = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
-    const marker = L.marker([a.ubicacion.lat, a.ubicacion.lng]).addTo(operadorMapa).bindPopup(`🚨 ${nombre}`);
+    const icono = L.divIcon({ className: '', html: '<div class="op-pin sos"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+    const marker = L.marker([a.ubicacion.lat, a.ubicacion.lng], { icon: icono, zIndexOffset: 1000 })
+      .addTo(operadorMapa)
+      .bindPopup(`🚨 <b>${nombre}</b><br>SOS activo`);
     operadorMarcadores.push(marker);
     puntos.push([a.ubicacion.lat, a.ubicacion.lng]);
   });
 
+  // Marcadores de clientes (verdes, geocodificados desde su dirección)
+  actualizarMarcadoresClientes(clientes);
+
   if (puntos.length === 1) {
     operadorMapa.setView(puntos[0], 15);
-  } else {
+  } else if (puntos.length > 1) {
     operadorMapa.fitBounds(puntos, { padding: [20, 20] });
+  } else {
+    ajustarEncuadreInicial();
   }
   setTimeout(() => operadorMapa.invalidateSize(), 100);
 }
