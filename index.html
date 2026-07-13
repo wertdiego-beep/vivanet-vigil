@@ -332,7 +332,7 @@ textarea{min-height:96px;resize:vertical}
       </div>
       <div class="card-title" style="margin:22px 0 12px">Accesos rápidos</div>
       <div class="quick-grid">
-        <button class="quick" onclick="go('s-soporte')" data-modo="empresa">
+        <button class="quick" onclick="go('s-soporte')" data-modo="empresa" data-solo-duenio>
           <span class="ic">🛠</span><strong>Reportar falla</strong><small>Cámara, sensor, alarma…</small>
         </button>
         <button class="quick" onclick="go('s-estado')" data-modo="empresa">
@@ -359,7 +359,7 @@ textarea{min-height:96px;resize:vertical}
         <div class="dev-grid" id="devGrid">
           <div class="dev"><small>Cargando dispositivos…</small></div>
         </div>
-        <button class="btn-full" onclick="go('s-soporte')" style="background:#FFF4E0;color:#B57500">⚠ Reportar cámara sin señal</button>
+        <button class="btn-full" onclick="go('s-soporte')" data-solo-duenio style="background:#FFF4E0;color:#B57500">⚠ Reportar cámara sin señal</button>
       </div>
       <div class="card">
         <div class="card-title">Últimos eventos</div>
@@ -748,7 +748,7 @@ textarea{min-height:96px;resize:vertical}
     <button data-s="s-estado" data-modo="empresa"><span class="nic">📊</span>Estado</button>
     <button data-s="s-contactos" data-modo="familia" style="display:none"><span class="nic">📞</span>Contactos</button>
     <button onclick="abrirSOS()" style="width:auto"><span class="sos-mini">SOS</span></button>
-    <button data-s="s-soporte" data-modo="empresa"><span class="nic">🛠</span>Soporte</button>
+    <button data-s="s-soporte" data-modo="empresa" data-solo-duenio><span class="nic">🛠</span>Soporte</button>
     <button data-s="s-chat" data-modo="familia" style="display:none"><span class="nic">💬</span>Chat</button>
     <button data-s="s-mas"><span class="nic">☰</span>Más</button>
   </div>
@@ -1908,11 +1908,45 @@ function aplicarEtiquetasGrupo(modo) {
 }
 
 // ══ APLICA EL MODO A LA NAVEGACIÓN Y LOS ACCESOS RÁPIDOS ══
+// ══ PERMISO: solo el dueño del plan agenda visitas técnicas ══
+// Quien se unió con el código de otra persona tiene grupoFamiliarId (es
+// integrante, no dueño). El dueño de la casa (papá/mamá) no lo tiene y es
+// el único que puede reportar fallas y agendar visitas del técnico.
+let soyMiembroVinculado = false;
+function aplicarPermisoAgendar() {
+  const bloquear = soyMiembroVinculado;
+  if (bloquear) {
+    // Ocultar todos los accesos a "Reportar falla / Soporte" para integrantes
+    document.querySelectorAll('[data-solo-duenio]').forEach((el) => { el.style.display = 'none'; });
+  }
+  const pantalla = document.getElementById('s-soporte');
+  if (!pantalla) return;
+  const form = document.getElementById('formFalla');
+  let aviso = document.getElementById('avisoSoloDuenio');
+  if (bloquear) {
+    if (form) form.style.display = 'none';
+    if (!aviso) {
+      aviso = document.createElement('div');
+      aviso.id = 'avisoSoloDuenio';
+      aviso.className = 'card';
+      aviso.style.cssText = 'background:#FFF4E0;color:#B57500;line-height:1.5';
+      aviso.innerHTML = '🔒 Solo el titular del plan (la persona dueña de la casa) puede reportar fallas y agendar visitas técnicas. Pídeselo a quien creó el plan familiar.';
+      pantalla.insertBefore(aviso, pantalla.firstChild);
+    } else {
+      aviso.style.display = '';
+    }
+  } else {
+    if (form) form.style.display = '';
+    if (aviso) aviso.style.display = 'none';
+  }
+}
+
 function aplicarModoNav(modo) {
   document.querySelectorAll('[data-modo]').forEach((el) => {
     const visible = el.dataset.modo === modo;
     el.style.display = visible ? '' : 'none';
   });
+  aplicarPermisoAgendar();
 }
 
 document.getElementById('guardarPerfil').addEventListener('click', () => {
@@ -2061,6 +2095,7 @@ function cargarDatosUsuario(uid) {
     if (doc.exists) {
       const data = doc.data();
       modoSeleccionado = data.modo || 'empresa'; // Usuarios existentes sin 'modo' quedan como empresa
+      soyMiembroVinculado = !!data.grupoFamiliarId; // Se unió con código de otra persona → no es el dueño
       aplicarModoNav(modoSeleccionado);
       if (data.nombre) {
         document.getElementById('userName').textContent = data.nombre;
@@ -2253,6 +2288,7 @@ function go(id){
   document.querySelectorAll('.nav button[data-s]').forEach(b=>b.classList.toggle('on', b.dataset.s===id));
   document.getElementById('appScreens').scrollTop = 0;
   document.body.classList.toggle('modo-operador', id === 's-operador');
+  aplicarPermisoAgendar();
 }
 document.querySelectorAll('.nav button[data-s]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.s)));
 
@@ -2531,6 +2567,7 @@ document.querySelectorAll('.equip').forEach(b=>{
 // crea la cita con el equipo/problema/foto incluidos, para que la central
 // pueda asignar técnico y el técnico vea el motivo de la visita.
 document.getElementById('agendarCita').addEventListener('click', () => {
+  if (soyMiembroVinculado) { alert('Solo el titular del plan (la persona dueña de la casa) puede agendar visitas técnicas.'); return; }
   const info = document.getElementById('fallaInfo');
   info.textContent = '';
   if (!equipoSel) { alert('Selecciona el equipo con problemas 🙂'); return; }
