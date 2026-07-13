@@ -282,7 +282,7 @@ textarea{min-height:96px;resize:vertical}
         <a href="tel:+56942759901" class="btn-full" style="display:block; text-align:center; text-decoration:none;">Llamar ahora</a>
       </div>
       <div class="card" id="formFalla">
-        <div class="card-title">Reportar una falla</div>
+        <div class="card-title">Reportar falla y agendar visita</div>
         <label>¿Qué equipo presenta problemas?</label>
         <div class="equip-grid">
           <button class="equip" data-eq="Cámara"><span class="ic">📹</span>Cámara</button>
@@ -294,20 +294,8 @@ textarea{min-height:96px;resize:vertical}
         </div>
         <label>¿Qué está pasando?</label>
         <textarea id="descFalla" placeholder="Ej: La cámara de la bodega dejó de mostrar imagen desde ayer en la tarde…"></textarea>
-        <label>Adjuntar foto o video (opcional)</label>
-        <div class="foto-drop">📷 Toca para subir una foto del equipo</div>
-        <button class="btn-full" id="enviarFalla">Crear ticket de soporte</button>
-      </div>
-      <div class="card ticket" id="ticketOk" style="display:none">
-        <div class="big">✅</div>
-        <h2>Ticket creado</h2>
-        <p>Nuestro equipo técnico ya recibió tu reporte y te contactará para coordinar la visita.</p>
-        <div class="ticket-num" id="ticketNum">VGL-1043</div>
-        <small>Recibirás notificaciones con cada avance</small>
-        <button class="btn-full" onclick="resetFalla()">Reportar otra falla</button>
-      </div>
-      <div class="card" id="formCita">
-        <div class="card-title">Agendar visita técnica</div>
+        <label>Adjuntar foto (opcional)</label>
+        <input type="file" accept="image/*" id="fotoFallaInput">
         <label>Fecha</label>
         <input type="date" id="citaFecha">
         <label>Horario preferido</label>
@@ -317,15 +305,16 @@ textarea{min-height:96px;resize:vertical}
           <option value="16:00">16:00 hrs</option>
           <option value="18:00">18:00 hrs</option>
         </select>
-        <button class="btn-full" id="agendarCita">Confirmar cita</button>
+        <button class="btn-full" id="agendarCita">Reportar y agendar visita</button>
+        <div class="error-msg" id="fallaInfo"></div>
       </div>
       <div class="card ticket" id="citaOk" style="display:none">
         <div class="big">📅</div>
         <h2>Visita agendada</h2>
-        <p>Un técnico llegará a tu local en el horario coordinado.</p>
-        <div class="ticket-num" id="citaResumen">—</div>
-        <small>Te avisaremos si hay algún cambio</small>
-        <button class="btn-full" onclick="resetCita()">Agendar otra visita</button>
+        <p>Nuestro equipo técnico recibió tu reporte y llegará a tu local en el horario coordinado.</p>
+        <div class="ticket-num" id="ticketNum">VGL-1043</div>
+        <small id="citaResumen">—</small>
+        <button class="btn-full" onclick="resetFalla()">Reportar otra falla</button>
       </div>
     </div>
     <!-- ══ CHAT ══ -->
@@ -928,7 +917,7 @@ function renderAgendaTecnicos(citas, tecnicos) {
           const d = new Date(c.fecha + 'T00:00:00');
           const nombreDia = diasSemana[(d.getDay() + 6) % 7];
           return `<div class="evento" style="padding:8px 0;">
-            <div style="flex:1;"><strong>${nombreDia} ${c.fecha} · ${c.horario}</strong><small>${c.clienteLocal || c.clienteNombre || 'Cliente'} · ${estadoTexto[c.estado] || c.estado}</small></div>
+            <div style="flex:1;"><strong>${nombreDia} ${c.fecha} · ${c.horario}</strong><small>${c.clienteLocal || c.clienteNombre || 'Cliente'} · ${estadoTexto[c.estado] || c.estado}${c.equipo ? ' · ' + c.equipo : ''}</small></div>
           </div>`;
         }).join('')
       : '<div style="color:var(--gris); font-size:.8rem; padding:6px 0;">Sin visitas asignadas esta semana.</div>';
@@ -956,12 +945,14 @@ function renderOperadorCitas(citas, tecnicos) {
       </div>` : '';
     const foto = c.fotoBase64 ? `<img src="data:image/jpeg;base64,${c.fotoBase64}" style="width:100%; border-radius:12px; margin-top:8px;">` : '';
     const comentario = c.comentarioTecnico ? `<p style="font-size:.8rem; color:var(--gris); margin-top:6px;"><strong>Nota del técnico:</strong> ${c.comentarioTecnico}</p>` : '';
+    const problema = c.equipo ? `<p style="font-size:.8rem; margin-top:6px;"><strong>Problema:</strong> ${c.equipo}${c.problema ? ' — ' + c.problema : ''}</p>` : '';
     return `
     <div class="evento" style="flex-direction:column; align-items:stretch;">
       <div style="display:flex; gap:10px; align-items:center;">
         <div class="ev-ic v">📅</div>
         <div style="flex:1;"><strong>${c.clienteLocal || c.clienteNombre || 'Cliente'}</strong><small>${c.fecha || ''} ${c.horario || ''} · ${estadoTexto[c.estado] || c.estado}${c.tecnicoNombre ? ' · ' + c.tecnicoNombre : ''}</small></div>
       </div>
+      ${problema}
       ${asignar}
       ${comentario}
       ${foto}
@@ -1083,12 +1074,16 @@ function renderTecnicoCitas(citas) {
         <button class="btn-full" style="margin-top:8px;" onclick="completarVisita('${c.clienteUid}','${c.citaId}', ${i})">Completar visita</button>
         <div class="error-msg" id="completarInfo${i}"></div>
       </div>` : '';
+    const problema = c.equipo ? `<p style="font-size:.85rem; margin-top:8px; background:rgba(0,0,0,.04); padding:8px 10px; border-radius:10px;"><strong>Reporte del cliente:</strong> ${c.equipo}${c.problema ? ' — ' + c.problema : ''}</p>` : '';
+    const fotoFalla = c.fotoFalla ? `<img src="data:image/jpeg;base64,${c.fotoFalla}" style="width:100%; border-radius:12px; margin-top:8px;">` : '';
     return `
     <div class="evento" style="flex-direction:column; align-items:stretch;">
       <div style="display:flex; gap:10px; align-items:center;">
         <div class="ev-ic v">📍</div>
         <div style="flex:1;"><strong>${c.clienteLocal || c.clienteNombre || 'Cliente'}</strong><small>${c.clienteDireccion || ''} · ${c.fecha || ''} ${c.horario || ''} · ${estadoTexto[c.estado] || c.estado}</small></div>
       </div>
+      ${problema}
+      ${fotoFalla}
       ${enCaminoBtn}
       ${completarForm}
     </div>`;
@@ -1997,79 +1992,80 @@ document.querySelectorAll('.equip').forEach(b=>{
     b.classList.add('sel'); equipoSel = b.dataset.eq;
   });
 });
-document.getElementById('enviarFalla').addEventListener('click',()=>{
-  if(!equipoSel){ alert('Selecciona el equipo con problemas 🙂'); return; }
-  const n = 1043 + Math.floor(Math.random()*20);
-  const numeroTicket = 'VGL-'+n;
-  const user = auth.currentUser;
-  const descripcion = document.getElementById('descFalla').value;
-
-  if (user) {
-    db.collection('usuarios').doc(user.uid).collection('tickets').add({
-      numero: numeroTicket,
-      equipo: equipoSel,
-      descripcion: descripcion,
-      estado: 'abierto',
-      creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch((err) => console.error('Error guardando ticket:', err));
-  }
-
-  document.getElementById('ticketNum').textContent = numeroTicket;
-  document.getElementById('formFalla').style.display='none';
-  document.getElementById('ticketOk').style.display='block';
-});
-function resetFalla(){
-  document.getElementById('formFalla').style.display='block';
-  document.getElementById('ticketOk').style.display='none';
-  document.querySelectorAll('.equip').forEach(x=>x.classList.remove('sel'));
-  document.getElementById('descFalla').value=''; equipoSel=null;
-}
-
-// ══ AGENDAR VISITA TÉCNICA ══
+// ══ REPORTAR FALLA + AGENDAR VISITA (un solo paso) ══
+// Antes eran dos flujos separados (un "ticket" sin fecha, y una "cita" sin
+// descripción del problema) que no se conectaban entre sí, así que el
+// técnico nunca veía qué problema tenía que revisar. Ahora un solo envío
+// crea la cita con el equipo/problema/foto incluidos, para que la central
+// pueda asignar técnico y el técnico vea el motivo de la visita.
 document.getElementById('agendarCita').addEventListener('click', () => {
+  const info = document.getElementById('fallaInfo');
+  info.textContent = '';
+  if (!equipoSel) { alert('Selecciona el equipo con problemas 🙂'); return; }
   const fecha = document.getElementById('citaFecha').value;
   const horario = document.getElementById('citaHorario').value;
   if (!fecha) { alert('Selecciona una fecha para la visita 🙂'); return; }
 
+  const descripcion = document.getElementById('descFalla').value.trim();
+  const fotoInput = document.getElementById('fotoFallaInput');
+  const archivo = fotoInput.files && fotoInput.files[0];
+  const procesarFoto = archivo ? comprimirFoto(archivo) : Promise.resolve(null);
+
+  const n = 1043 + Math.floor(Math.random()*20);
+  const numeroTicket = 'VGL-'+n;
   const user = auth.currentUser;
   const resumen = `${fecha} a las ${horario}`;
 
-  if (user) {
-    const userRef = db.collection('usuarios').doc(user.uid);
-    userRef.collection('citas').add({
-      fecha: fecha,
-      horario: horario,
-      estado: 'agendada',
-      creadaEn: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch((err) => console.error('Error guardando cita:', err));
+  procesarFoto.then((fotoFalla) => {
+    if (user) {
+      const userRef = db.collection('usuarios').doc(user.uid);
+      userRef.collection('citas').add({
+        fecha: fecha,
+        horario: horario,
+        estado: 'agendada',
+        numeroTicket: numeroTicket,
+        equipo: equipoSel,
+        problema: descripcion,
+        fotoFalla: fotoFalla || null,
+        creadaEn: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch((err) => console.error('Error guardando cita:', err));
 
-    userRef.get().then((doc) => {
-      const data = doc.exists ? doc.data() : {};
-      const nombreCliente = data.nombre || user.email;
-      const local = data.local || 'Local sin nombre registrado';
-      const direccion = data.direccion || 'Dirección no registrada';
-      notificarTelegram(
-        `📅 Nueva visita técnica agendada\n` +
-        `Cliente: ${nombreCliente} (${user.email})\n` +
-        `Local: ${local}\n` +
-        `Dirección: ${direccion}\n` +
-        `Cuándo: ${resumen}`
-      );
-    }).catch((err) => {
-      console.error('Error obteniendo datos del usuario para la notificación:', err);
-      notificarTelegram(`📅 ${user.email} agendó una visita técnica para el ${resumen}.`);
-    });
-  }
+      userRef.get().then((doc) => {
+        const data = doc.exists ? doc.data() : {};
+        const nombreCliente = data.nombre || user.email;
+        const local = data.local || 'Local sin nombre registrado';
+        const direccion = data.direccion || 'Dirección no registrada';
+        notificarTelegram(
+          `📅 Nueva visita técnica agendada\n` +
+          `Cliente: ${nombreCliente} (${user.email})\n` +
+          `Local: ${local}\n` +
+          `Dirección: ${direccion}\n` +
+          `Equipo: ${equipoSel}${descripcion ? ' — ' + descripcion : ''}\n` +
+          `Cuándo: ${resumen}`
+        );
+      }).catch((err) => {
+        console.error('Error obteniendo datos del usuario para la notificación:', err);
+        notificarTelegram(`📅 ${user.email} agendó una visita técnica (${equipoSel}) para el ${resumen}.`);
+      });
+    }
 
-  document.getElementById('citaResumen').textContent = resumen;
-  document.getElementById('formCita').style.display = 'none';
-  document.getElementById('citaOk').style.display = 'block';
+    document.getElementById('ticketNum').textContent = numeroTicket;
+    document.getElementById('citaResumen').textContent = `${equipoSel} · ${resumen}`;
+    document.getElementById('formFalla').style.display = 'none';
+    document.getElementById('citaOk').style.display = 'block';
+  }).catch((err) => {
+    console.error('Error procesando la foto de la falla:', err);
+    info.style.color = 'var(--rojo)';
+    info.textContent = 'No se pudo procesar la foto. Intenta de nuevo o sin foto.';
+  });
 });
-
-function resetCita(){
-  document.getElementById('formCita').style.display = 'block';
-  document.getElementById('citaOk').style.display = 'none';
-  document.getElementById('citaFecha').value = '';
+function resetFalla(){
+  document.getElementById('formFalla').style.display='block';
+  document.getElementById('citaOk').style.display='none';
+  document.querySelectorAll('.equip').forEach(x=>x.classList.remove('sel'));
+  document.getElementById('descFalla').value=''; equipoSel=null;
+  document.getElementById('fotoFallaInput').value='';
+  document.getElementById('citaFecha').value='';
 }
 // ══ CHAT CON IA REAL (Gemini vía función serverless en Vercel) ══
 async function enviarMensajeChat(texto) {
