@@ -2356,10 +2356,15 @@ function actualizarUbicacionAlerta(lat, lng) {
     ubicacionPendiente = { lat, lng };
     return;
   }
-  db.collection('usuarios').doc(user.uid).collection('alertas').doc(alertaActualId).update({
-    ubicacion: { lat: lat, lng: lng },
-    ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch((err) => console.error('Error actualizando ubicación de alerta:', err));
+  // La ubicación se guarda VÍA SERVIDOR (/api/alerta-ubicacion): las reglas
+  // de Firestore no dejan al cliente editar la alerta ya creada, por eso
+  // antes el GPS llegaba a Telegram pero nunca al panel de la central.
+  const idAlerta = alertaActualId;
+  user.getIdToken().then((idToken) => fetch('/api/alerta-ubicacion', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken, alertaId: idAlerta, lat: lat, lng: lng })
+  })).catch((err) => console.error('Error actualizando ubicación de alerta:', err));
 
   // La primera vez que tenemos la ubicación real, se la mandamos por Telegram (central + contactos)
   if (!ubicacionEnviada) {
@@ -2394,10 +2399,13 @@ function notificarUbicacionContactosEmergencia(lat, lng) {
 function cancelarAlertaSOS() {
   const user = auth.currentUser;
   if (!user || !alertaActualId) return;
-  db.collection('usuarios').doc(user.uid).collection('alertas').doc(alertaActualId).update({
-    estado: 'cancelada',
-    canceladaEn: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch((err) => console.error('Error cancelando alerta:', err));
+  // También vía servidor, por el mismo motivo que la ubicación.
+  const idAlerta = alertaActualId;
+  user.getIdToken().then((idToken) => fetch('/api/alerta-ubicacion', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken, alertaId: idAlerta, accion: 'cancelar' })
+  })).catch((err) => console.error('Error cancelando alerta:', err));
   notificarTelegram(`✅ Alerta cancelada por ${user.email} (falsa alarma).`);
   alertaActualId = null;
 }
