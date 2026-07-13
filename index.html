@@ -1962,13 +1962,10 @@ function aplicarUIFamilia(modo){
 let soyMiembroVinculado = false;
 function aplicarPermisoAgendar() {
   const bloquear = soyMiembroVinculado;
-  // Integrante: ocultar los accesos a "Reportar falla / Soporte".
-  // Titular: restaurar respetando su data-modo (para no reaparecer donde no corresponde).
-  document.querySelectorAll('[data-solo-duenio]').forEach((el) => {
-    if (bloquear) { el.style.display = 'none'; }
-    else if (el.dataset.modo) { el.style.display = (el.dataset.modo === modoSeleccionado) ? '' : 'none'; }
-    else { el.style.display = ''; }
-  });
+  // Los integrantes SÍ pueden llamar al técnico de guardia y pedir ayuda:
+  // solo se les bloquea AGENDAR una visita. Por eso NO ocultamos los accesos
+  // a Soporte (ahí vive "Llamar ahora"); solo reemplazamos el formulario de
+  // agendamiento por un aviso. La tarjeta de llamada queda siempre visible.
   const pantalla = document.getElementById('s-soporte');
   if (!pantalla) return;
   const form = document.getElementById('formFalla');
