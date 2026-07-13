@@ -1507,9 +1507,10 @@ function renderOperadorMapa(alertas, clientes) {
   if (firmaAlertas !== operadorMapaFirmaAlertas) {
     operadorMapaFirmaAlertas = firmaAlertas;
     if (puntos.length === 1) {
-      operadorMapa.setView(puntos[0], 15);
+      // Acercar hasta ver las calles con nombre, sin tener que apretar "Ver ubicación".
+      operadorMapa.setView(puntos[0], 17);
     } else if (puntos.length > 1) {
-      operadorMapa.fitBounds(puntos, { padding: [20, 20] });
+      operadorMapa.fitBounds(puntos, { padding: [20, 20], maxZoom: 16 });
     }
   }
   if (puntos.length === 0) ajustarEncuadreInicial();
