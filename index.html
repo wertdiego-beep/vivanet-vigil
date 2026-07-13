@@ -913,7 +913,12 @@ let operadorMapaAjustado = false;    // ya se hizo el encuadre inicial
 let operadorMapaFirmaAlertas = '';   // para re-centrar solo cuando cambian las alertas
 const MAPA_CENTRO_DEFECTO = [-29.9045, -71.2489]; // La Serena
 const MAPA_CIUDAD_CONTEXTO = 'La Serena, Chile';  // se agrega a direcciones sin ciudad
-const GEO_CACHE_KEY = 'vigilGeoCache_v1';
+// Caja que delimita la zona de operación (La Serena–Coquimbo): las
+// direcciones solo se geocodifican DENTRO de esta caja. Sin esto, una
+// dirección mal escrita terminaba en cualquier punto de Chile y el mapa se
+// alejaba hasta mostrar el continente entero.
+const MAPA_VIEWBOX = '-71.45,-29.70,-71.05,-30.10'; // lonIzq,latArriba,lonDer,latAbajo
+const GEO_CACHE_KEY = 'vigilGeoCache_v2'; // v2: invalida la caché con puntos fuera de la zona
 const geoEnProceso = new Set();
 let geoCola = [];
 let geoColaActiva = false;
@@ -1309,7 +1314,9 @@ function guardarEnGeoCache(clave, valor) {
 }
 
 async function consultarNominatim(q) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&q=${encodeURIComponent(q)}`;
+  // bounded=1 + viewbox: solo acepta resultados dentro de la zona de
+  // operación (La Serena–Coquimbo); si la dirección no existe ahí, null.
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&viewbox=${MAPA_VIEWBOX}&bounded=1&q=${encodeURIComponent(q)}`;
   const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
   if (!resp.ok) return null;
   const data = await resp.json();
