@@ -183,6 +183,36 @@ async function asignar(res, accessToken, { clienteUid, citaId, tecnicoUid }) {
   res.status(200).json({ ok: true });
 }
 
+// Cierra el ticket/visita directamente desde el panel de la central, sin
+// depender de que el técnico complete el paso desde su celular (ej: si el
+// trabajo se coordinó por teléfono, o la central quiere cerrarlo a mano).
+async function cerrar(res, accessToken, { clienteUid, citaId }) {
+  if (!clienteUid || !citaId) {
+    res.status(400).json({ error: 'Faltan datos' });
+    return;
+  }
+  const url =
+    `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/citas/${citaId}` +
+    `?updateMask.fieldPaths=estado&updateMask.fieldPaths=completadaEn`;
+  const resp = await fetch(url, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fields: {
+        estado: { stringValue: 'completada' },
+        completadaEn: { timestampValue: new Date().toISOString() }
+      }
+    })
+  });
+  if (!resp.ok) {
+    const data = await resp.json();
+    console.error('Error cerrando ticket:', data);
+    res.status(502).json({ error: 'No se pudo cerrar el ticket' });
+    return;
+  }
+  res.status(200).json({ ok: true });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Método no permitido' });
@@ -203,6 +233,11 @@ export default async function handler(req, res) {
 
     if (accion === 'asignar') {
       await asignar(res, accessToken, req.body || {});
+      return;
+    }
+
+    if (accion === 'cerrar') {
+      await cerrar(res, accessToken, req.body || {});
       return;
     }
 
