@@ -1688,19 +1688,60 @@ function renderOperadorHistorial(historial, clientes) {
 // Convierte coordenadas GPS en nombre de calle (geocodificación inversa, cacheada).
 const _calleCache = {};
 function claveCoord(lat, lng){ return Number(lat).toFixed(5) + ',' + Number(lng).toFixed(5); }
+// Distancia en metros entre dos puntos (lat/lng) — para medir cercanía al GPS.
+function distMetros(lat1, lon1, lat2, lon2){
+  const R = 6371000, toRad = (x) => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+// Importancia de cada tipo de vía (más alto = calle más importante).
+const PESO_VIA = { motorway:6, trunk:5, primary:4, secondary:3, tertiary:2, unclassified:1, residential:1, living_street:0.8 };
+
+// Usa las coordenadas (eje X = lng, eje Y = lat) para encontrar las calles con
+// nombre más importantes cercanas al GPS. Muestra la principal y, si hay un
+// cruce cercano, "Principal c/ Secundaria". Respaldo: Nominatim.
 function obtenerCalleGPS(lat, lng){
   const k = claveCoord(lat, lng);
   if (_calleCache[k]) return Promise.resolve(_calleCache[k]);
-  const url = `https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&addressdetails=1&lat=${lat}&lon=${lng}`;
-  return fetch(url, { headers: { 'Accept-Language': 'es' } })
+
+  const consulta = `[out:json][timeout:8];way(around:250,${lat},${lng})[highway][name];out geom;`;
+  const overpassUrl = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(consulta);
+
+  return fetch(overpassUrl)
     .then((r) => r.json())
-    .then((d) => {
-      const ad = d.address || {};
-      const via = ad.road || ad.pedestrian || ad.residential || ad.neighbourhood || ad.suburb;
-      const texto = via ? (via + (ad.house_number ? ' ' + ad.house_number : '')) : (d.display_name ? d.display_name.split(',').slice(0, 2).join(',').trim() : null);
-      if (texto) _calleCache[k] = texto;
+    .then((data) => {
+      const vias = (data.elements || []).filter((e) => e.type === 'way' && e.tags && e.tags.name && e.geometry);
+      if (!vias.length) throw new Error('sin vías');
+      const evaluadas = vias.map((v) => {
+        let dmin = Infinity;
+        for (const p of v.geometry){ const d = distMetros(lat, lng, p.lat, p.lon); if (d < dmin) dmin = d; }
+        const peso = PESO_VIA[v.tags.highway] != null ? PESO_VIA[v.tags.highway] : 0.5;
+        return { nombre: v.tags.name, dist: dmin, score: peso - dmin/80 };
+      });
+      // Principal: mejor equilibrio entre importancia y cercanía.
+      evaluadas.sort((a, b) => b.score - a.score);
+      const principal = evaluadas[0];
+      // Cruce: la calle con nombre distinto más cercana (para dar una esquina de referencia).
+      const cruce = evaluadas.filter((v) => v.nombre !== principal.nombre).sort((a, b) => a.dist - b.dist)[0];
+      let texto = principal.nombre;
+      if (cruce && cruce.dist < 140) texto += ' c/ ' + cruce.nombre;
+      _calleCache[k] = texto;
       return texto;
-    }).catch(() => null);
+    })
+    .catch(() => {
+      // Respaldo: geocodificación inversa de Nominatim.
+      const nurl = `https://nominatim.openstreetmap.org/reverse?format=json&zoom=17&addressdetails=1&lat=${lat}&lon=${lng}`;
+      return fetch(nurl, { headers: { 'Accept-Language': 'es' } })
+        .then((r) => r.json())
+        .then((d) => {
+          const ad = d.address || {};
+          const via = ad.road || ad.pedestrian || ad.residential || ad.neighbourhood || ad.suburb;
+          const texto = via ? (via + (ad.house_number ? ' ' + ad.house_number : '')) : (d.display_name ? d.display_name.split(',').slice(0, 2).join(',').trim() : null);
+          if (texto) _calleCache[k] = texto;
+          return texto;
+        }).catch(() => null);
+    });
 }
 
 function renderOperadorAlertas(alertas, clientes) {
