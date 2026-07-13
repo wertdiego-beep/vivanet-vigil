@@ -188,6 +188,10 @@ body.modo-operador #s-operador{
 .ev-ic.v{background:var(--violeta-suave);color:var(--violeta)}
 .ev-ic.g{background:var(--verde-suave);color:#048A52}
 .ev-ic.a{background:#FFF4E0;color:var(--ambar)}
+.ev-ic.b{background:#E4EEFB;color:#2C63B0}
+.cuenta-badge{margin-left:auto;font-size:.6rem;font-weight:700;font-family:'Chakra Petch',sans-serif;letter-spacing:.08em;text-transform:uppercase;padding:5px 11px;border-radius:99px;background:var(--verde-suave);color:#048A52;white-space:nowrap;align-self:center}
+.cuenta-badge.integrante{background:#EEF0F5;color:var(--gris)}
+.row-chev{margin-left:auto;color:#C7C4DA;font-size:1.3rem;align-self:center;line-height:1}
 .evento strong{font-size:.9rem;display:block}
 .evento small{font-size:.78rem;color:var(--gris)}
 .evento time{margin-left:auto;font-size:.72rem;color:var(--gris);white-space:nowrap;font-family:'Chakra Petch',sans-serif}
@@ -450,12 +454,12 @@ textarea{min-height:96px;resize:vertical}
     <div class="screen-scroll" id="s-mas">
       <div class="card">
         <div class="card-title">Mi cuenta</div>
-        <div class="evento"><div class="ev-ic v">👤</div><div><strong id="accountName">Usuario</strong><small id="accountEmail">correo@ejemplo.cl</small></div></div>
-        <div class="evento"><div class="ev-ic v">📍</div><div><strong id="accountLocal">Cargando…</strong><small id="accountDireccion">—</small></div></div>
+        <div class="evento"><div class="ev-ic v">👤</div><div style="flex:1"><strong id="accountName">Usuario</strong><small id="accountEmail">correo@ejemplo.cl</small></div><span class="cuenta-badge" id="cuentaBadge">Titular</span></div>
+        <div class="evento"><div class="ev-ic b">📍</div><div style="flex:1"><strong id="accountLocal">Cargando…</strong><small id="accountDireccion">—</small></div></div>
         <button class="evento" style="width:100%; text-align:left; background:none; cursor:pointer;" onclick="go('s-contactos')">
-          <div class="ev-ic v">📞</div><div><strong>Contactos de emergencia</strong><small id="contactosResumen">Sin contactos configurados</small></div>
+          <div class="ev-ic v">📞</div><div style="flex:1"><strong>Contactos de emergencia</strong><small id="contactosResumen">Sin contactos configurados</small></div><span class="row-chev">›</span>
         </button>
-        <div class="evento" data-modo="empresa"><div class="ev-ic v">💳</div><div><strong>Facturas y pagos</strong><small>Al día · Próximo pago 05 Ago</small></div></div>
+        <div class="evento" data-modo="empresa"><div class="ev-ic g">💳</div><div><strong>Facturas y pagos</strong><small>Al día · Próximo pago 05 Ago</small></div></div>
       </div>
       <div class="card">
         <div class="card-title">Editar mi información</div>
@@ -2107,6 +2111,11 @@ function cargarDatosUsuario(uid) {
       const data = doc.data();
       modoSeleccionado = data.modo || 'empresa'; // Usuarios existentes sin 'modo' quedan como empresa
       soyMiembroVinculado = !!data.grupoFamiliarId; // Se unió con código de otra persona → no es el dueño
+      const cuentaBadge = document.getElementById('cuentaBadge');
+      if (cuentaBadge) {
+        cuentaBadge.textContent = soyMiembroVinculado ? 'Integrante' : 'Titular';
+        cuentaBadge.classList.toggle('integrante', soyMiembroVinculado);
+      }
       aplicarModoNav(modoSeleccionado);
       if (data.nombre) {
         document.getElementById('userName').textContent = data.nombre;
