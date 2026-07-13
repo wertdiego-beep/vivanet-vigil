@@ -45,14 +45,69 @@ button{font-family:inherit;border:none;cursor:pointer;background:none}
    (arriba: resumen; abajo: "Monitoreo y clientes" a la izquierda,
    "Servicio técnico" a la derecha) en vez de una sola columna larga, para
    que sea más fácil de leer de un vistazo en computador.*/
-body.modo-operador{padding:0}
-.operador-col-title{display:none}
-@media(min-width:900px){
-  body.modo-operador .phone{max-width:1280px;height:auto;min-height:100vh;border-radius:0;box-shadow:none}
-  body.modo-operador #s-operador{padding:28px 32px 60px}
-  body.modo-operador .operador-top{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-  body.modo-operador .operador-cols{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
-  body.modo-operador .operador-col-title{display:block;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1rem;letter-spacing:.04em;color:var(--tinta);margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--violeta-suave)}
+body.modo-operador{padding:0;background:#0b0d14}
+body.modo-operador .phone{max-width:none;height:100vh;min-height:100vh;border-radius:0;box-shadow:none;background:#0b0d14}
+body.modo-operador .app-head{display:none}
+body.modo-operador .nav{display:none}
+body.modo-operador .pill-demo{display:none}
+body.modo-operador .screens{overflow:hidden;background:#0b0d14}
+body.modo-operador #s-operador{
+  /* Tema oscuro: se redefinen las variables solo dentro del panel operador,
+     así todo el contenido que generan las funciones render (que usa
+     var(--gris), var(--violeta), etc.) se adapta solo. */
+  --blanco:#161a28; --fondo:#0b0d14; --tinta:#eef0f8; --gris:#9aa1bd;
+  --violeta:#7c6cff; --violeta-suave:rgba(124,108,255,.16);
+  --verde:#3ddc97; --verde-suave:rgba(61,220,151,.14); --linea:#252b40;
+  flex-direction:row;padding:0;height:100%;overflow:hidden;color:var(--tinta);
+}
+/* ── Sidebar ── */
+#s-operador .op-side{width:216px;min-width:216px;background:#11141f;border-right:1px solid var(--linea);display:flex;flex-direction:column;padding:18px 12px;gap:3px}
+#s-operador .op-logo{display:flex;align-items:center;gap:10px;padding:2px 8px 18px}
+#s-operador .op-logo-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#7c6cff,#4b3f9f);color:#fff;display:grid;place-items:center;font-family:'Chakra Petch',sans-serif;font-weight:700;box-shadow:0 4px 14px rgba(124,108,255,.35)}
+#s-operador .op-logo-txt b{font-family:'Chakra Petch',sans-serif;letter-spacing:.06em;font-size:.95rem}
+#s-operador .op-logo-txt small{display:block;font-size:.6rem;color:var(--gris)}
+#s-operador .op-nav{display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border-radius:10px;color:var(--gris);font-weight:600;font-size:.84rem;text-align:left;transition:background .15s,color .15s}
+#s-operador .op-nav em{font-style:normal}
+#s-operador .op-nav span{width:20px;text-align:center}
+#s-operador .op-nav:hover{background:var(--blanco);color:var(--tinta)}
+#s-operador .op-nav.on{background:var(--violeta-suave);color:#9d8fff}
+#s-operador .op-nav.op-out:hover{background:rgba(229,52,75,.14);color:#ff4d5e}
+#s-operador .op-pill{margin-left:auto;background:#ff4d5e;color:#fff;font-size:.6rem;font-weight:700;padding:1px 7px;border-radius:99px;font-style:normal;display:none}
+#s-operador .op-side-foot{margin-top:auto;border-top:1px solid var(--linea);padding-top:10px}
+/* ── Zona principal ── */
+#s-operador .op-main{flex:1;display:flex;flex-direction:column;min-width:0}
+#s-operador .op-topbar{height:58px;min-height:58px;display:flex;align-items:center;gap:14px;padding:0 22px;border-bottom:1px solid var(--linea)}
+#s-operador .op-title{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1.02rem}
+#s-operador .op-live{display:inline-flex;align-items:center;gap:6px;font-size:.62rem;font-weight:700;letter-spacing:.08em;color:var(--verde);background:var(--verde-suave);padding:4px 10px;border-radius:99px;font-family:'Chakra Petch',sans-serif}
+#s-operador .op-live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--verde);animation:opBlink 1.6s infinite}
+@keyframes opBlink{50%{opacity:.3}}
+#s-operador .op-content{flex:1;overflow-y:auto;padding:20px 22px 40px}
+#s-operador .op-view{display:none;animation:fadeIn .25s ease}
+#s-operador .op-view.active{display:block}
+/* ── Tarjetas y contenido en oscuro ── */
+#s-operador .card{background:var(--blanco);border:1px solid var(--linea);border-radius:16px}
+#s-operador .evento strong{color:var(--tinta)}
+#s-operador .ev-ic.a{background:rgba(255,181,71,.15);color:#ffb547}
+#s-operador .ev-ic.g{background:var(--verde-suave);color:var(--verde)}
+#s-operador .ev-ic.v{background:var(--violeta-suave);color:#9d8fff}
+#s-operador input,#s-operador textarea,#s-operador select{background:#1c2133;border:1px solid #303752;color:var(--tinta);color-scheme:dark}
+#s-operador input::placeholder,#s-operador textarea::placeholder{color:#5d6480}
+#s-operador .op-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+#s-operador .op-kpis .stat-box{background:var(--blanco);border:1px solid var(--linea);border-radius:16px;padding:16px 18px;text-align:left}
+#s-operador .op-kpis .stat-box strong{font-size:1.7rem;color:var(--tinta)}
+#s-operador .op-kpis .stat-box.alerta{border-color:rgba(255,77,94,.4)}
+#s-operador .op-kpis .stat-box.alerta strong{color:#ff4d5e}
+#s-operador .op-grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;align-items:start}
+#s-operador .map-container{border-color:var(--linea);background:#0d1020}
+#s-operador .btn-out{margin:0}
+@media(max-width:860px){
+  #s-operador .op-side{width:62px;min-width:62px;padding:14px 7px}
+  #s-operador .op-logo{justify-content:center;padding:2px 0 16px}
+  #s-operador .op-logo-txt,#s-operador .op-nav em,#s-operador .op-pill{display:none!important}
+  #s-operador .op-nav{justify-content:center;padding:10px 8px}
+  #s-operador .op-grid2{grid-template-columns:1fr !important}
+  #s-operador .op-content{padding:14px 14px 40px}
+  #s-operador .op-kpis{gap:8px}
 }
 .app-head{padding:22px 22px 14px;display:flex;align-items:center;justify-content:space-between}
 .brand{display:flex;align-items:center;gap:10px;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:.03em}
@@ -470,105 +525,142 @@ textarea{min-height:96px;resize:vertical}
     </div>
     <!-- ══ PANEL OPERADOR (solo la cuenta central) ══ -->
     <div class="screen-scroll" id="s-operador">
-      <div class="operador-top">
-        <div class="card">
-          <div class="card-title">Panel operador</div>
-          <div class="evento">
-            <div class="ev-ic v">👁️</div>
-            <div><strong>Vista de la central</strong><small>Alertas y clientes en tiempo real</small></div>
-          </div>
-          <div id="operadorStats" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px;"></div>
+      <aside class="op-side">
+        <div class="op-logo">
+          <div class="op-logo-mark">V</div>
+          <div class="op-logo-txt"><b>VIGIL</b><small>Central de monitoreo</small></div>
         </div>
-        <div class="card">
-          <div class="card-title">Código para técnicos</div>
-          <p style="color:var(--gris); font-size:.85rem; margin-bottom:10px;">Entrégale este código a un técnico. Él debe crear su cuenta, elegir "Empresa" y luego, en "Mi cuenta", usar "Unirme a una familia" con este código y el rol Técnico.</p>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <div id="operadorCodigoTecnico" style="font-size:1.4rem; font-weight:700; letter-spacing:2px; background:rgba(255,255,255,.06); padding:8px 14px; border-radius:10px;">------</div>
-            <button class="btn-full" id="copiarCodigoTecnico" style="width:auto; margin:0; padding:8px 14px;">Copiar</button>
-          </div>
-          <div class="error-msg" id="operadorCodigoError" style="margin-top:8px;"></div>
+        <button class="op-nav on" data-opview="monitoreo"><span>🗺️</span><em>Monitoreo</em><i class="op-pill" id="opAlertPill"></i></button>
+        <button class="op-nav" data-opview="clientes"><span>👥</span><em>Clientes</em></button>
+        <button class="op-nav" data-opview="tecnico"><span>🛠️</span><em>Servicio técnico</em></button>
+        <button class="op-nav" data-opview="historial"><span>🕘</span><em>Historial</em></button>
+        <button class="op-nav" data-opview="equipo"><span>🔑</span><em>Equipo técnico</em></button>
+        <div class="op-side-foot">
+          <button class="op-nav" onclick="go('s-mas')"><span>👤</span><em>Mi cuenta</em></button>
+          <button class="op-nav op-out" onclick="cerrarSesion()"><span>↩︎</span><em>Cerrar sesión</em></button>
+        </div>
+      </aside>
+      <div class="op-main">
+        <div class="op-topbar">
+          <div class="op-title" id="opTitulo">Monitoreo en vivo</div>
+          <span class="op-live">EN VIVO</span>
+        </div>
+        <div class="op-content">
+
+          <!-- ── Vista: Monitoreo ── -->
+          <section class="op-view active" id="op-view-monitoreo">
+            <div id="operadorStats" class="op-kpis"></div>
+            <div class="op-grid2">
+              <div class="card" id="operadorMapaCard" style="margin-bottom:0;">
+                <div class="card-title">Mapa de la central</div>
+                <div style="font-size:.72rem; color:var(--gris); margin:2px 0 10px;">
+                  <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
+                  <span style="color:var(--verde);">●</span> Cliente protegido
+                </div>
+                <div class="map-container" style="max-width:none; height:330px; margin:0;">
+                  <div id="mapaOperador" style="width:100%; height:100%; border-radius:12px;"></div>
+                </div>
+              </div>
+              <div class="card" style="margin-bottom:0;">
+                <div class="card-title">Alertas activas</div>
+                <div id="operadorAlertas">
+                  <div class="evento"><div><strong>Cargando alertas…</strong></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="margin-top:14px;">
+              <div class="card-title">Historial reciente</div>
+              <div id="operadorHistorial">
+                <div class="evento"><div><strong>Cargando historial…</strong></div></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── Vista: Clientes ── -->
+          <section class="op-view" id="op-view-clientes">
+            <div class="card">
+              <div class="card-title">Buscar cliente</div>
+              <input type="text" id="operadorBuscarCliente" placeholder="Nombre, local o dirección…">
+            </div>
+            <div class="op-grid2" style="grid-template-columns:1fr 1fr;">
+              <div class="card" style="margin-bottom:0;">
+                <div class="card-title">Clientes empresa 🏪</div>
+                <div id="operadorClientesEmpresa">
+                  <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
+                </div>
+              </div>
+              <div class="card" style="margin-bottom:0;">
+                <div class="card-title">Clientes familia 👨‍👩‍👧</div>
+                <div id="operadorClientesFamilia">
+                  <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── Vista: Servicio técnico ── -->
+          <section class="op-view" id="op-view-tecnico">
+            <div class="card">
+              <div class="card-title">Visitas técnicas</div>
+              <div id="operadorCitas">
+                <div class="evento"><div><strong>Cargando visitas…</strong></div></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">Agenda de técnicos (esta semana)</div>
+              <div id="operadorAgendaTecnicos">
+                <div class="evento"><div><strong>Cargando agenda…</strong></div></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── Vista: Historial de tickets ── -->
+          <section class="op-view" id="op-view-historial">
+            <div class="card">
+              <div class="card-title">Historial de tickets</div>
+              <div style="display:flex; gap:8px; margin-bottom:10px; max-width:420px;">
+                <button id="ticketsTabActivos" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:var(--violeta); color:#fff;" onclick="cambiarFiltroTickets('activos')">Activos</button>
+                <button id="ticketsTabCerrados" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:rgba(0,0,0,.06); color:var(--gris);" onclick="cambiarFiltroTickets('cerrados')">Cerrados</button>
+              </div>
+              <div style="display:flex; gap:8px; align-items:end; margin-bottom:10px; max-width:420px;">
+                <div style="flex:1;">
+                  <label style="font-size:.72rem;">Desde</label>
+                  <input type="date" id="ticketsFechaDesde" style="margin:0;" onchange="renderHistorialTickets()">
+                </div>
+                <div style="flex:1;">
+                  <label style="font-size:.72rem;">Hasta</label>
+                  <input type="date" id="ticketsFechaHasta" style="margin:0;" onchange="renderHistorialTickets()">
+                </div>
+                <button style="width:auto; padding:10px 12px; font-size:.75rem; background:rgba(0,0,0,.06); border-radius:10px; color:var(--gris);" onclick="document.getElementById('ticketsFechaDesde').value=''; document.getElementById('ticketsFechaHasta').value=''; renderHistorialTickets();">Limpiar</button>
+              </div>
+              <div id="operadorHistorialTickets">
+                <div class="evento"><div><strong>Cargando tickets…</strong></div></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── Vista: Equipo técnico ── -->
+          <section class="op-view" id="op-view-equipo">
+            <div class="card">
+              <div class="card-title">Código para técnicos</div>
+              <p style="color:var(--gris); font-size:.85rem; margin-bottom:10px;">Entrégale este código a un técnico. Él debe crear su cuenta, elegir "Empresa" y luego, en "Mi cuenta", usar "Unirme a una familia" con este código y el rol Técnico.</p>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div id="operadorCodigoTecnico" style="font-size:1.4rem; font-weight:700; letter-spacing:2px; background:rgba(255,255,255,.06); padding:8px 14px; border-radius:10px;">------</div>
+                <button class="btn-full" id="copiarCodigoTecnico" style="width:auto; margin:0; padding:8px 14px;">Copiar</button>
+              </div>
+              <div class="error-msg" id="operadorCodigoError" style="margin-top:8px;"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">Vista de la central</div>
+              <div class="evento" style="border-bottom:none;">
+                <div class="ev-ic v">👁️</div>
+                <div><strong>Cuenta central</strong><small>Alertas y clientes en tiempo real</small></div>
+              </div>
+            </div>
+          </section>
+
         </div>
       </div>
-      <div class="operador-cols">
-        <div class="operador-col">
-          <div class="operador-col-title">Monitoreo y clientes</div>
-          <div class="card" id="operadorMapaCard">
-            <div class="card-title">Mapa de la central</div>
-            <div style="font-size:.72rem; color:var(--gris); margin:2px 0 10px;">
-              <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
-              <span style="color:var(--verde);">●</span> Cliente protegido
-            </div>
-            <div class="map-container" style="max-width:none; height:260px; margin:0;">
-              <div id="mapaOperador" style="width:100%; height:100%; border-radius:16px;"></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">Alertas activas</div>
-            <div id="operadorAlertas">
-              <div class="evento"><div><strong>Cargando alertas…</strong></div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">Buscar cliente</div>
-            <input type="text" id="operadorBuscarCliente" placeholder="Nombre, local o dirección…">
-          </div>
-          <div class="card">
-            <div class="card-title">Clientes empresa 🏪</div>
-            <div id="operadorClientesEmpresa">
-              <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">Clientes familia 👨‍👩‍👧</div>
-            <div id="operadorClientesFamilia">
-              <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
-            </div>
-          </div>
-        </div>
-        <div class="operador-col">
-          <div class="operador-col-title">Servicio técnico</div>
-          <div class="card">
-            <div class="card-title">Visitas técnicas</div>
-            <div id="operadorCitas">
-              <div class="evento"><div><strong>Cargando visitas…</strong></div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">Agenda de técnicos (esta semana)</div>
-            <div id="operadorAgendaTecnicos">
-              <div class="evento"><div><strong>Cargando agenda…</strong></div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">Historial de tickets</div>
-            <div style="display:flex; gap:8px; margin-bottom:10px;">
-              <button id="ticketsTabActivos" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:var(--violeta); color:#fff;" onclick="cambiarFiltroTickets('activos')">Activos</button>
-              <button id="ticketsTabCerrados" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:rgba(0,0,0,.06); color:var(--gris);" onclick="cambiarFiltroTickets('cerrados')">Cerrados</button>
-            </div>
-            <div style="display:flex; gap:8px; align-items:end; margin-bottom:10px;">
-              <div style="flex:1;">
-                <label style="font-size:.72rem;">Desde</label>
-                <input type="date" id="ticketsFechaDesde" style="margin:0;" onchange="renderHistorialTickets()">
-              </div>
-              <div style="flex:1;">
-                <label style="font-size:.72rem;">Hasta</label>
-                <input type="date" id="ticketsFechaHasta" style="margin:0;" onchange="renderHistorialTickets()">
-              </div>
-              <button style="width:auto; padding:10px 12px; font-size:.75rem; background:rgba(0,0,0,.06); border-radius:10px;" onclick="document.getElementById('ticketsFechaDesde').value=''; document.getElementById('ticketsFechaHasta').value=''; renderHistorialTickets();">Limpiar</button>
-            </div>
-            <div id="operadorHistorialTickets">
-              <div class="evento"><div><strong>Cargando tickets…</strong></div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">Historial reciente</div>
-            <div id="operadorHistorial">
-              <div class="evento"><div><strong>Cargando historial…</strong></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
     <!-- ══ PANEL TÉCNICO (rolEmpresa === 'tecnico') ══ -->
     <div class="screen-scroll" id="s-tecnico">
@@ -1134,6 +1226,13 @@ function asignarTecnicoCita(clienteUid, citaId, tecnicoUid) {
 
 function renderOperadorStats(stats) {
   const cont = document.getElementById('operadorStats');
+  // Contador de SOS activas en el sidebar
+  const pill = document.getElementById('opAlertPill');
+  if (pill) {
+    const n = stats?.totalActivas ?? 0;
+    pill.style.display = n > 0 ? 'inline-block' : 'none';
+    pill.textContent = n;
+  }
   if (!stats) { cont.innerHTML = ''; return; }
   const tiempoTxt = stats.tiempoPromedioResp !== null && stats.tiempoPromedioResp !== undefined
     ? `${stats.tiempoPromedioResp} min`
@@ -1234,7 +1333,8 @@ function renderOperadorMapa(alertas, clientes) {
 
   if (!operadorMapa) {
     operadorMapa = L.map('mapaOperador').setView(MAPA_CENTRO_DEFECTO, 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'Vigil App', maxZoom: 19 }).addTo(operadorMapa);
+    // Tiles oscuros (CARTO) para calzar con el tema del panel
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(operadorMapa);
   }
 
   // Marcadores de alertas SOS (rojos, pulsantes)
@@ -2021,6 +2121,17 @@ function go(id){
   document.body.classList.toggle('modo-operador', id === 's-operador');
 }
 document.querySelectorAll('.nav button[data-s]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.s)));
+
+// ══ NAVEGACIÓN INTERNA DEL PANEL OPERADOR (sidebar) ══
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico' };
+function opGo(v){
+  document.querySelectorAll('.op-nav[data-opview]').forEach(b=>b.classList.toggle('on', b.dataset.opview===v));
+  document.querySelectorAll('.op-view').forEach(s=>s.classList.toggle('active', s.id==='op-view-'+v));
+  const t = document.getElementById('opTitulo');
+  if (t) t.textContent = opTitulos[v] || '';
+  if (v==='monitoreo' && operadorMapa) setTimeout(()=>operadorMapa.invalidateSize(), 120);
+}
+document.querySelectorAll('.op-nav[data-opview]').forEach(b=>b.addEventListener('click',()=>opGo(b.dataset.opview)));
 // ══ BOTÓN SOS Y MAPA ══
 let map = null, marker = null, watchID = null, alertaActualId = null, ubicacionEnviada = false;
 const sosBtn = document.getElementById('sosBtn');
