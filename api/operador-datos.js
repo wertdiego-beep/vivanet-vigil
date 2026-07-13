@@ -105,19 +105,38 @@ async function listarClientes(accessToken) {
     .filter((c) => c.uid !== CENTRAL_UID);
 }
 
-async function listarAlertasActivas(accessToken) {
+// IMPORTANTE: antes las alertas activas se pedían con una consulta filtrada
+// (where estado == 'activa') sobre el grupo de colecciones "alertas". Ese
+// tipo de consulta requiere un índice de grupo de colecciones en Firestore
+// que este proyecto no tiene, así que Firestore respondía con error, el
+// código lo tragaba con "return []" y el panel SIEMPRE mostraba 0 alertas
+// activas (aunque el historial —que usa la consulta SIN filtro— sí las
+// mostraba). Ahora las activas se derivan en JS desde esa misma consulta
+// sin filtro, que no necesita ningún índice.
+function derivarAlertasActivas(alertasRecientes) {
+  // Una alerta "activa" con más de 12 horas se considera vencida (quedó
+  // huérfana de alguna prueba o de un cierre que falló) y no se muestra
+  // como emergencia vigente.
+  const corte = Date.now() - 12 * 3600 * 1000;
+  return alertasRecientes
+    .filter((a) => a.estado === 'activa' && a.creadaEn && new Date(a.creadaEn).getTime() >= corte)
+    .slice(0, 50);
+}
+
+// Trae hasta 120 alertas recientes (de cualquier estado, de cualquier
+// cliente) sin filtro, para armar el historial general y las estadísticas.
+// Antes traía 300, pero como este endpoint se consulta en cada actualización
+// del panel operador, ese límite alto multiplicaba mucho las lecturas de
+// Firestore y agotaba la cuota gratuita diaria. 120 alcanza para el
+// historial visible (20), las estadísticas del día y las alertas activas.
+// No usamos "where"/"orderBy" combinados para evitar depender de un índice
+// compuesto en Firestore; ordenamos y filtramos acá mismo, en JS.
+async function listarAlertasRecientes(accessToken) {
   const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
   const body = {
     structuredQuery: {
       from: [{ collectionId: 'alertas', allDescendants: true }],
-      where: {
-        fieldFilter: {
-          field: { fieldPath: 'estado' },
-          op: 'EQUAL',
-          value: { stringValue: 'activa' }
-        }
-      },
-      limit: 50
+      limit: 120
     }
   };
   const resp = await fetch(url, {
@@ -132,7 +151,6 @@ async function listarAlertasActivas(accessToken) {
     .map((r) => {
       const doc = r.document;
       const parts = doc.name.split('/');
-      // .../documents/usuarios/{uid}/alertas/{alertaId}
       const alertaId = parts.pop();
       parts.pop(); // 'alertas'
       const uid = parts.pop();
@@ -143,55 +161,14 @@ async function listarAlertasActivas(accessToken) {
         alertaId,
         estado: f.estado?.stringValue || '',
         creadaEn: f.creadaEn?.timestampValue || null,
+        atendidaEn: f.atendidaEn?.timestampValue || null,
+        canceladaEn: f.canceladaEn?.timestampValue || null,
         ubicacion: ubic
           ? {
               lat: parseFloat(ubic.lat?.doubleValue ?? ubic.lat?.integerValue ?? 0),
               lng: parseFloat(ubic.lng?.doubleValue ?? ubic.lng?.integerValue ?? 0)
             }
           : null
-      };
-    });
-}
-
-// Trae hasta 60 alertas recientes (de cualquier estado, de cualquier
-// cliente) sin filtro, para armar el historial general y las estadísticas.
-// Antes traía 300, pero como este endpoint se consulta en cada actualización
-// del panel operador, ese límite alto multiplicaba mucho las lecturas de
-// Firestore y agotaba la cuota gratuita diaria. 60 alcanza de sobra para el
-// historial visible (20) y las estadísticas del día a esta escala de uso.
-// No usamos "where"/"orderBy" combinados para evitar depender de un índice
-// compuesto en Firestore; ordenamos y filtramos acá mismo, en JS.
-async function listarAlertasRecientes(accessToken) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
-  const body = {
-    structuredQuery: {
-      from: [{ collectionId: 'alertas', allDescendants: true }],
-      limit: 60
-    }
-  };
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) return [];
-  const data = await resp.json();
-  return (data || [])
-    .filter((r) => r.document)
-    .map((r) => {
-      const doc = r.document;
-      const parts = doc.name.split('/');
-      const alertaId = parts.pop();
-      parts.pop(); // 'alertas'
-      const uid = parts.pop();
-      const f = doc.fields || {};
-      return {
-        clienteUid: uid,
-        alertaId,
-        estado: f.estado?.stringValue || '',
-        creadaEn: f.creadaEn?.timestampValue || null,
-        atendidaEn: f.atendidaEn?.timestampValue || null,
-        canceladaEn: f.canceladaEn?.timestampValue || null
       };
     })
     .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
@@ -269,11 +246,11 @@ export default async function handler(req, res) {
       return;
     }
 
-    const [clientes, alertas, alertasRecientes] = await Promise.all([
+    const [clientes, alertasRecientes] = await Promise.all([
       listarClientes(accessToken),
-      listarAlertasActivas(accessToken),
       listarAlertasRecientes(accessToken)
     ]);
+    const alertas = derivarAlertasActivas(alertasRecientes);
 
     const stats = calcularStats(alertasRecientes);
     stats.totalActivas = alertas.length;
