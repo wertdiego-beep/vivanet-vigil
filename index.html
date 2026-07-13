@@ -98,6 +98,17 @@ body.modo-operador #s-operador{
 #s-operador .op-kpis .stat-box.alerta{border-color:rgba(255,77,94,.4)}
 #s-operador .op-kpis .stat-box.alerta strong{color:#ff4d5e}
 #s-operador .op-grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;align-items:start}
+/* ── Popups y controles del mapa en oscuro (como el prototipo) ── */
+#s-operador .leaflet-popup-content-wrapper{background:#1c2133;color:var(--tinta);border:1px solid #303752;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:'Inter',sans-serif}
+#s-operador .leaflet-popup-content{margin:12px 14px;font-size:.8rem;line-height:1.55}
+#s-operador .leaflet-popup-content b{font-size:.86rem}
+#s-operador .leaflet-popup-tip{background:#1c2133;border:1px solid #303752}
+#s-operador .leaflet-popup-close-button{color:var(--gris) !important}
+#s-operador .leaflet-control-zoom a{background:#1c2133 !important;color:var(--tinta) !important;border-color:#303752 !important}
+#s-operador .leaflet-control-attribution{background:rgba(11,13,20,.7) !important;color:var(--gris) !important;font-size:9px !important}
+#s-operador .leaflet-control-attribution a{color:var(--gris) !important}
+#s-operador #operadorAlertas .evento{cursor:pointer;transition:background .15s;border-radius:10px}
+#s-operador #operadorAlertas .evento:hover{background:rgba(255,255,255,.04)}
 /* ── Agenda semanal en grilla (técnicos × días) ── */
 #s-operador .op-agenda-wrap{overflow-x:auto}
 #s-operador .op-agenda{display:grid;grid-template-columns:128px repeat(7,minmax(94px,1fr));min-width:820px;border:1px solid var(--linea);border-radius:12px;overflow:hidden}
@@ -909,7 +920,16 @@ let operadorAlertaIdsConocidas = null; // null = primera carga (no suena)
 let operadorMapa = null;
 let operadorMarcadores = [];
 let operadorMarcadoresClientes = {}; // uid -> marker (clientes geocodificados)
+let operadorMarcadoresAlertas = {};  // alertaId -> marker (para volar al pin desde la lista)
 let operadorMapaAjustado = false;    // ya se hizo el encuadre inicial
+
+// Clic en una alerta de la lista = el mapa vuela al pin y abre su descripción
+function volarAAlerta(alertaId) {
+  const marker = operadorMarcadoresAlertas[alertaId];
+  if (!marker || !operadorMapa) return;
+  operadorMapa.flyTo(marker.getLatLng(), 16, { duration: 0.8 });
+  setTimeout(() => marker.openPopup(), 850);
+}
 let operadorMapaFirmaAlertas = '';   // para re-centrar solo cuando cambian las alertas
 const MAPA_CENTRO_DEFECTO = [-29.9045, -71.2489]; // La Serena
 const MAPA_CIUDAD_CONTEXTO = 'La Serena, Chile';  // se agrega a direcciones sin ciudad
@@ -1354,7 +1374,9 @@ function agregarMarcadorCliente(cliente, coords) {
   const nombre = cliente.local || cliente.nombre || 'Cliente';
   const marker = L.marker([coords.lat, coords.lng], { icon: icono })
     .addTo(operadorMapa)
-    .bindPopup(`${emoji} <b>${nombre}</b><br><span style="color:#5C5A72">${cliente.direccion || ''}</span>`);
+    .bindPopup(`${emoji} <b>${nombre}</b><br>
+      <span style="color:var(--verde);font-weight:700">● Protegido</span><br>
+      <span style="color:var(--gris)">${cliente.direccion || ''}</span>`);
   operadorMarcadoresClientes[cliente.uid] = marker;
 }
 
@@ -1402,18 +1424,23 @@ function renderOperadorMapa(alertas, clientes) {
   operadorMarcadores = [];
 
   const puntos = [];
+  operadorMarcadoresAlertas = {};
   const iconoSOS = () => L.divIcon({ className: '', html: '<div class="op-pin sos"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
 
   (alertas || []).forEach((a) => {
     const cliente = clientes.find((c) => c.uid === a.clienteUid);
     const nombre = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
+    const hora = typeof formatearHoraOperador === 'function' ? formatearHoraOperador(a.creadaEn) : '';
 
     // 1) La alerta trae GPS del teléfono: pin exacto
     if (a.ubicacion) {
       const marker = L.marker([a.ubicacion.lat, a.ubicacion.lng], { icon: iconoSOS(), zIndexOffset: 1000 })
         .addTo(operadorMapa)
-        .bindPopup(`🚨 <b>${nombre}</b><br>SOS activo · ubicación GPS en vivo`);
+        .bindPopup(`🚨 <b>${nombre}</b><br>
+          <span style="color:var(--rojo);font-weight:700">● SOS activo</span> · <span style="color:var(--gris)">${hora}</span><br>
+          <span style="color:var(--gris)">📍 Ubicación GPS en vivo</span>`);
       operadorMarcadores.push(marker);
+      operadorMarcadoresAlertas[a.alertaId] = marker;
       puntos.push([a.ubicacion.lat, a.ubicacion.lng]);
       return;
     }
@@ -1438,8 +1465,12 @@ function renderOperadorMapa(alertas, clientes) {
 
     const marker = L.marker([coords.lat, coords.lng], { icon: iconoSOS(), zIndexOffset: 1000 })
       .addTo(operadorMapa)
-      .bindPopup(`🚨 <b>${nombre}</b><br>SOS activo · ubicación aproximada (dirección del local)<br><span style="color:#5C5A72">${cliente.direccion || ''}</span>`);
+      .bindPopup(`🚨 <b>${nombre}</b><br>
+        <span style="color:var(--rojo);font-weight:700">● SOS activo</span> · <span style="color:var(--gris)">${hora}</span><br>
+        <span style="color:var(--gris)">📍 Ubicación aproximada (dirección del local)</span><br>
+        <span style="color:var(--gris)">${cliente.direccion || ''}</span>`);
     operadorMarcadores.push(marker);
+    operadorMarcadoresAlertas[a.alertaId] = marker;
     puntos.push([coords.lat, coords.lng]);
   });
 
@@ -1640,13 +1671,13 @@ function renderOperadorAlertas(alertas, clientes) {
     const nombreCliente = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
     const mapaLink = a.ubicacion ? `https://www.google.com/maps?q=${a.ubicacion.lat},${a.ubicacion.lng}` : null;
     return `
-      <div class="evento">
+      <div class="evento" onclick="volarAAlerta('${a.alertaId}')" title="Ver en el mapa">
         <div class="ev-ic a">🚨</div>
         <div style="flex:1;">
           <strong>${nombreCliente}</strong>
-          <small>${formatearHoraOperador(a.creadaEn)}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
+          <small>${formatearHoraOperador(a.creadaEn)}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
         </div>
-        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="atenderAlertaOperador('${a.clienteUid}','${a.alertaId}')">Atender</button>
+        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); atenderAlertaOperador('${a.clienteUid}','${a.alertaId}')">Atender</button>
       </div>`;
   }).join('');
 }
