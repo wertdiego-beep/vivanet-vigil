@@ -535,6 +535,17 @@ textarea{min-height:96px;resize:vertical}
               <button id="ticketsTabActivos" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:var(--violeta); color:#fff;" onclick="cambiarFiltroTickets('activos')">Activos</button>
               <button id="ticketsTabCerrados" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:rgba(0,0,0,.06); color:var(--gris);" onclick="cambiarFiltroTickets('cerrados')">Cerrados</button>
             </div>
+            <div style="display:flex; gap:8px; align-items:end; margin-bottom:10px;">
+              <div style="flex:1;">
+                <label style="font-size:.72rem;">Desde</label>
+                <input type="date" id="ticketsFechaDesde" style="margin:0;" onchange="renderHistorialTickets()">
+              </div>
+              <div style="flex:1;">
+                <label style="font-size:.72rem;">Hasta</label>
+                <input type="date" id="ticketsFechaHasta" style="margin:0;" onchange="renderHistorialTickets()">
+              </div>
+              <button style="width:auto; padding:10px 12px; font-size:.75rem; background:rgba(0,0,0,.06); border-radius:10px;" onclick="document.getElementById('ticketsFechaDesde').value=''; document.getElementById('ticketsFechaHasta').value=''; renderHistorialTickets();">Limpiar</button>
+            </div>
             <div id="operadorHistorialTickets">
               <div class="evento"><div><strong>Cargando tickets…</strong></div></div>
             </div>
@@ -934,12 +945,24 @@ function renderHistorialTickets() {
   if (!cont) return;
   const estadoTexto = { agendada: 'Agendada', asignada: 'Asignada', en_camino: 'Técnico en camino', completada: 'Completada', cancelada: 'Cancelada' };
   const esCerrado = (c) => c.estado === 'completada' || c.estado === 'cancelada';
+
+  // Filtro de fechas (desde/hasta): compara contra la fecha de la visita
+  // (c.fecha, formato YYYY-MM-DD) y solo se aplica en el navegador sobre los
+  // datos que ya están cargados, sin pedirle nada nuevo a Firestore.
+  const desdeEl = document.getElementById('ticketsFechaDesde');
+  const hastaEl = document.getElementById('ticketsFechaHasta');
+  const desde = desdeEl ? desdeEl.value : '';
+  const hasta = hastaEl ? hastaEl.value : '';
+
   const filtradas = citasOperadorCache
     .filter((c) => (filtroTickets === 'cerrados' ? esCerrado(c) : !esCerrado(c)))
+    .filter((c) => !desde || (c.fecha && c.fecha >= desde))
+    .filter((c) => !hasta || (c.fecha && c.fecha <= hasta))
     .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
 
   if (!filtradas.length) {
-    cont.innerHTML = `<div class="evento"><div><strong>Sin tickets ${filtroTickets === 'cerrados' ? 'cerrados' : 'activos'}.</strong></div></div>`;
+    const rango = (desde || hasta) ? ' en ese rango de fechas' : '';
+    cont.innerHTML = `<div class="evento"><div><strong>Sin tickets ${filtroTickets === 'cerrados' ? 'cerrados' : 'activos'}${rango}.</strong></div></div>`;
     return;
   }
   cont.innerHTML = filtradas.map((c) => {
