@@ -505,6 +505,16 @@ textarea{min-height:96px;resize:vertical}
         </div>
       </div>
       <div class="card">
+        <div class="card-title">Historial de tickets</div>
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <button id="ticketsTabActivos" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:var(--violeta); color:#fff;" onclick="cambiarFiltroTickets('activos')">Activos</button>
+          <button id="ticketsTabCerrados" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:rgba(0,0,0,.06); color:var(--gris);" onclick="cambiarFiltroTickets('cerrados')">Cerrados</button>
+        </div>
+        <div id="operadorHistorialTickets">
+          <div class="evento"><div><strong>Cargando tickets…</strong></div></div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-title">Historial reciente</div>
         <div id="operadorHistorial">
           <div class="evento"><div><strong>Cargando historial…</strong></div></div>
@@ -868,9 +878,57 @@ async function cargarCitasOperador() {
     }
     renderOperadorCitas(data.citas || [], data.tecnicos || []);
     renderAgendaTecnicos(data.citas || [], data.tecnicos || []);
+    citasOperadorCache = data.citas || [];
+    renderHistorialTickets();
   } catch (err) {
     console.error('Error cargando citas del operador:', err);
   }
+}
+
+// Historial de tickets (activos/cerrados): reutiliza la misma lista de citas
+// que ya trae cargarCitasOperador() (sin lecturas extra a Firestore) y solo
+// la filtra/ordena en el navegador según la pestaña elegida.
+let citasOperadorCache = [];
+let filtroTickets = 'activos';
+function cambiarFiltroTickets(filtro) {
+  filtroTickets = filtro;
+  const activoBtn = document.getElementById('ticketsTabActivos');
+  const cerradoBtn = document.getElementById('ticketsTabCerrados');
+  if (activoBtn && cerradoBtn) {
+    const on = { background: 'var(--violeta)', color: '#fff' };
+    const off = { background: 'rgba(0,0,0,.06)', color: 'var(--gris)' };
+    Object.assign(activoBtn.style, filtro === 'activos' ? on : off);
+    Object.assign(cerradoBtn.style, filtro === 'cerrados' ? on : off);
+  }
+  renderHistorialTickets();
+}
+function renderHistorialTickets() {
+  const cont = document.getElementById('operadorHistorialTickets');
+  if (!cont) return;
+  const estadoTexto = { agendada: 'Agendada', asignada: 'Asignada', en_camino: 'Técnico en camino', completada: 'Completada', cancelada: 'Cancelada' };
+  const esCerrado = (c) => c.estado === 'completada' || c.estado === 'cancelada';
+  const filtradas = citasOperadorCache
+    .filter((c) => (filtroTickets === 'cerrados' ? esCerrado(c) : !esCerrado(c)))
+    .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
+
+  if (!filtradas.length) {
+    cont.innerHTML = `<div class="evento"><div><strong>Sin tickets ${filtroTickets === 'cerrados' ? 'cerrados' : 'activos'}.</strong></div></div>`;
+    return;
+  }
+  cont.innerHTML = filtradas.map((c) => {
+    const problema = c.equipo ? `${c.equipo}${c.problema ? ' — ' + c.problema : ''}` : 'Visita técnica';
+    return `
+    <div class="evento" style="flex-direction:column; align-items:stretch;">
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="ev-ic ${esCerrado(c) ? 'g' : 'v'}">${esCerrado(c) ? '✅' : '🕒'}</div>
+        <div style="flex:1;">
+          <strong>${c.numeroTicket ? c.numeroTicket + ' · ' : ''}${c.clienteLocal || c.clienteNombre || 'Cliente'}</strong>
+          <small style="display:block;">${problema}</small>
+          <small style="display:block;">${c.fecha || ''} ${c.horario || ''} · ${estadoTexto[c.estado] || c.estado}${c.tecnicoNombre ? ' · ' + c.tecnicoNombre : ''}</small>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // Agenda semanal por técnico: reutiliza los mismos datos de citas que ya
