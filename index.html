@@ -40,13 +40,19 @@ button{font-family:inherit;border:none;cursor:pointer;background:none}
 /* Panel de control (central): en pantallas grandes se ve como una app de
    escritorio normal, en vez del recuadro angosto tipo celular que usan las
    pantallas de cliente/técnico. Se activa agregando la clase "modo-operador"
-   al body cuando se entra a #s-operador (ver función go()). */
+   al body cuando se entra a #s-operador (ver función go()). Además de
+   ensanchar el contenedor, las tarjetas se agrupan en secciones fijas
+   (arriba: resumen; abajo: "Monitoreo y clientes" a la izquierda,
+   "Servicio técnico" a la derecha) en vez de una sola columna larga, para
+   que sea más fácil de leer de un vistazo en computador.*/
 body.modo-operador{padding:0}
+.operador-col-title{display:none}
 @media(min-width:900px){
   body.modo-operador .phone{max-width:1280px;height:auto;min-height:100vh;border-radius:0;box-shadow:none}
-  body.modo-operador #s-operador{display:grid;grid-template-columns:repeat(auto-fill, minmax(360px,1fr));align-items:start;gap:16px}
-  body.modo-operador #s-operador .card{margin-bottom:0}
-  body.modo-operador #s-operador .card:first-child{grid-column:1 / -1}
+  body.modo-operador #s-operador{padding:28px 32px 60px}
+  body.modo-operador .operador-top{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  body.modo-operador .operador-cols{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+  body.modo-operador .operador-col-title{display:block;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1rem;letter-spacing:.04em;color:var(--tinta);margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--violeta-suave)}
 }
 .app-head{padding:22px 22px 14px;display:flex;align-items:center;justify-content:space-between}
 .brand{display:flex;align-items:center;gap:10px;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:.03em}
@@ -458,77 +464,87 @@ textarea{min-height:96px;resize:vertical}
     </div>
     <!-- ══ PANEL OPERADOR (solo la cuenta central) ══ -->
     <div class="screen-scroll" id="s-operador">
-      <div class="card">
-        <div class="card-title">Panel operador</div>
-        <div class="evento">
-          <div class="ev-ic v">👁️</div>
-          <div><strong>Vista de la central</strong><small>Alertas y clientes en tiempo real</small></div>
+      <div class="operador-top">
+        <div class="card">
+          <div class="card-title">Panel operador</div>
+          <div class="evento">
+            <div class="ev-ic v">👁️</div>
+            <div><strong>Vista de la central</strong><small>Alertas y clientes en tiempo real</small></div>
+          </div>
+          <div id="operadorStats" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px;"></div>
         </div>
-        <div id="operadorStats" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px;"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Código para técnicos</div>
-        <p style="color:var(--gris); font-size:.85rem; margin-bottom:10px;">Entrégale este código a un técnico. Él debe crear su cuenta, elegir "Empresa" y luego, en "Mi cuenta", usar "Unirme a una familia" con este código y el rol Técnico.</p>
-        <div style="display:flex; align-items:center; gap:10px;">
-          <div id="operadorCodigoTecnico" style="font-size:1.4rem; font-weight:700; letter-spacing:2px; background:rgba(255,255,255,.06); padding:8px 14px; border-radius:10px;">------</div>
-          <button class="btn-full" id="copiarCodigoTecnico" style="width:auto; margin:0; padding:8px 14px;">Copiar</button>
-        </div>
-        <div class="error-msg" id="operadorCodigoError" style="margin-top:8px;"></div>
-      </div>
-      <div class="card" id="operadorMapaCard" style="display:none;">
-        <div class="card-title">Mapa de alertas activas</div>
-        <div class="map-container" style="max-width:none; height:180px; margin:0;">
-          <div id="mapaOperador" style="width:100%; height:100%; border-radius:16px;"></div>
+        <div class="card">
+          <div class="card-title">Código para técnicos</div>
+          <p style="color:var(--gris); font-size:.85rem; margin-bottom:10px;">Entrégale este código a un técnico. Él debe crear su cuenta, elegir "Empresa" y luego, en "Mi cuenta", usar "Unirme a una familia" con este código y el rol Técnico.</p>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div id="operadorCodigoTecnico" style="font-size:1.4rem; font-weight:700; letter-spacing:2px; background:rgba(255,255,255,.06); padding:8px 14px; border-radius:10px;">------</div>
+            <button class="btn-full" id="copiarCodigoTecnico" style="width:auto; margin:0; padding:8px 14px;">Copiar</button>
+          </div>
+          <div class="error-msg" id="operadorCodigoError" style="margin-top:8px;"></div>
         </div>
       </div>
-      <div class="card">
-        <div class="card-title">Alertas activas</div>
-        <div id="operadorAlertas">
-          <div class="evento"><div><strong>Cargando alertas…</strong></div></div>
+      <div class="operador-cols">
+        <div class="operador-col">
+          <div class="operador-col-title">Monitoreo y clientes</div>
+          <div class="card" id="operadorMapaCard" style="display:none;">
+            <div class="card-title">Mapa de alertas activas</div>
+            <div class="map-container" style="max-width:none; height:180px; margin:0;">
+              <div id="mapaOperador" style="width:100%; height:100%; border-radius:16px;"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Alertas activas</div>
+            <div id="operadorAlertas">
+              <div class="evento"><div><strong>Cargando alertas…</strong></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Buscar cliente</div>
+            <input type="text" id="operadorBuscarCliente" placeholder="Nombre, local o dirección…">
+          </div>
+          <div class="card">
+            <div class="card-title">Clientes empresa 🏪</div>
+            <div id="operadorClientesEmpresa">
+              <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Clientes familia 👨‍👩‍👧</div>
+            <div id="operadorClientesFamilia">
+              <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Buscar cliente</div>
-        <input type="text" id="operadorBuscarCliente" placeholder="Nombre, local o dirección…">
-      </div>
-      <div class="card">
-        <div class="card-title">Clientes empresa 🏪</div>
-        <div id="operadorClientesEmpresa">
-          <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Clientes familia 👨‍👩‍👧</div>
-        <div id="operadorClientesFamilia">
-          <div class="evento"><div><strong>Cargando clientes…</strong></div></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Visitas técnicas</div>
-        <div id="operadorCitas">
-          <div class="evento"><div><strong>Cargando visitas…</strong></div></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Agenda de técnicos (esta semana)</div>
-        <div id="operadorAgendaTecnicos">
-          <div class="evento"><div><strong>Cargando agenda…</strong></div></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Historial de tickets</div>
-        <div style="display:flex; gap:8px; margin-bottom:10px;">
-          <button id="ticketsTabActivos" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:var(--violeta); color:#fff;" onclick="cambiarFiltroTickets('activos')">Activos</button>
-          <button id="ticketsTabCerrados" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:rgba(0,0,0,.06); color:var(--gris);" onclick="cambiarFiltroTickets('cerrados')">Cerrados</button>
-        </div>
-        <div id="operadorHistorialTickets">
-          <div class="evento"><div><strong>Cargando tickets…</strong></div></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Historial reciente</div>
-        <div id="operadorHistorial">
-          <div class="evento"><div><strong>Cargando historial…</strong></div></div>
+        <div class="operador-col">
+          <div class="operador-col-title">Servicio técnico</div>
+          <div class="card">
+            <div class="card-title">Visitas técnicas</div>
+            <div id="operadorCitas">
+              <div class="evento"><div><strong>Cargando visitas…</strong></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Agenda de técnicos (esta semana)</div>
+            <div id="operadorAgendaTecnicos">
+              <div class="evento"><div><strong>Cargando agenda…</strong></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Historial de tickets</div>
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <button id="ticketsTabActivos" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:var(--violeta); color:#fff;" onclick="cambiarFiltroTickets('activos')">Activos</button>
+              <button id="ticketsTabCerrados" style="flex:1; margin:0; padding:8px; font-size:.8rem; border-radius:10px; background:rgba(0,0,0,.06); color:var(--gris);" onclick="cambiarFiltroTickets('cerrados')">Cerrados</button>
+            </div>
+            <div id="operadorHistorialTickets">
+              <div class="evento"><div><strong>Cargando tickets…</strong></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Historial reciente</div>
+            <div id="operadorHistorial">
+              <div class="evento"><div><strong>Cargando historial…</strong></div></div>
+            </div>
+          </div>
         </div>
       </div>
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
