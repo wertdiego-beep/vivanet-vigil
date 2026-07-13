@@ -1688,60 +1688,33 @@ function renderOperadorHistorial(historial, clientes) {
 // Convierte coordenadas GPS en nombre de calle (geocodificación inversa, cacheada).
 const _calleCache = {};
 function claveCoord(lat, lng){ return Number(lat).toFixed(5) + ',' + Number(lng).toFixed(5); }
-// Distancia en metros entre dos puntos (lat/lng) — para medir cercanía al GPS.
-function distMetros(lat1, lon1, lat2, lon2){
-  const R = 6371000, toRad = (x) => x * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-  return 2 * R * Math.asin(Math.sqrt(a));
+// Limpia prefijos de ciclovía para quedarnos con el nombre de la calle.
+function limpiarVia(nombre){
+  if (!nombre) return nombre;
+  return nombre.replace(/^(Ciclov[ií]a|Ciclorruta|Ciclo\s*v[ií]a)\s+/i, '').trim();
 }
-// Importancia de cada tipo de vía (más alto = calle más importante).
-const PESO_VIA = { motorway:6, trunk:5, primary:4, secondary:3, tertiary:2, unclassified:1, residential:1, living_street:0.8 };
 
-// Usa las coordenadas (eje X = lng, eje Y = lat) para encontrar las calles con
-// nombre más importantes cercanas al GPS. Muestra la principal y, si hay un
-// cruce cercano, "Principal c/ Secundaria". Respaldo: Nominatim.
+// Usa las coordenadas (eje X = lng, eje Y = lat) para obtener las calles con
+// nombre más importantes cerca del GPS. Toma la vía principal (zoom 16 = calles
+// importantes) y, si hay una vía de referencia distinta, arma "Principal c/ Cruce".
 function obtenerCalleGPS(lat, lng){
   const k = claveCoord(lat, lng);
   if (_calleCache[k]) return Promise.resolve(_calleCache[k]);
-
-  const consulta = `[out:json][timeout:8];way(around:250,${lat},${lng})[highway][name];out geom;`;
-  const overpassUrl = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(consulta);
-
-  return fetch(overpassUrl)
-    .then((r) => r.json())
-    .then((data) => {
-      const vias = (data.elements || []).filter((e) => e.type === 'way' && e.tags && e.tags.name && e.geometry);
-      if (!vias.length) throw new Error('sin vías');
-      const evaluadas = vias.map((v) => {
-        let dmin = Infinity;
-        for (const p of v.geometry){ const d = distMetros(lat, lng, p.lat, p.lon); if (d < dmin) dmin = d; }
-        const peso = PESO_VIA[v.tags.highway] != null ? PESO_VIA[v.tags.highway] : 0.5;
-        return { nombre: v.tags.name, dist: dmin, score: peso - dmin/80 };
-      });
-      // Principal: mejor equilibrio entre importancia y cercanía.
-      evaluadas.sort((a, b) => b.score - a.score);
-      const principal = evaluadas[0];
-      // Cruce: la calle con nombre distinto más cercana (para dar una esquina de referencia).
-      const cruce = evaluadas.filter((v) => v.nombre !== principal.nombre).sort((a, b) => a.dist - b.dist)[0];
-      let texto = principal.nombre;
-      if (cruce && cruce.dist < 140) texto += ' c/ ' + cruce.nombre;
-      _calleCache[k] = texto;
-      return texto;
-    })
-    .catch(() => {
-      // Respaldo: geocodificación inversa de Nominatim.
-      const nurl = `https://nominatim.openstreetmap.org/reverse?format=json&zoom=17&addressdetails=1&lat=${lat}&lon=${lng}`;
-      return fetch(nurl, { headers: { 'Accept-Language': 'es' } })
-        .then((r) => r.json())
-        .then((d) => {
-          const ad = d.address || {};
-          const via = ad.road || ad.pedestrian || ad.residential || ad.neighbourhood || ad.suburb;
-          const texto = via ? (via + (ad.house_number ? ' ' + ad.house_number : '')) : (d.display_name ? d.display_name.split(',').slice(0, 2).join(',').trim() : null);
-          if (texto) _calleCache[k] = texto;
-          return texto;
-        }).catch(() => null);
-    });
+  const rev = (zoom) => fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=${zoom}&addressdetails=1&lat=${lat}&lon=${lng}`, { headers: { 'Accept-Language': 'es' } }).then((r) => r.json()).catch(() => ({}));
+  return rev(16).then((d16) => rev(17).then((d17) => {
+    const a16 = d16.address || {}, a17 = d17.address || {};
+    const importante = a16.road || null;              // calle importante (secundaria/principal)
+    const referencia = limpiarVia(a17.road || null);  // vía local / eje a lo largo
+    const area = a16.suburb || a16.neighbourhood || a16.residential || a16.quarter || a17.suburb || null;
+    let texto;
+    if (importante && referencia && referencia !== importante) {
+      texto = importante + ' c/ ' + referencia;
+    } else {
+      texto = importante || referencia || area || (d16.display_name ? d16.display_name.split(',').slice(0, 2).join(',').trim() : null);
+    }
+    if (texto) _calleCache[k] = texto;
+    return texto;
+  }));
 }
 
 function renderOperadorAlertas(alertas, clientes) {
@@ -1777,7 +1750,7 @@ function renderOperadorAlertas(alertas, clientes) {
         const el = document.getElementById('alertaCalle-' + a.alertaId);
         if (el && calle) el.textContent = calle;
       });
-    }, i * 1100); // respetar el límite de Nominatim (~1 pedido/seg)
+    }, i * 1800); // separar por alerta: 2 llamadas c/u, respetar Nominatim (~1/seg)
   });
 }
 
