@@ -1787,12 +1787,14 @@ function verificarPerfilYEntrar(uid) {
       document.getElementById('bottomNav').style.display = 'flex';
       cargarDatosUsuario(uid);
       go('s-inicio');
+      prepararPermisoGPS();
     }
   }).catch((err) => {
     console.error('Error verificando perfil:', err);
     document.getElementById('bottomNav').style.display = 'flex';
     cargarDatosUsuario(uid);
     go('s-inicio');
+    prepararPermisoGPS();
   });
 }
 
@@ -2400,6 +2402,15 @@ function cancelarAlertaSOS() {
   alertaActualId = null;
 }
 
+let gpsAvisoMostrado = false;
+
+function usarPosicionSOS(lat, lon) {
+  const newLatLng = new L.LatLng(lat, lon);
+  marker.setLatLng(newLatLng);
+  map.setView(newLatLng, 17);
+  if (!sosModoPrueba) actualizarUbicacionAlerta(lat, lon);
+}
+
 function iniciarSeguimientoVivo() {
   if (!navigator.geolocation) { alert("Tu dispositivo no soporta geolocalización."); return; }
   if (!map) {
@@ -2407,17 +2418,47 @@ function iniciarSeguimientoVivo() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'Vigil App', maxZoom: 19 }).addTo(map);
     marker = L.marker([-33.0472, -71.6127]).addTo(map).bindPopup('Ubicación actual').openPopup();
   }
-  watchID = navigator.geolocation.watchPosition(
-    (position) => {
-      const lat = position.coords.latitude, lon = position.coords.longitude;
-      const newLatLng = new L.LatLng(lat, lon);
-      marker.setLatLng(newLatLng);
-      map.setView(newLatLng, 17);
-      if (!sosModoPrueba) actualizarUbicacionAlerta(lat, lon);
-    },
-    (error) => { alert("No pudimos acceder a tu GPS. Revisa los permisos de ubicación."); },
-    { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+  gpsAvisoMostrado = false;
+
+  // 1) Fijación rápida: acepta una ubicación aproximada o en caché (hasta
+  //    1 min de antigüedad) para que la central tenga ALGO de inmediato,
+  //    aunque sea la antena de red y no el GPS fino.
+  navigator.geolocation.getCurrentPosition(
+    (p) => usarPosicionSOS(p.coords.latitude, p.coords.longitude),
+    () => {}, // silencioso: el watch de abajo sigue intentando
+    { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 }
   );
+
+  // 2) Seguimiento fino: GPS de alta precisión con plazo realista (30 s,
+  //    lo que tarda un GPS en frío). Los timeouts reintentan solos y sin
+  //    molestar; el aviso solo aparece si el permiso está bloqueado.
+  watchID = navigator.geolocation.watchPosition(
+    (position) => usarPosicionSOS(position.coords.latitude, position.coords.longitude),
+    (error) => {
+      if (error.code === 1 && !gpsAvisoMostrado) { // PERMISSION_DENIED
+        gpsAvisoMostrado = true;
+        alert("La ubicación está bloqueada para Vigil. Actívala tocando el candado junto a la dirección del sitio → Permisos → Ubicación → Permitir, y vuelve a intentar. La central igual recibió tu alerta.");
+      }
+      // code 2 (sin señal) y 3 (timeout): el watch sigue reintentando solo
+      console.warn('GPS:', error.code, error.message);
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 }
+  );
+}
+
+// Pide el permiso de ubicación al entrar a la app, en un momento tranquilo,
+// para que durante una emergencia real el SOS no pierda tiempo en el aviso
+// del navegador. Si ya está concedido o bloqueado, no molesta.
+function prepararPermisoGPS() {
+  if (!navigator.geolocation) return;
+  const pedir = () => navigator.geolocation.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: false, maximumAge: 600000, timeout: 8000 });
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then((st) => {
+      if (st.state === 'prompt') pedir();
+    }).catch(pedir);
+  } else {
+    pedir();
+  }
 }
 function detenerSeguimientoVivo() {
   if (watchID !== null) { navigator.geolocation.clearWatch(watchID); watchID = null; }
