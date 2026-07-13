@@ -1962,10 +1962,13 @@ function aplicarUIFamilia(modo){
 let soyMiembroVinculado = false;
 function aplicarPermisoAgendar() {
   const bloquear = soyMiembroVinculado;
-  if (bloquear) {
-    // Ocultar todos los accesos a "Reportar falla / Soporte" para integrantes
-    document.querySelectorAll('[data-solo-duenio]').forEach((el) => { el.style.display = 'none'; });
-  }
+  // Integrante: ocultar los accesos a "Reportar falla / Soporte".
+  // Titular: restaurar respetando su data-modo (para no reaparecer donde no corresponde).
+  document.querySelectorAll('[data-solo-duenio]').forEach((el) => {
+    if (bloquear) { el.style.display = 'none'; }
+    else if (el.dataset.modo) { el.style.display = (el.dataset.modo === modoSeleccionado) ? '' : 'none'; }
+    else { el.style.display = ''; }
+  });
   const pantalla = document.getElementById('s-soporte');
   if (!pantalla) return;
   const form = document.getElementById('formFalla');
