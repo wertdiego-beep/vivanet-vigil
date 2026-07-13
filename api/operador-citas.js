@@ -96,6 +96,9 @@ async function listarCitas(accessToken) {
         tecnicoNombre: f.tecnicoNombre?.stringValue || '',
         comentarioTecnico: f.comentarioTecnico?.stringValue || '',
         fotoBase64: f.fotoBase64?.stringValue || '',
+        equipo: f.equipo?.stringValue || '',
+        problema: f.problema?.stringValue || '',
+        numeroTicket: f.numeroTicket?.stringValue || '',
         creadaEn: f.creadaEn?.timestampValue || null
       };
     })

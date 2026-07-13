@@ -102,7 +102,11 @@ async function listarCitasTecnico(accessToken, tecnicoUid) {
         citaId,
         fecha: f.fecha?.stringValue || '',
         horario: f.horario?.stringValue || '',
-        estado: f.estado?.stringValue || 'agendada'
+        estado: f.estado?.stringValue || 'agendada',
+        equipo: f.equipo?.stringValue || '',
+        problema: f.problema?.stringValue || '',
+        fotoFalla: f.fotoFalla?.stringValue || '',
+        numeroTicket: f.numeroTicket?.stringValue || ''
       };
     });
 }
