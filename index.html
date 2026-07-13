@@ -482,14 +482,16 @@ textarea{min-height:96px;resize:vertical}
       <div class="card">
         <div class="card-title" id="codigoGrupoTitulo">Código de familia</div>
         <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;" id="codigoGrupoIntro">Comparte este código con los demás integrantes de tu familia para que se sumen a tu mismo plan, con los mismos contactos de emergencia. Cuando cualquiera presione SOS, la alerta indicará quién fue.</p>
-        <div class="evento"><div class="ev-ic v">🔑</div><div><strong id="miCodigoFamilia">—</strong><small id="miRolEmpresa"></small></div></div>
+        <div class="evento" id="filaCodigo"><div class="ev-ic v">🔑</div><div><strong id="miCodigoFamilia">—</strong><small id="miRolEmpresa"></small></div></div>
         <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
           <input type="checkbox" id="recibirAlertasFamilia" checked style="width:auto; margin:0;">
           <span style="font-weight:600; font-size:.85rem; margin:0;" id="recibirAlertasLabel">Avisarme cuando otro familiar active el SOS</span>
         </label>
         <div class="error-msg" id="alertasFamiliaInfo" style="color:#048A52;"></div>
+        <button class="btn-out" id="salirFamiliaBtn" style="display:none;">Salir de la familia</button>
+        <div class="error-msg" id="salirFamiliaInfo"></div>
       </div>
-      <div class="card">
+      <div class="card" id="cardUnirme">
         <div class="card-title" id="unirseGrupoTitulo">Unirme a una familia</div>
         <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;" id="unirseGrupoIntro">Si otro integrante de tu familia ya tiene un plan, ingresa aquí el código que te compartió.</p>
         <input type="text" id="codigoFamiliaInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase;">
@@ -1920,6 +1922,36 @@ function aplicarEtiquetasGrupo(modo) {
     rolLabel.style.display = 'none';
     rolInput.style.display = 'none';
   }
+  aplicarUIFamilia(modo);
+}
+
+// Simplifica la sección de familia según seas TITULAR (dueño del plan) o
+// INTEGRANTE (te uniste con un código). Muestra solo lo que te sirve.
+function aplicarUIFamilia(modo){
+  const esFamilia = modo !== 'empresa';
+  const esInteg = soyMiembroVinculado;
+  const cardUnirme = document.getElementById('cardUnirme');
+  const filaCodigo = document.getElementById('filaCodigo');
+  const salirBtn = document.getElementById('salirFamiliaBtn');
+  const titulo = document.getElementById('codigoGrupoTitulo');
+  const intro = document.getElementById('codigoGrupoIntro');
+  const unirTit = document.getElementById('unirseGrupoTitulo');
+  const unirIntro = document.getElementById('unirseGrupoIntro');
+  if (cardUnirme) cardUnirme.style.display = esInteg ? 'none' : '';
+  if (filaCodigo) filaCodigo.style.display = esInteg ? 'none' : '';
+  if (salirBtn) salirBtn.style.display = esInteg ? '' : 'none';
+  if (titulo) titulo.textContent = esFamilia ? 'Mi familia' : 'Mi equipo';
+  if (intro) intro.textContent = esInteg
+    ? (esFamilia
+        ? 'Perteneces a la familia de tu titular: comparten las mismas alertas y contactos de emergencia. Si quieres tener tu propio plan, sal de la familia.'
+        : 'Perteneces al equipo de tu titular. Si quieres tener tu propio plan, sal del equipo.')
+    : (esFamilia
+        ? 'Eres el titular. Comparte este código con tu familia (hijos, pareja) para que se sumen a tu plan, con los mismos contactos de emergencia.'
+        : 'Eres el titular. Comparte este código con tu equipo para que se sumen a tu plan.');
+  if (unirTit) unirTit.textContent = esFamilia ? '¿Te compartieron un código?' : '¿Te dieron un código de equipo?';
+  if (unirIntro) unirIntro.textContent = esFamilia
+    ? 'Solo si alguien de tu familia ya tiene el plan: pega su código aquí para unirte a su familia.'
+    : 'Solo si tu jefe o gerente ya tiene un plan: pega su código aquí para unirte.';
 }
 
 // ══ APLICA EL MODO A LA NAVEGACIÓN Y LOS ACCESOS RÁPIDOS ══
@@ -2079,6 +2111,33 @@ if (unirseFamiliaBtn) {
       unirseFamiliaBtn.disabled = false;
       unirseFamiliaBtn.textContent = 'Unirme';
       info.textContent = 'No pudimos unirte a esa familia.';
+    });
+  });
+}
+
+// ══ SALIR DE LA FAMILIA (volver a ser titular) ══
+const salirFamiliaBtn = document.getElementById('salirFamiliaBtn');
+if (salirFamiliaBtn) {
+  salirFamiliaBtn.addEventListener('click', () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    if (!confirm('¿Salir de la familia? Tu cuenta pasará a ser titular, con su propio plan y sus propios contactos.')) return;
+    const info = document.getElementById('salirFamiliaInfo');
+    info.style.color = 'var(--gris)';
+    info.textContent = 'Saliendo…';
+    salirFamiliaBtn.disabled = true;
+    db.collection('usuarios').doc(user.uid).update({
+      grupoFamiliarId: firebase.firestore.FieldValue.delete()
+    }).then(() => {
+      soyMiembroVinculado = false;
+      info.style.color = '#048A52';
+      info.textContent = 'Listo, ahora eres titular. Actualizando…';
+      setTimeout(() => location.reload(), 900);
+    }).catch((err) => {
+      console.error('Error al salir de la familia:', err);
+      salirFamiliaBtn.disabled = false;
+      info.style.color = 'var(--rojo)';
+      info.textContent = 'No pudimos completar la salida. Intenta de nuevo.';
     });
   });
 }
