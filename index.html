@@ -150,13 +150,17 @@ body.modo-operador #s-operador{
 .chip.on{background:var(--verde-suave);color:#048A52}
 .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--verde);animation:pulse 1.8s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,199,118,.4)}55%{box-shadow:0 0 0 7px rgba(0,199,118,0)}}
-.dev-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.dev{border:1px solid var(--linea);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;background:#fff}
-.dev .ic{font-size:1.3rem}
-.dev strong{font-size:.88rem}
-.dev small{font-size:.75rem;font-family:'Chakra Petch',sans-serif;letter-spacing:.08em;text-transform:uppercase}
-.dev.ok small{color:#048A52}
-.dev.warn small{color:var(--ambar)}
+.dev-grid{display:grid;grid-template-columns:1fr;gap:10px}
+.dev{border:1px solid var(--linea);border-radius:14px;padding:12px 14px;display:flex;flex-direction:row;align-items:center;gap:12px;background:#fff}
+.dev .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:1.2rem;background:var(--violeta-suave);flex:0 0 auto}
+.dev.ok .ic{background:var(--verde-suave)}
+.dev.warn .ic{background:#FFF4E0}
+.dev .dev-body{flex:1;min-width:0}
+.dev strong{font-size:.9rem;display:block}
+.dev .dev-body small{font-size:.76rem;color:var(--gris);font-family:'Inter',sans-serif;letter-spacing:0;text-transform:none}
+.dev-pill{font-size:.68rem;font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap;font-family:'Chakra Petch',sans-serif;letter-spacing:.05em}
+.dev.ok .dev-pill{background:var(--verde-suave);color:#048A52}
+.dev.warn .dev-pill{background:#FFF4E0;color:#B9770F}
 .dev.warn{border-color:#F8DFAE;background:#FFFBF2}
 .sos-wrap{text-align:center;padding:26px 0 10px}
 .sos-hint{font-size:.82rem;color:var(--gris);margin-top:14px}
@@ -2162,7 +2166,8 @@ function cargarDatosUsuario(uid) {
       const ic = iconosDispositivo[dev.tipo] || '🔧';
       const div = document.createElement('div');
       div.className = 'dev ' + (ok ? 'ok' : 'warn');
-      div.innerHTML = `<span class="ic">${ic}</span><strong>${dev.nombre || 'Dispositivo'}</strong><small>${ok ? '●' : '⚠'} ${(dev.estado || '').replace(/_/g,' ')}</small>`;
+      const estadoTxt = (dev.estado || '').replace(/_/g,' ').trim();
+      div.innerHTML = `<span class="ic">${ic}</span><div class="dev-body"><strong>${dev.nombre || 'Dispositivo'}</strong><small>${estadoTxt || (ok ? 'Operativo' : 'Revisar')}</small></div><span class="dev-pill">${ok ? 'En línea' : 'Sin señal'}</span>`;
       grid.appendChild(div);
     });
   }).catch((err) => console.error('Error cargando dispositivos:', err));
