@@ -1685,6 +1685,24 @@ function renderOperadorHistorial(historial, clientes) {
   }).join('');
 }
 
+// Convierte coordenadas GPS en nombre de calle (geocodificación inversa, cacheada).
+const _calleCache = {};
+function claveCoord(lat, lng){ return Number(lat).toFixed(5) + ',' + Number(lng).toFixed(5); }
+function obtenerCalleGPS(lat, lng){
+  const k = claveCoord(lat, lng);
+  if (_calleCache[k]) return Promise.resolve(_calleCache[k]);
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&addressdetails=1&lat=${lat}&lon=${lng}`;
+  return fetch(url, { headers: { 'Accept-Language': 'es' } })
+    .then((r) => r.json())
+    .then((d) => {
+      const ad = d.address || {};
+      const via = ad.road || ad.pedestrian || ad.residential || ad.neighbourhood || ad.suburb;
+      const texto = via ? (via + (ad.house_number ? ' ' + ad.house_number : '')) : (d.display_name ? d.display_name.split(',').slice(0, 2).join(',').trim() : null);
+      if (texto) _calleCache[k] = texto;
+      return texto;
+    }).catch(() => null);
+}
+
 function renderOperadorAlertas(alertas, clientes) {
   const cont = document.getElementById('operadorAlertas');
   if (!alertas || alertas.length === 0) {
@@ -1694,17 +1712,32 @@ function renderOperadorAlertas(alertas, clientes) {
   cont.innerHTML = alertas.map((a) => {
     const cliente = clientes.find((c) => c.uid === a.clienteUid);
     const nombreCliente = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
-    const mapaLink = a.ubicacion ? `https://www.google.com/maps?q=${a.ubicacion.lat},${a.ubicacion.lng}` : null;
+    const tieneGPS = a.ubicacion && a.ubicacion.lat != null;
+    const mapaLink = tieneGPS ? `https://www.google.com/maps?q=${a.ubicacion.lat},${a.ubicacion.lng}` : null;
+    const calleCache = tieneGPS ? _calleCache[claveCoord(a.ubicacion.lat, a.ubicacion.lng)] : null;
+    const titulo = calleCache || (tieneGPS ? 'Ubicando dirección…' : nombreCliente);
     return `
       <div class="evento" onclick="volarAAlerta('${a.alertaId}')" title="Ver en el mapa">
         <div class="ev-ic a">🚨</div>
         <div style="flex:1;">
-          <strong>${nombreCliente}</strong>
-          <small>${formatearHoraOperador(a.creadaEn)}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
+          <strong id="alertaCalle-${a.alertaId}">${titulo}</strong>
+          <small>${nombreCliente} · ${formatearHoraOperador(a.creadaEn)}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
         </div>
         <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); atenderAlertaOperador('${a.clienteUid}','${a.alertaId}')">Atender</button>
       </div>`;
   }).join('');
+
+  // Rellenar la calle real (async) para las alertas que aún no están en caché.
+  alertas.forEach((a, i) => {
+    if (!(a.ubicacion && a.ubicacion.lat != null)) return;
+    if (_calleCache[claveCoord(a.ubicacion.lat, a.ubicacion.lng)]) return;
+    setTimeout(() => {
+      obtenerCalleGPS(a.ubicacion.lat, a.ubicacion.lng).then((calle) => {
+        const el = document.getElementById('alertaCalle-' + a.alertaId);
+        if (el && calle) el.textContent = calle;
+      });
+    }, i * 1100); // respetar el límite de Nominatim (~1 pedido/seg)
+  });
 }
 
 let operadorClientesData = [];
