@@ -946,6 +946,8 @@ function renderOperadorCitas(citas, tecnicos) {
     const foto = c.fotoBase64 ? `<img src="data:image/jpeg;base64,${c.fotoBase64}" style="width:100%; border-radius:12px; margin-top:8px;">` : '';
     const comentario = c.comentarioTecnico ? `<p style="font-size:.8rem; color:var(--gris); margin-top:6px;"><strong>Nota del técnico:</strong> ${c.comentarioTecnico}</p>` : '';
     const problema = c.equipo ? `<p style="font-size:.8rem; margin-top:6px;"><strong>Problema:</strong> ${c.equipo}${c.problema ? ' — ' + c.problema : ''}</p>` : '';
+    const cerrar = (c.estado !== 'completada' && c.estado !== 'cancelada') ? `
+      <button style="width:auto; margin-top:8px; padding:8px 14px; font-size:.75rem; background:var(--verde-suave); color:#048A52;" onclick="cerrarTicketOperador('${c.clienteUid}','${c.citaId}')">Cerrar ticket</button>` : '';
     return `
     <div class="evento" style="flex-direction:column; align-items:stretch;">
       <div style="display:flex; gap:10px; align-items:center;">
@@ -956,8 +958,31 @@ function renderOperadorCitas(citas, tecnicos) {
       ${asignar}
       ${comentario}
       ${foto}
+      ${cerrar}
     </div>`;
   }).join('');
+}
+
+function cerrarTicketOperador(clienteUid, citaId) {
+  const user = auth.currentUser;
+  if (!user) return;
+  if (!confirm('¿Cerrar este ticket? Se marcará la visita como completada.')) return;
+  user.getIdToken().then((idToken) => {
+    return fetch('/api/operador-citas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, accion: 'cerrar', clienteUid, citaId })
+    });
+  }).then((r) => r.json()).then((data) => {
+    if (data.ok) {
+      cargarCitasOperador();
+    } else {
+      alert(data.error || 'No se pudo cerrar el ticket.');
+    }
+  }).catch((err) => {
+    console.error('Error cerrando ticket:', err);
+    alert('No se pudo cerrar el ticket.');
+  });
 }
 
 function asignarTecnicoCita(clienteUid, citaId, tecnicoUid) {
