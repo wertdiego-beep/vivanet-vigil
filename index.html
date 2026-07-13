@@ -170,6 +170,12 @@ body.modo-operador #s-operador{
 .quick{background:#fff;border:1px solid var(--linea);border-radius:16px;padding:18px 16px;text-align:left;display:flex;flex-direction:column;gap:8px;transition:transform .15s, border-color .15s;width:100%}
 .quick:active{transform:scale(.97)}
 .quick .ic{width:40px;height:40px;border-radius:11px;background:var(--violeta-suave);color:var(--violeta);display:grid;place-items:center;font-size:1.15rem}
+.quick .ic.ic-amber{background:#FDF0DA;color:#B9770F}
+.quick .ic.ic-blue{background:#E4EEFB;color:#2C63B0}
+.quick .ic.ic-green{background:var(--verde-suave);color:#048A52}
+.estado-row{gap:12px}
+.estado-icon{width:48px;height:48px;border-radius:14px;background:var(--verde-suave);color:#048A52;display:grid;place-items:center;font-size:1.5rem;flex:0 0 auto}
+.estado-info{flex:1;min-width:0}
 .quick strong{font-size:.92rem}
 .quick small{font-size:.78rem;color:var(--gris)}
 .evento{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--linea)}
@@ -316,6 +322,7 @@ textarea{min-height:96px;resize:vertical}
     <div class="screen-scroll" id="s-inicio">
       <div class="card">
         <div class="estado-row">
+          <span class="estado-icon">🛡️</span>
           <div class="estado-info">
             <h2>Hola, <span id="userName">Usuario</span></h2>
             <p id="userLocal">Cargando…</p>
@@ -333,22 +340,22 @@ textarea{min-height:96px;resize:vertical}
       <div class="card-title" style="margin:22px 0 12px">Accesos rápidos</div>
       <div class="quick-grid">
         <button class="quick" onclick="go('s-soporte')" data-modo="empresa" data-solo-duenio>
-          <span class="ic">🛠</span><strong>Reportar falla</strong><small>Cámara, sensor, alarma…</small>
+          <span class="ic ic-amber">🛠</span><strong>Reportar falla</strong><small>Cámara, sensor, alarma…</small>
         </button>
         <button class="quick" onclick="go('s-estado')" data-modo="empresa">
-          <span class="ic">📊</span><strong>Mi sistema</strong><small>Estado y eventos</small>
+          <span class="ic ic-blue">📊</span><strong>Mi sistema</strong><small>Estado y eventos</small>
         </button>
         <button class="quick" onclick="go('s-chat')">
           <span class="ic">💬</span><strong>Asistente Vigil</strong><small>Respuesta inmediata</small>
         </button>
         <button class="quick" onclick="alert('Demo: aquí se integraría Mercado Pago / Webpay para pagar la mantención mensual.')" data-modo="empresa">
-          <span class="ic">💳</span><strong>Pagos</strong><small>Facturas y mantención</small>
+          <span class="ic ic-green">💳</span><strong>Pagos</strong><small>Facturas y mantención</small>
         </button>
         <button class="quick" onclick="go('s-contactos')" data-modo="familia" style="display:none">
           <span class="ic">📞</span><strong>Contactos de emergencia</strong><small>A quién avisamos con el SOS</small>
         </button>
         <button class="quick" onclick="go('s-estado')" data-modo="familia" style="display:none">
-          <span class="ic">📊</span><strong>Actividad</strong><small>Historial de alertas</small>
+          <span class="ic ic-blue">📊</span><strong>Actividad</strong><small>Historial de alertas</small>
         </button>
       </div>
     </div>
