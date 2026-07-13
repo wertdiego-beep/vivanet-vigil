@@ -891,12 +891,26 @@ function entrarAVigil() {
 // que lo espaciamos y además lo pausamos por completo si la pestaña queda en
 // segundo plano (nadie la está mirando, no hace falta seguir consultando).
 const INTERVALO_POLLING_MS = 45000;
+// Con alertas SOS activas el panel consulta mucho más seguido, para que la
+// ubicación del pin se mueva casi en vivo. Sin alertas vuelve a 45 s para
+// cuidar la cuota gratuita de Firestore.
+const INTERVALO_ALERTA_MS = 10000;
+let operadorIntervaloActual = INTERVALO_POLLING_MS;
 let operadorInterval = null;
+
+function ajustarPollingOperador(hayAlertas) {
+  const objetivo = hayAlertas ? INTERVALO_ALERTA_MS : INTERVALO_POLLING_MS;
+  if (objetivo === operadorIntervaloActual && operadorInterval) return;
+  operadorIntervaloActual = objetivo;
+  if (operadorInterval) clearInterval(operadorInterval);
+  operadorInterval = setInterval(cargarPanelOperador, objetivo);
+}
 let operadorAlertaIdsConocidas = null; // null = primera carga (no suena)
 let operadorMapa = null;
 let operadorMarcadores = [];
 let operadorMarcadoresClientes = {}; // uid -> marker (clientes geocodificados)
 let operadorMapaAjustado = false;    // ya se hizo el encuadre inicial
+let operadorMapaFirmaAlertas = '';   // para re-centrar solo cuando cambian las alertas
 const MAPA_CENTRO_DEFECTO = [-29.9045, -71.2489]; // La Serena
 const MAPA_CIUDAD_CONTEXTO = 'La Serena, Chile';  // se agrega a direcciones sin ciudad
 const GEO_CACHE_KEY = 'vigilGeoCache_v1';
@@ -911,7 +925,7 @@ document.addEventListener('visibilitychange', () => {
     if (operadorInterval) { clearInterval(operadorInterval); operadorInterval = null; pollPausadoOperador = true; }
     if (tecnicoInterval) { clearInterval(tecnicoInterval); tecnicoInterval = null; pollPausadoTecnico = true; }
   } else {
-    if (pollPausadoOperador) { pollPausadoOperador = false; cargarPanelOperador(); operadorInterval = setInterval(cargarPanelOperador, INTERVALO_POLLING_MS); }
+    if (pollPausadoOperador) { pollPausadoOperador = false; cargarPanelOperador(); operadorInterval = setInterval(cargarPanelOperador, operadorIntervaloActual); }
     if (pollPausadoTecnico) { pollPausadoTecnico = false; cargarPanelTecnico(); tecnicoInterval = setInterval(cargarPanelTecnico, INTERVALO_POLLING_MS); }
   }
 });
@@ -1013,6 +1027,7 @@ async function cargarPanelOperador() {
     renderOperadorMapa(data.alertas, data.clientes);
     renderOperadorClientes(data.clientes);
     renderOperadorHistorial(data.historial, data.clientes);
+    ajustarPollingOperador((data.alertas || []).length > 0);
   } catch (err) {
     console.error('Error cargando panel operador:', err);
   }
@@ -1424,13 +1439,18 @@ function renderOperadorMapa(alertas, clientes) {
   // Marcadores de clientes (verdes, geocodificados desde su dirección)
   actualizarMarcadoresClientes(clientes);
 
-  if (puntos.length === 1) {
-    operadorMapa.setView(puntos[0], 15);
-  } else if (puntos.length > 1) {
-    operadorMapa.fitBounds(puntos, { padding: [20, 20] });
-  } else {
-    ajustarEncuadreInicial();
+  // Re-centrar solo cuando aparece/desaparece una alerta, no en cada
+  // actualización: así el pin se mueve en vivo sin robarle el mapa al operador.
+  const firmaAlertas = (alertas || []).map((a) => a.alertaId).sort().join(',');
+  if (firmaAlertas !== operadorMapaFirmaAlertas) {
+    operadorMapaFirmaAlertas = firmaAlertas;
+    if (puntos.length === 1) {
+      operadorMapa.setView(puntos[0], 15);
+    } else if (puntos.length > 1) {
+      operadorMapa.fitBounds(puntos, { padding: [20, 20] });
+    }
   }
+  if (puntos.length === 0) ajustarEncuadreInicial();
   setTimeout(() => operadorMapa.invalidateSize(), 100);
 }
 
