@@ -98,6 +98,17 @@ body.modo-operador #s-operador{
 #s-operador .op-kpis .stat-box.alerta{border-color:rgba(255,77,94,.4)}
 #s-operador .op-kpis .stat-box.alerta strong{color:#ff4d5e}
 #s-operador .op-grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;align-items:start}
+/* ── Agenda semanal en grilla (técnicos × días) ── */
+#s-operador .op-agenda-wrap{overflow-x:auto}
+#s-operador .op-agenda{display:grid;grid-template-columns:128px repeat(7,minmax(94px,1fr));min-width:820px;border:1px solid var(--linea);border-radius:12px;overflow:hidden}
+#s-operador .op-agenda .ag-cell{border-bottom:1px solid var(--linea);border-right:1px solid var(--linea);padding:7px;min-height:52px}
+#s-operador .op-agenda .ag-cell:nth-child(8n){border-right:none}
+#s-operador .op-agenda .ag-head{min-height:auto;background:#11141f;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:.6rem;letter-spacing:.06em;color:var(--gris);text-transform:uppercase;text-align:center;padding:8px 4px}
+#s-operador .op-agenda .ag-head.hoy{color:#9d8fff;background:rgba(124,108,255,.1)}
+#s-operador .op-agenda .ag-tec{display:flex;align-items:center;gap:7px;font-weight:700;font-size:.72rem;background:#11141f;color:var(--tinta)}
+#s-operador .ag-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+#s-operador .ag-chip{border-radius:8px;padding:5px 7px;font-size:.66rem;font-weight:600;line-height:1.35;margin-bottom:4px;border-left:3px solid}
+#s-operador .ag-chip small{display:block;font-weight:500;opacity:.8;font-size:.6rem;color:inherit}
 #s-operador .map-container{border-color:var(--linea);background:#0d1020}
 #s-operador .btn-out{margin:0}
 @media(max-width:860px){
@@ -1104,7 +1115,12 @@ function inicioSemana(fecha) {
   return d;
 }
 function formatoFechaISO(d) {
-  return d.toISOString().slice(0, 10);
+  // Fecha local (no UTC): con toISOString(), en Chile la fecha saltaba al
+  // día siguiente después de las 20:00 hrs.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
 }
 function renderAgendaTecnicos(citas, tecnicos) {
   const cont = document.getElementById('operadorAgendaTecnicos');
@@ -1128,23 +1144,45 @@ function renderAgendaTecnicos(citas, tecnicos) {
     return;
   }
 
-  cont.innerHTML = tecnicos.map((t) => {
-    const citasTecnico = citasSemana.filter((c) => c.tecnicoUid === t.uid);
-    const items = citasTecnico.length
-      ? citasTecnico.map((c) => {
-          const d = new Date(c.fecha + 'T00:00:00');
-          const nombreDia = diasSemana[(d.getDay() + 6) % 7];
-          return `<div class="evento" style="padding:8px 0;">
-            <div style="flex:1;"><strong>${nombreDia} ${c.fecha} · ${c.horario}</strong><small>${c.clienteLocal || c.clienteNombre || 'Cliente'} · ${estadoTexto[c.estado] || c.estado}${c.equipo ? ' · ' + c.equipo : ''}</small></div>
-          </div>`;
-        }).join('')
-      : '<div style="color:var(--gris); font-size:.8rem; padding:6px 0;">Sin visitas asignadas esta semana.</div>';
-    return `
-      <div style="margin-bottom:14px;">
-        <div style="font-weight:700; margin-bottom:4px;">👷 ${t.nombre || t.uid} <span style="font-weight:400; color:var(--gris); font-size:.75rem;">(ID ${t.uid.slice(-6).toUpperCase()})</span></div>
-        ${items}
-      </div>`;
-  }).join('');
+  // Grilla semanal: una fila por técnico, una columna por día, con chips
+  // de color por técnico. Cada chip es una visita (horario + cliente).
+  const paleta = [
+    ['#7c6cff', 'rgba(124,108,255,.16)'],
+    ['#ffb547', 'rgba(255,181,71,.15)'],
+    ['#4da3ff', 'rgba(77,163,255,.15)'],
+    ['#3ddc97', 'rgba(61,220,151,.15)'],
+    ['#ff6b9d', 'rgba(255,107,157,.15)']
+  ];
+  const diasCortos = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const hoyISO = formatoFechaISO(new Date());
+
+  const fechasSemana = [];
+  let html = '<div class="op-agenda-wrap"><div class="op-agenda">';
+  html += '<div class="ag-cell ag-head"></div>';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(lunes);
+    d.setDate(d.getDate() + i);
+    const iso = formatoFechaISO(d);
+    fechasSemana.push(iso);
+    html += `<div class="ag-cell ag-head ${iso === hoyISO ? 'hoy' : ''}">${diasCortos[i]} ${d.getDate()}</div>`;
+  }
+
+  tecnicos.forEach((t, idx) => {
+    const [color, fondo] = paleta[idx % paleta.length];
+    const nombreTec = t.nombre || ('ID ' + t.uid.slice(-6).toUpperCase());
+    html += `<div class="ag-cell ag-tec" title="ID ${t.uid.slice(-6).toUpperCase()}"><span class="ag-dot" style="background:${color}"></span>${nombreTec}</div>`;
+    fechasSemana.forEach((f) => {
+      const delDia = citasSemana.filter((c) => c.tecnicoUid === t.uid && c.fecha === f);
+      html += '<div class="ag-cell">' + delDia.map((c) => `
+        <div class="ag-chip" style="background:${fondo};color:${color};border-color:${color}">
+          ${c.horario || ''} ${c.clienteLocal || c.clienteNombre || 'Cliente'}
+          <small>${c.equipo ? c.equipo + ' · ' : ''}${estadoTexto[c.estado] || c.estado}</small>
+        </div>`).join('') + '</div>';
+    });
+  });
+
+  html += '</div></div>';
+  cont.innerHTML = html;
 }
 
 function renderOperadorCitas(citas, tecnicos) {
@@ -1342,16 +1380,45 @@ function renderOperadorMapa(alertas, clientes) {
   operadorMarcadores = [];
 
   const puntos = [];
-  const conUbicacion = (alertas || []).filter((a) => a.ubicacion);
-  conUbicacion.forEach((a) => {
+  const iconoSOS = () => L.divIcon({ className: '', html: '<div class="op-pin sos"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+
+  (alertas || []).forEach((a) => {
     const cliente = clientes.find((c) => c.uid === a.clienteUid);
     const nombre = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
-    const icono = L.divIcon({ className: '', html: '<div class="op-pin sos"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
-    const marker = L.marker([a.ubicacion.lat, a.ubicacion.lng], { icon: icono, zIndexOffset: 1000 })
+
+    // 1) La alerta trae GPS del teléfono: pin exacto
+    if (a.ubicacion) {
+      const marker = L.marker([a.ubicacion.lat, a.ubicacion.lng], { icon: iconoSOS(), zIndexOffset: 1000 })
+        .addTo(operadorMapa)
+        .bindPopup(`🚨 <b>${nombre}</b><br>SOS activo · ubicación GPS en vivo`);
+      operadorMarcadores.push(marker);
+      puntos.push([a.ubicacion.lat, a.ubicacion.lng]);
+      return;
+    }
+
+    // 2) Sin GPS (permiso denegado o aún no llega): usamos la ubicación
+    //    del local del cliente (geocodificada desde su dirección) como
+    //    posición aproximada, para que la alerta SIEMPRE aparezca en el mapa.
+    if (!cliente) return;
+    let coords = null;
+    const marcadorCliente = operadorMarcadoresClientes[cliente.uid];
+    if (marcadorCliente) {
+      const ll = marcadorCliente.getLatLng();
+      coords = { lat: ll.lat, lng: ll.lng };
+    } else {
+      const clave = (cliente.direccion || '').trim().toLowerCase();
+      if (clave) {
+        const cache = leerGeoCache();
+        if (cache[clave]) coords = cache[clave];
+      }
+    }
+    if (!coords) return; // sin dirección geocodificable: aparecerá cuando llegue el GPS
+
+    const marker = L.marker([coords.lat, coords.lng], { icon: iconoSOS(), zIndexOffset: 1000 })
       .addTo(operadorMapa)
-      .bindPopup(`🚨 <b>${nombre}</b><br>SOS activo`);
+      .bindPopup(`🚨 <b>${nombre}</b><br>SOS activo · ubicación aproximada (dirección del local)<br><span style="color:#5C5A72">${cliente.direccion || ''}</span>`);
     operadorMarcadores.push(marker);
-    puntos.push([a.ubicacion.lat, a.ubicacion.lng]);
+    puntos.push([coords.lat, coords.lng]);
   });
 
   // Marcadores de clientes (verdes, geocodificados desde su dirección)
