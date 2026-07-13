@@ -1402,7 +1402,7 @@ function actualizarMarcadoresClientes(clientes) {
 function ajustarEncuadreInicial() {
   if (operadorMapaAjustado || !operadorMapa) return;
   const marcadores = Object.values(operadorMarcadoresClientes);
-  if (operadorMarcadores.length > 0) return; // las alertas ya mandan el encuadre
+  if (Object.keys(operadorMarcadoresAlertas).length > 0) return; // las alertas ya mandan el encuadre
   if (marcadores.length === 0) return;
   operadorMapaAjustado = true;
   const grupo = L.featureGroup(marcadores);
@@ -1419,12 +1419,11 @@ function renderOperadorMapa(alertas, clientes) {
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(operadorMapa);
   }
 
-  // Marcadores de alertas SOS (rojos, pulsantes)
-  operadorMarcadores.forEach((m) => operadorMapa.removeLayer(m));
-  operadorMarcadores = [];
-
+  // Marcadores de alertas SOS (rojos, pulsantes). Se ACTUALIZAN en vez de
+  // destruirse en cada refresco: así el popup abierto no se cierra con el
+  // polling y el pin se desliza si el GPS del cliente cambia.
   const puntos = [];
-  operadorMarcadoresAlertas = {};
+  const idsVigentes = new Set();
   const iconoSOS = () => L.divIcon({ className: '', html: '<div class="op-pin sos"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
 
   (alertas || []).forEach((a) => {
@@ -1432,46 +1431,54 @@ function renderOperadorMapa(alertas, clientes) {
     const nombre = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
     const hora = typeof formatearHoraOperador === 'function' ? formatearHoraOperador(a.creadaEn) : '';
 
-    // 1) La alerta trae GPS del teléfono: pin exacto
-    if (a.ubicacion) {
-      const marker = L.marker([a.ubicacion.lat, a.ubicacion.lng], { icon: iconoSOS(), zIndexOffset: 1000 })
-        .addTo(operadorMapa)
-        .bindPopup(`🚨 <b>${nombre}</b><br>
-          <span style="color:var(--rojo);font-weight:700">● SOS activo</span> · <span style="color:var(--gris)">${hora}</span><br>
-          <span style="color:var(--gris)">📍 Ubicación GPS en vivo</span>`);
-      operadorMarcadores.push(marker);
-      operadorMarcadoresAlertas[a.alertaId] = marker;
-      puntos.push([a.ubicacion.lat, a.ubicacion.lng]);
-      return;
-    }
-
-    // 2) Sin GPS (permiso denegado o aún no llega): usamos la ubicación
-    //    del local del cliente (geocodificada desde su dirección) como
-    //    posición aproximada, para que la alerta SIEMPRE aparezca en el mapa.
-    if (!cliente) return;
+    // 1) Con GPS del teléfono: posición exacta. 2) Sin GPS: dirección del
+    //    local geocodificada como posición aproximada.
     let coords = null;
-    const marcadorCliente = operadorMarcadoresClientes[cliente.uid];
-    if (marcadorCliente) {
-      const ll = marcadorCliente.getLatLng();
-      coords = { lat: ll.lat, lng: ll.lng };
-    } else {
-      const clave = (cliente.direccion || '').trim().toLowerCase();
-      if (clave) {
-        const cache = leerGeoCache();
-        if (cache[clave]) coords = cache[clave];
+    let detalle = '';
+    if (a.ubicacion) {
+      coords = { lat: a.ubicacion.lat, lng: a.ubicacion.lng };
+      detalle = `<span style="color:var(--gris)">📍 Ubicación GPS en vivo</span>`;
+    } else if (cliente) {
+      const marcadorCliente = operadorMarcadoresClientes[cliente.uid];
+      if (marcadorCliente) {
+        const ll = marcadorCliente.getLatLng();
+        coords = { lat: ll.lat, lng: ll.lng };
+      } else {
+        const clave = (cliente.direccion || '').trim().toLowerCase();
+        if (clave) {
+          const cache = leerGeoCache();
+          if (cache[clave]) coords = cache[clave];
+        }
       }
+      detalle = `<span style="color:var(--gris)">📍 Ubicación aproximada (dirección del local)</span><br>
+        <span style="color:var(--gris)">${cliente.direccion || ''}</span>`;
     }
-    if (!coords) return; // sin dirección geocodificable: aparecerá cuando llegue el GPS
+    if (!coords) return; // sin GPS ni dirección geocodificable todavía
 
-    const marker = L.marker([coords.lat, coords.lng], { icon: iconoSOS(), zIndexOffset: 1000 })
-      .addTo(operadorMapa)
-      .bindPopup(`🚨 <b>${nombre}</b><br>
-        <span style="color:var(--rojo);font-weight:700">● SOS activo</span> · <span style="color:var(--gris)">${hora}</span><br>
-        <span style="color:var(--gris)">📍 Ubicación aproximada (dirección del local)</span><br>
-        <span style="color:var(--gris)">${cliente.direccion || ''}</span>`);
-    operadorMarcadores.push(marker);
-    operadorMarcadoresAlertas[a.alertaId] = marker;
+    const contenido = `🚨 <b>${nombre}</b><br>
+      <span style="color:var(--rojo);font-weight:700">● SOS activo</span> · <span style="color:var(--gris)">${hora}</span><br>
+      ${detalle}`;
+
+    idsVigentes.add(a.alertaId);
     puntos.push([coords.lat, coords.lng]);
+
+    const existente = operadorMarcadoresAlertas[a.alertaId];
+    if (existente) {
+      existente.setLatLng([coords.lat, coords.lng]);
+      existente.setPopupContent(contenido);
+    } else {
+      operadorMarcadoresAlertas[a.alertaId] = L.marker([coords.lat, coords.lng], { icon: iconoSOS(), zIndexOffset: 1000 })
+        .addTo(operadorMapa)
+        .bindPopup(contenido);
+    }
+  });
+
+  // Quita los pins de alertas que ya no están activas
+  Object.keys(operadorMarcadoresAlertas).forEach((id) => {
+    if (!idsVigentes.has(id)) {
+      operadorMapa.removeLayer(operadorMarcadoresAlertas[id]);
+      delete operadorMarcadoresAlertas[id];
+    }
   });
 
   // Marcadores de clientes (verdes, geocodificados desde su dirección)
