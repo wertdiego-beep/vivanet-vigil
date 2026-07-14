@@ -2165,7 +2165,7 @@ function renderProtocolo(c, contactos) {
       <div class="card-title">Cliente</div>
       <div class="evento"><div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div><div style="flex:1;"><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || 'Sin dirección'}</small></div></div>
       <div class="evento"><div class="ev-ic v">📞</div><div style="flex:1;"><strong>${c.telefono || 'Sin teléfono'}</strong><small>Teléfono del cliente</small></div>${llamar(c.telefono)}</div>
-      <div class="evento"><div class="ev-ic a">🔑</div><div style="flex:1;"><strong>Clave de seguridad</strong><small>Pídela para verificar identidad</small></div>${clave}</div>
+      <div class="evento"><div class="ev-ic a">🔑</div><div style="flex:1;"><strong>Clave de seguridad</strong><small>Opcional · sirve para verificar, nunca bloquea la ayuda</small></div>${clave}</div>
     </div>
     <div class="card" style="margin-bottom:12px;">
       <div class="card-title">Contactos de emergencia</div>
@@ -2173,7 +2173,8 @@ function renderProtocolo(c, contactos) {
     </div>
     <div class="card" style="margin-bottom:12px;">
       <div class="card-title">Pasos</div>
-      <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Verificar identidad con la clave</label>
+      <p style="color:var(--gris); font-size:.75rem; margin:0 0 8px; line-height:1.5;">La clave es opcional y de apoyo: si la persona no la recuerda (bajo estrés es normal), verifica por voz o datos personales y despacha igual. La clave nunca bloquea la ayuda.</p>
+      <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Verificar identidad (clave o datos personales)</label>
       <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Contactar al cliente</label>
       <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Contactar a los contactos</label>
       <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Evaluar y despachar</label>
