@@ -97,6 +97,9 @@ body.modo-operador #s-operador{
 #s-operador .op-kpis .stat-box strong{font-size:1.25rem;color:var(--tinta)}
 #s-operador .op-kpis .stat-box.alerta{border-color:rgba(255,77,94,.4)}
 #s-operador .op-kpis .stat-box.alerta strong{color:#ff4d5e}
+#s-operador .op-kpi-inline{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;color:var(--gris);background:var(--fondo);border:1px solid var(--linea);border-radius:99px;padding:4px 11px;margin-left:6px;text-transform:none;letter-spacing:0;font-weight:400}
+#s-operador .op-kpi-inline b{font-family:'Chakra Petch',sans-serif;font-size:.85rem;color:var(--tinta)}
+#s-operador .op-kpi-inline.alerta b{color:#ff4d5e}
 #s-operador .op-grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;align-items:start}
 /* ── Popups y controles del mapa en oscuro (como el prototipo) ── */
 #s-operador .leaflet-popup-content-wrapper{background:#1c2133;color:var(--tinta);border:1px solid #303752;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:'Inter',sans-serif}
@@ -588,10 +591,9 @@ textarea{min-height:96px;resize:vertical}
 
           <!-- ── Vista: Monitoreo ── -->
           <section class="op-view active" id="op-view-monitoreo">
-            <div id="operadorStats" class="op-kpis"></div>
             <div class="op-grid2" style="grid-template-columns:2.2fr 1fr;">
               <div class="card" id="operadorMapaCard" style="margin-bottom:0;">
-                <div class="card-title">Mapa de la central</div>
+                <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;"><span>Mapa de la central</span><span id="operadorStats"></span></div>
                 <div style="font-size:.72rem; color:var(--gris); margin:2px 0 10px;">
                   <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
                   <span style="color:var(--verde);">●</span> Cliente protegido
@@ -1333,8 +1335,8 @@ function renderOperadorStats(stats) {
   }
   if (!stats) { cont.innerHTML = ''; return; }
   cont.innerHTML = `
-    <div class="stat-box ${stats.totalActivas > 0 ? 'alerta' : ''}"><strong>${stats.totalActivas ?? 0}</strong><small>Activas</small></div>
-    <div class="stat-box"><strong>${stats.alertasHoy ?? 0}</strong><small>Hoy</small></div>`;
+    <span class="op-kpi-inline ${stats.totalActivas > 0 ? 'alerta' : ''}"><b>${stats.totalActivas ?? 0}</b> activas</span>
+    <span class="op-kpi-inline"><b>${stats.alertasHoy ?? 0}</b> hoy</span>`;
 }
 
 // ── Geocodificación de direcciones de clientes (Nominatim/OSM, gratis) ──
