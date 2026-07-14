@@ -161,6 +161,11 @@ body.op-dis-compacto #s-operador .card-title{font-size:.7rem;margin-bottom:8px}
 body.op-dis-compacto #s-operador .op-grid2{gap:10px}
 body.op-dis-compacto #s-operador .evento{padding:7px 0}
 body.op-dis-compacto #s-operador .map-container{height:380px !important}
+/* ── Alarma sonora/visual: parpadeo del panel + banner ── */
+@keyframes opAlarmaFlash{0%,100%{box-shadow:inset 0 0 0 0 rgba(229,52,75,0)}50%{box-shadow:inset 0 0 0 5px rgba(229,52,75,.6)}}
+body.op-alarma-flash #s-operador .op-main{animation:opAlarmaFlash 1s ease-in-out infinite}
+@keyframes opBannerPulse{0%,100%{background:#E5344B}50%{background:#b81a30}}
+#alarmaBanner{animation:opBannerPulse 1s ease-in-out infinite}
 @media(max-width:860px){
   #s-operador .op-side{width:62px;min-width:62px;padding:14px 7px}
   #s-operador .op-logo{justify-content:center;padding:2px 0 16px}
@@ -642,6 +647,11 @@ textarea{min-height:96px;resize:vertical}
             </div>
             </div>
           </div>
+        </div>
+        <div id="alarmaBanner" style="display:none; align-items:center; gap:12px; background:#E5344B; color:#fff; padding:11px 20px; font-weight:700; font-family:'Chakra Petch',sans-serif;">
+          <span style="font-size:1.2rem;">🚨</span>
+          <span id="alarmaBannerTxt" style="flex:1; letter-spacing:.02em;">Nueva alerta SOS</span>
+          <button onclick="detenerAlarma()" style="background:rgba(255,255,255,.22); color:#fff; border:1px solid rgba(255,255,255,.55); padding:6px 16px; border-radius:8px; font-weight:700; cursor:pointer; font-family:'Chakra Petch',sans-serif;">Silenciar</button>
         </div>
         <div class="op-content">
 
@@ -1560,6 +1570,60 @@ function setDisenoOperador(d) {
 document.addEventListener('click', function () { const m = document.getElementById('disenoMenu'); if (m) m.style.display = 'none'; });
 (function () { try { const d = localStorage.getItem('vigilDisenoOperador'); if (d) document.body.classList.add('op-dis-' + d); } catch (e) {} })();
 
+// ── Alarma sonora + parpadeo al entrar una NUEVA alerta SOS ──
+let audioCtxOp = null, alarmaInterval = null, alarmaActiva = false, alertasConocidas = null;
+function iniciarAudioOp() { try { if (!audioCtxOp) audioCtxOp = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtxOp.state === 'suspended') audioCtxOp.resume(); } catch (e) {} }
+document.addEventListener('click', iniciarAudioOp);
+function beepSirena() {
+  if (!audioCtxOp) return;
+  const ctx = audioCtxOp, now = ctx.currentTime;
+  [880, 1180].forEach(function (freq, i) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square'; o.frequency.value = freq; o.connect(g); g.connect(ctx.destination);
+    const t = now + i * 0.28;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    o.start(t); o.stop(t + 0.27);
+  });
+}
+function mostrarBannerAlarma(show, txt) {
+  const b = document.getElementById('alarmaBanner'); if (!b) return;
+  b.style.display = show ? 'flex' : 'none';
+  if (txt) { const t = document.getElementById('alarmaBannerTxt'); if (t) t.textContent = txt; }
+}
+function iniciarAlarma(txt) {
+  mostrarBannerAlarma(true, txt || 'Nueva alerta SOS');
+  if (alarmaActiva) return;
+  alarmaActiva = true;
+  iniciarAudioOp();
+  document.body.classList.add('op-alarma-flash');
+  beepSirena();
+  alarmaInterval = setInterval(beepSirena, 900);
+}
+function detenerAlarma() {
+  alarmaActiva = false;
+  if (alarmaInterval) { clearInterval(alarmaInterval); alarmaInterval = null; }
+  document.body.classList.remove('op-alarma-flash');
+  mostrarBannerAlarma(false);
+}
+function revisarNuevasAlertas(alertas, clientes) {
+  const activas = (alertas || []).filter(function (a) { return a.estado === 'activa'; });
+  const ids = new Set(activas.map(function (a) { return a.alertaId; }));
+  if (alertasConocidas === null) { alertasConocidas = ids; return; } // primer barrido: no suena
+  let nueva = null;
+  ids.forEach(function (id) {
+    if (!alertasConocidas.has(id)) {
+      const a = activas.find(function (x) { return x.alertaId === id; });
+      const c = (clientes || []).find(function (cl) { return cl.uid === a.clienteUid; });
+      nueva = c ? (c.local || c.nombre || 'Cliente') : 'Cliente';
+    }
+  });
+  alertasConocidas = ids;
+  if (nueva) iniciarAlarma('Nueva alerta SOS · ' + nueva);
+  else if (ids.size === 0) detenerAlarma();
+}
+
 function renderOperadorMapa(alertas, clientes) {
   const card = document.getElementById('operadorMapaCard');
   card.style.display = 'block';
@@ -1962,6 +2026,7 @@ function obtenerCalleGPS(lat, lng){
 
 function renderOperadorAlertas(alertas, clientes) {
   const cont = document.getElementById('operadorAlertas');
+  revisarNuevasAlertas(alertas, clientes);
   if (!alertas || alertas.length === 0) {
     cont.innerHTML = '<div class="evento"><div><strong>Sin alertas activas</strong><small>Todo tranquilo por ahora</small></div></div>';
     return;
