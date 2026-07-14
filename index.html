@@ -524,6 +524,13 @@ textarea{min-height:96px;resize:vertical}
         <div class="error-msg" id="telefonoInfo" style="color:#048A52;"></div>
       </div>
       <div class="card">
+        <div class="card-title">Clave de seguridad</div>
+        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Una palabra o número que la central te pedirá para confirmar tu identidad en una emergencia. Memorízala; no la compartas por escrito.</p>
+        <input type="text" id="accountClave" placeholder="Ej: girasol">
+        <button class="btn-full" id="guardarClave">Guardar clave</button>
+        <div class="error-msg" id="claveInfo" style="color:#048A52;"></div>
+      </div>
+      <div class="card">
         <div class="card-title" id="codigoGrupoTitulo">Código de familia</div>
         <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;" id="codigoGrupoIntro">Comparte este código con los demás integrantes de tu familia para que se sumen a tu mismo plan, con los mismos contactos de emergencia. Cuando cualquiera presione SOS, la alerta indicará quién fue.</p>
         <div class="evento" id="filaCodigo"><div class="ev-ic v">🔑</div><div><strong id="miCodigoFamilia">—</strong><small id="miRolEmpresa"></small></div></div>
@@ -652,6 +659,15 @@ textarea{min-height:96px;resize:vertical}
           <span style="font-size:1.2rem;">🚨</span>
           <span id="alarmaBannerTxt" style="flex:1; letter-spacing:.02em;">Nueva alerta SOS</span>
           <button onclick="detenerAlarma()" style="background:rgba(255,255,255,.22); color:#fff; border:1px solid rgba(255,255,255,.55); padding:6px 16px; border-radius:8px; font-weight:700; cursor:pointer; font-family:'Chakra Petch',sans-serif;">Silenciar</button>
+        </div>
+        <div id="protocoloModal" style="display:none; position:fixed; inset:0; z-index:5000; background:rgba(0,0,0,.55); align-items:center; justify-content:center; padding:20px;">
+          <div style="background:var(--blanco); color:var(--tinta); width:100%; max-width:560px; max-height:90vh; overflow-y:auto; border-radius:16px; border:1px solid var(--linea); font-family:'Inter',sans-serif;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--linea);">
+              <strong style="font-family:'Chakra Petch',sans-serif; font-size:1rem;">Protocolo de atención</strong>
+              <button onclick="cerrarProtocolo()" style="background:none; color:var(--gris); font-size:1.3rem; cursor:pointer; line-height:1;">✕</button>
+            </div>
+            <div id="protocoloBody" style="padding:16px 18px;"></div>
+          </div>
         </div>
         <div class="op-content">
 
@@ -2051,7 +2067,7 @@ function renderOperadorAlertas(alertas, clientes) {
           <strong id="alertaCalle-${a.alertaId}">${titulo}</strong>
           <small>${nombreCliente} · ${formatearHoraOperador(a.creadaEn)}${(tieneGPS && a.ubicacion.precision > 0) ? ` · ±${Math.round(a.ubicacion.precision)} m` : ''}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
         </div>
-        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); atenderAlertaOperador('${a.clienteUid}','${a.alertaId}')">Atender</button>
+        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); abrirProtocolo('${a.clienteUid}','${a.alertaId}')">Atender</button>
       </div>`;
   }).join('');
 
@@ -2108,6 +2124,72 @@ function renderListaClientesOperador(contId, lista, icono) {
 }
 
 // ══ DETALLE DE CLIENTE (panel operador) ══
+let protocoloActual = null;
+function abrirProtocolo(clienteUid, alertaId) {
+  protocoloActual = { clienteUid, alertaId };
+  if (typeof detenerAlarma === 'function') detenerAlarma();
+  const modal = document.getElementById('protocoloModal');
+  const body = document.getElementById('protocoloBody');
+  body.innerHTML = '<div class="evento"><div><strong>Cargando datos del cliente…</strong></div></div>';
+  modal.style.display = 'flex';
+  const user = auth.currentUser;
+  if (!user) return;
+  user.getIdToken().then((idToken) => fetch('/api/operador-cliente', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken, clienteUid })
+  })).then((r) => r.json()).then((data) => {
+    if (!data.ok) { body.innerHTML = '<div class="evento"><div><strong>No se pudo cargar el cliente.</strong></div></div>'; return; }
+    renderProtocolo(data.cliente, data.contactos || []);
+  }).catch((err) => { console.error(err); body.innerHTML = '<div class="evento"><div><strong>Error cargando el cliente.</strong></div></div>'; });
+}
+function cerrarProtocolo() { const m = document.getElementById('protocoloModal'); if (m) m.style.display = 'none'; protocoloActual = null; }
+function renderProtocolo(c, contactos) {
+  const body = document.getElementById('protocoloBody');
+  const llamar = (tel) => tel ? `<a href="tel:${tel}" class="btn-full" style="width:auto;margin:0;padding:7px 14px;font-size:.75rem;text-decoration:none;display:inline-block;">📞 Llamar</a>` : '';
+  const clave = c.claveSeguridad
+    ? `<span style="font-family:'Chakra Petch',sans-serif;font-weight:700;color:var(--tinta);background:var(--violeta-suave);padding:4px 12px;border-radius:8px;letter-spacing:.06em;">${c.claveSeguridad}</span>`
+    : `<span style="color:var(--gris);">No configurada</span>`;
+  const contactosHtml = contactos.length
+    ? contactos.map((k) => `<div class="evento"><div class="ev-ic v">📞</div><div style="flex:1;"><strong>${k.nombre || 'Contacto'}</strong><small>${k.telefono || 'Sin teléfono'}</small></div>${llamar(k.telefono)}</div>`).join('')
+    : '<div class="evento"><div><small>Sin contactos configurados</small></div></div>';
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:12px;">
+      <div class="card-title">Cliente</div>
+      <div class="evento"><div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div><div style="flex:1;"><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || 'Sin dirección'}</small></div></div>
+      <div class="evento"><div class="ev-ic v">📞</div><div style="flex:1;"><strong>${c.telefono || 'Sin teléfono'}</strong><small>Teléfono del cliente</small></div>${llamar(c.telefono)}</div>
+      <div class="evento"><div class="ev-ic a">🔑</div><div style="flex:1;"><strong>Clave de seguridad</strong><small>Pídela para verificar identidad</small></div>${clave}</div>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div class="card-title">Contactos de emergencia</div>
+      ${contactosHtml}
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div class="card-title">Pasos</div>
+      <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Verificar identidad con la clave</label>
+      <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Contactar al cliente</label>
+      <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Contactar a los contactos</label>
+      <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Evaluar y despachar</label>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div class="card-title">Nota</div>
+      <textarea id="protocoloNota" placeholder="Qué se hizo, con quién se habló, resultado…"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-full" style="margin:0;background:var(--rojo);" onclick="protocoloResolver('real')">Confirmar emergencia (real)</button>
+      <button class="btn-full" style="margin:0;background:transparent;color:var(--tinta);border:1px solid var(--linea);" onclick="protocoloResolver('falsa')">Falsa alarma</button>
+    </div>`;
+}
+function protocoloResolver(resultado) {
+  if (!protocoloActual) return;
+  const { clienteUid, alertaId } = protocoloActual;
+  const nota = (document.getElementById('protocoloNota') || {}).value || '';
+  const user = auth.currentUser; if (!user) return;
+  user.getIdToken().then((idToken) => fetch('/api/operador-atender', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken, clienteUid, alertaId, resultado, nota })
+  })).then(() => { cerrarProtocolo(); if (typeof cargarPanelOperador === 'function') cargarPanelOperador(); }).catch((err) => console.error('Error resolviendo protocolo:', err));
+}
+
 async function verClienteOperador(clienteUid) {
   go('s-operador-cliente');
   document.getElementById('clienteOperadorInfo').innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
@@ -2523,6 +2605,25 @@ if (guardarTelefonoBtn) {
   });
 }
 
+// ══ CLAVE DE SEGURIDAD (verificación de identidad en emergencia) ══
+const guardarClaveBtn = document.getElementById('guardarClave');
+if (guardarClaveBtn) {
+  guardarClaveBtn.addEventListener('click', () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const clave = document.getElementById('accountClave').value.trim();
+    const info = document.getElementById('claveInfo');
+    info.textContent = '';
+    db.collection('usuarios').doc(user.uid).set({ claveSeguridad: clave }, { merge: true }).then(() => {
+      info.textContent = 'Clave guardada.';
+    }).catch((err) => {
+      console.error('Error guardando clave de seguridad:', err);
+      info.style.color = 'var(--rojo)';
+      info.textContent = 'No pudimos guardar la clave.';
+    });
+  });
+}
+
 // ══ DATOS REALES DESDE FIRESTORE ══
 function cargarDatosUsuario(uid) {
   const ref = db.collection('usuarios').doc(uid);
@@ -2546,6 +2647,7 @@ function cargarDatosUsuario(uid) {
       document.getElementById('accountLocal').textContent = data.local || 'Sin local registrado';
       document.getElementById('accountDireccion').textContent = data.direccion || '—';
       if (data.telefono) document.getElementById('accountTelefono').value = data.telefono;
+      if (data.claveSeguridad) { const _ac = document.getElementById('accountClave'); if (_ac) _ac.value = data.claveSeguridad; }
       document.getElementById('editNombre').value = data.nombre || '';
       document.getElementById('editLocal').value = data.local || '';
       document.getElementById('editDireccion').value = data.direccion || '';
