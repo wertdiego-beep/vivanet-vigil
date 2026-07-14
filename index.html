@@ -125,6 +125,27 @@ body.modo-operador #s-operador{
 #s-operador .ag-chip small{display:block;font-weight:500;opacity:.8;font-size:.6rem;color:inherit}
 #s-operador .map-container{border-color:var(--linea);background:#0d1020}
 #s-operador .btn-out{margin:0}
+/* ── 3 interfaces del panel (a gusto del operador) ── */
+#temaMenu .tema-op:hover{background:var(--fondo)}
+/* Claro */
+body.op-tema-claro.modo-operador,
+body.op-tema-claro.modo-operador .phone,
+body.op-tema-claro.modo-operador .screens{background:#eef0f5}
+body.op-tema-claro.modo-operador #s-operador{--blanco:#ffffff;--fondo:#eef0f5;--tinta:#1a1730;--gris:#5f6480;--violeta:#4B3F9F;--violeta-suave:#EEEBFA;--verde:#00A566;--verde-suave:#E6F9F0;--linea:#e4e6ef}
+body.op-tema-claro #s-operador .op-side{background:#ffffff}
+body.op-tema-claro #s-operador .op-agenda .ag-head,body.op-tema-claro #s-operador .op-agenda .ag-tec{background:#f0f1f7}
+body.op-tema-claro #s-operador input,body.op-tema-claro #s-operador textarea,body.op-tema-claro #s-operador select{background:#f5f6fa;border-color:#dfe1ec;color:#1a1730;color-scheme:light}
+body.op-tema-claro #s-operador .leaflet-popup-content-wrapper,body.op-tema-claro #s-operador .leaflet-popup-tip{background:#fff;color:#1a1730;border-color:#e4e6ef}
+body.op-tema-claro #s-operador .leaflet-control-zoom a{background:#fff !important;color:#1a1730 !important;border-color:#e4e6ef !important}
+body.op-tema-claro #s-operador .map-container{background:#dfe3ea}
+/* Alto contraste */
+body.op-tema-contraste.modo-operador,
+body.op-tema-contraste.modo-operador .phone,
+body.op-tema-contraste.modo-operador .screens{background:#000000}
+body.op-tema-contraste.modo-operador #s-operador{--blanco:#0c0c0c;--fondo:#000000;--tinta:#ffffff;--gris:#cfcfcf;--violeta:#a99bff;--violeta-suave:rgba(169,155,255,.22);--verde:#33ff99;--verde-suave:rgba(51,255,153,.18);--linea:#3a3a3a}
+body.op-tema-contraste #s-operador .op-side{background:#080808}
+body.op-tema-contraste #s-operador .op-agenda .ag-head,body.op-tema-contraste #s-operador .op-agenda .ag-tec{background:#0a0a0a}
+body.op-tema-contraste #s-operador input,body.op-tema-contraste #s-operador textarea,body.op-tema-contraste #s-operador select{background:#141414;border-color:#3a3a3a;color:#fff}
 @media(max-width:860px){
   #s-operador .op-side{width:62px;min-width:62px;padding:14px 7px}
   #s-operador .op-logo{justify-content:center;padding:2px 0 16px}
@@ -586,6 +607,15 @@ textarea{min-height:96px;resize:vertical}
         <div class="op-topbar">
           <div class="op-title" id="opTitulo">Monitoreo en vivo</div>
           <span class="op-live">EN VIVO</span>
+          <div style="margin-left:auto; position:relative;">
+            <button onclick="toggleMenuTema(event)" style="display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:10px; background:var(--blanco); border:1px solid var(--linea); color:var(--tinta); font-size:.78rem; font-weight:700; font-family:'Chakra Petch',sans-serif; cursor:pointer;">🎨 Interfaz</button>
+            <div id="temaMenu" style="display:none; position:absolute; right:0; top:calc(100% + 8px); background:var(--blanco); border:1px solid var(--linea); border-radius:12px; padding:6px; min-width:200px; z-index:2000; box-shadow:0 14px 36px rgba(0,0,0,.35);">
+              <div style="font-size:.6rem; color:var(--gris); text-transform:uppercase; letter-spacing:.08em; padding:6px 10px 4px;">Elige tu interfaz</div>
+              <button class="tema-op" onclick="setTemaOperador('oscuro')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;"><span style="width:16px;height:16px;border-radius:5px;background:#161a28;border:1px solid #303752;"></span>Oscuro</button>
+              <button class="tema-op" onclick="setTemaOperador('claro')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;"><span style="width:16px;height:16px;border-radius:5px;background:#ffffff;border:1px solid #cfd3e0;"></span>Claro</button>
+              <button class="tema-op" onclick="setTemaOperador('contraste')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;"><span style="width:16px;height:16px;border-radius:5px;background:#000;border:1px solid #555;"></span>Alto contraste</button>
+            </div>
+          </div>
         </div>
         <div class="op-content">
 
@@ -968,6 +998,7 @@ function ajustarPollingOperador(hayAlertas) {
 }
 let operadorAlertaIdsConocidas = null; // null = primera carga (no suena)
 let operadorMapa = null;
+let operadorTileLayer = null;
 let operadorMarcadores = [];
 let operadorMarcadoresClientes = {}; // uid -> marker (clientes geocodificados)
 let operadorMarcadoresAlertas = {};  // alertaId -> marker (para volar al pin desde la lista)
@@ -1455,6 +1486,36 @@ function ajustarEncuadreInicial() {
   operadorMapa.fitBounds(grupo.getBounds().pad(0.25), { maxZoom: 15 });
 }
 
+// ── Interfaz del panel: 3 temas a elección del operador (se recuerda) ──
+function temaActualOperador() {
+  try { return localStorage.getItem('vigilTemaOperador') || 'oscuro'; } catch (e) { return 'oscuro'; }
+}
+function urlTilesOperador(tema) {
+  return tema === 'claro'
+    ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+}
+function aplicarTilesOperador(tema) {
+  if (!operadorMapa) return;
+  if (operadorTileLayer) operadorMapa.removeLayer(operadorTileLayer);
+  operadorTileLayer = L.tileLayer(urlTilesOperador(tema), { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(operadorMapa);
+}
+function toggleMenuTema(e) {
+  if (e) e.stopPropagation();
+  const m = document.getElementById('temaMenu');
+  if (m) m.style.display = (m.style.display === 'none' || !m.style.display) ? 'block' : 'none';
+}
+function setTemaOperador(tema) {
+  document.body.classList.remove('op-tema-oscuro', 'op-tema-claro', 'op-tema-contraste');
+  document.body.classList.add('op-tema-' + tema);
+  try { localStorage.setItem('vigilTemaOperador', tema); } catch (e) {}
+  aplicarTilesOperador(tema);
+  const m = document.getElementById('temaMenu');
+  if (m) m.style.display = 'none';
+}
+document.addEventListener('click', function () { const m = document.getElementById('temaMenu'); if (m) m.style.display = 'none'; });
+(function () { try { const t = localStorage.getItem('vigilTemaOperador'); if (t) document.body.classList.add('op-tema-' + t); } catch (e) {} })();
+
 function renderOperadorMapa(alertas, clientes) {
   const card = document.getElementById('operadorMapaCard');
   card.style.display = 'block';
@@ -1462,7 +1523,7 @@ function renderOperadorMapa(alertas, clientes) {
   if (!operadorMapa) {
     operadorMapa = L.map('mapaOperador').setView(MAPA_CENTRO_DEFECTO, 13);
     // Tiles oscuros (CARTO) para calzar con el tema del panel
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(operadorMapa);
+    operadorTileLayer = L.tileLayer(urlTilesOperador(temaActualOperador()), { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(operadorMapa);
   }
 
   // Marcadores de alertas SOS (rojos, pulsantes). Se ACTUALIZAN en vez de
