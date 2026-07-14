@@ -1701,16 +1701,23 @@ function obtenerCalleGPS(lat, lng){
   const k = claveCoord(lat, lng);
   if (_calleCache[k]) return Promise.resolve(_calleCache[k]);
   const rev = (zoom) => fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=${zoom}&addressdetails=1&lat=${lat}&lon=${lng}`, { headers: { 'Accept-Language': 'es' } }).then((r) => r.json()).catch(() => ({}));
-  return rev(16).then((d16) => rev(17).then((d17) => {
-    const a16 = d16.address || {}, a17 = d17.address || {};
-    const importante = a16.road || null;              // calle importante (secundaria/principal)
-    const referencia = limpiarVia(a17.road || null);  // vía local / eje a lo largo
-    const area = a16.suburb || a16.neighbourhood || a16.residential || a16.quarter || a17.suburb || null;
+  // zoom 18 = punto EXACTO (calle + número si existe); zoom 16 = calle importante para el cruce.
+  return rev(18).then((d18) => rev(16).then((d16) => {
+    const a18 = d18.address || {}, a16 = d16.address || {};
+    const exacta = limpiarVia(a18.road || null);
+    const numero = a18.house_number || null;
+    const importante = limpiarVia(a16.road || null);
+    const sector = a18.neighbourhood || a18.suburb || a18.residential || a18.quarter || a16.suburb || null;
     let texto;
-    if (importante && referencia && referencia !== importante) {
-      texto = importante + ' c/ ' + referencia;
+    if (exacta) {
+      texto = numero ? (exacta + ' ' + numero) : exacta;
+      if (!numero && importante && importante !== exacta) {
+        texto += ' c/ ' + importante;   // esquina de referencia
+      } else if (sector && sector !== exacta) {
+        texto += ' · ' + sector;        // sector, para ubicar mejor
+      }
     } else {
-      texto = importante || referencia || area || (d16.display_name ? d16.display_name.split(',').slice(0, 2).join(',').trim() : null);
+      texto = importante || sector || (d18.display_name ? d18.display_name.split(',').slice(0, 2).join(',').trim() : null);
     }
     if (texto) _calleCache[k] = texto;
     return texto;
