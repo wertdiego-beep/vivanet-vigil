@@ -2929,7 +2929,14 @@ function cancelarAlertaSOS() {
 
 let gpsAvisoMostrado = false;
 
-function usarPosicionSOS(lat, lon) {
+let mejorPrecisionSOS = Infinity;
+function usarPosicionSOS(lat, lon, precision) {
+  precision = (typeof precision === 'number' && isFinite(precision)) ? precision : 9999;
+  // No reemplazar un GPS fino por una ubicación de red imprecisa: solo
+  // aceptamos la posición si su precisión (en metros) es igual o mejor a
+  // la mejor vista hasta ahora (con un pequeño margen).
+  if (precision > mejorPrecisionSOS + 5) return;
+  mejorPrecisionSOS = Math.min(mejorPrecisionSOS, precision);
   const newLatLng = new L.LatLng(lat, lon);
   marker.setLatLng(newLatLng);
   map.setView(newLatLng, 17);
@@ -2937,6 +2944,7 @@ function usarPosicionSOS(lat, lon) {
 }
 
 function iniciarSeguimientoVivo() {
+  mejorPrecisionSOS = Infinity;
   if (!navigator.geolocation) { alert("Tu dispositivo no soporta geolocalización."); return; }
   if (!map) {
     map = L.map('mapaVigil').setView([-33.0472, -71.6127], 15);
@@ -2949,16 +2957,16 @@ function iniciarSeguimientoVivo() {
   //    1 min de antigüedad) para que la central tenga ALGO de inmediato,
   //    aunque sea la antena de red y no el GPS fino.
   navigator.geolocation.getCurrentPosition(
-    (p) => usarPosicionSOS(p.coords.latitude, p.coords.longitude),
+    (p) => usarPosicionSOS(p.coords.latitude, p.coords.longitude, p.coords.accuracy),
     () => {}, // silencioso: el watch de abajo sigue intentando
-    { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 }
+    { enableHighAccuracy: true, maximumAge: 15000, timeout: 8000 }
   );
 
   // 2) Seguimiento fino: GPS de alta precisión con plazo realista (30 s,
   //    lo que tarda un GPS en frío). Los timeouts reintentan solos y sin
   //    molestar; el aviso solo aparece si el permiso está bloqueado.
   watchID = navigator.geolocation.watchPosition(
-    (position) => usarPosicionSOS(position.coords.latitude, position.coords.longitude),
+    (position) => usarPosicionSOS(position.coords.latitude, position.coords.longitude, position.coords.accuracy),
     (error) => {
       if (error.code === 1 && !gpsAvisoMostrado) { // PERMISSION_DENIED
         gpsAvisoMostrado = true;
