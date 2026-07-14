@@ -660,6 +660,23 @@ textarea{min-height:96px;resize:vertical}
 
           <!-- ── Vista: Historial de tickets ── -->
           <section class="op-view" id="op-view-historial">
+            <div class="card" style="margin-bottom:14px;">
+              <div class="card-title">Historial de alarmas</div>
+              <div style="display:flex; gap:8px; align-items:end; margin-bottom:10px; max-width:420px;">
+                <div style="flex:1;">
+                  <label style="font-size:.72rem;">Desde</label>
+                  <input type="date" id="alarmasFechaDesde" style="margin:0;" onchange="renderHistorialAlarmas()">
+                </div>
+                <div style="flex:1;">
+                  <label style="font-size:.72rem;">Hasta</label>
+                  <input type="date" id="alarmasFechaHasta" style="margin:0;" onchange="renderHistorialAlarmas()">
+                </div>
+                <button style="width:auto; padding:10px 12px; font-size:.75rem; background:rgba(0,0,0,.06); border-radius:10px; color:var(--gris);" onclick="document.getElementById('alarmasFechaDesde').value=''; document.getElementById('alarmasFechaHasta').value=''; renderHistorialAlarmas();">Limpiar</button>
+              </div>
+              <div id="operadorHistorialAlarmas">
+                <div class="evento"><div><strong>Cargando alarmas…</strong></div></div>
+              </div>
+            </div>
             <div class="card">
               <div class="card-title">Historial de tickets</div>
               <div style="display:flex; gap:8px; margin-bottom:10px; max-width:420px;">
@@ -1680,6 +1697,7 @@ function toggleHistorial() {
 }
 function renderOperadorHistorial(historial, clientes) {
   _histData = { historial: historial || [], clientes: clientes || [] };
+  if (typeof renderHistorialAlarmas === 'function') renderHistorialAlarmas();
   const cont = document.getElementById('operadorHistorial');
   const lista = historialExpandido ? (historial || []) : (historial || []).filter((a) => a.estado === 'activa');
   if (!lista.length) {
@@ -1696,6 +1714,40 @@ function renderOperadorHistorial(historial, clientes) {
       <div class="evento">
         <div class="ev-ic ${a.estado === 'activa' ? 'a' : 'g'}">${iconos[a.estado] || '📍'}</div>
         <div><strong>${nombre}</strong><small>${a.estado || '—'} · ${formatearHoraOperador(a.creadaEn)}</small></div>
+      </div>`;
+  }).join('');
+}
+
+// Historial de alarmas filtrable por rango de fechas (desde/hasta), sobre los
+// datos de alarmas ya cargados (sin lecturas extra a Firestore).
+function renderHistorialAlarmas() {
+  const cont = document.getElementById('operadorHistorialAlarmas');
+  if (!cont) return;
+  const desde = (document.getElementById('alarmasFechaDesde') || {}).value || '';
+  const hasta = (document.getElementById('alarmasFechaHasta') || {}).value || '';
+  const iconos = { activa: '🚨', atendida: '✅', cancelada: '⚪' };
+  const estadoTxt = { activa: 'Activa', atendida: 'Atendida', cancelada: 'Cancelada' };
+  const lista = (_histData.historial || [])
+    .filter((a) => {
+      if (!desde && !hasta) return true;
+      const dia = a.creadaEn ? formatoFechaISO(new Date(a.creadaEn)) : '';
+      if (desde && (!dia || dia < desde)) return false;
+      if (hasta && (!dia || dia > hasta)) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
+  if (!lista.length) {
+    const rango = (desde || hasta) ? ' en ese rango de fechas' : '';
+    cont.innerHTML = `<div class="evento"><div><strong>Sin alarmas${rango}.</strong></div></div>`;
+    return;
+  }
+  cont.innerHTML = lista.map((a) => {
+    const cliente = (_histData.clientes || []).find((c) => c.uid === a.clienteUid);
+    const nombre = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
+    return `
+      <div class="evento">
+        <div class="ev-ic ${a.estado === 'activa' ? 'a' : 'g'}">${iconos[a.estado] || '📍'}</div>
+        <div><strong>${nombre}</strong><small>${estadoTxt[a.estado] || a.estado || '—'} · ${formatearHoraOperador(a.creadaEn)}</small></div>
       </div>`;
   }).join('');
 }
