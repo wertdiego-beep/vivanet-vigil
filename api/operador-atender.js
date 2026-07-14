@@ -76,14 +76,16 @@ async function verificarOperador(idToken) {
   return data.users[0].localId;
 }
 
-async function marcarAtendida(accessToken, clienteUid, alertaId) {
+async function marcarAtendida(accessToken, clienteUid, alertaId, resultado, nota) {
   const url =
     `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/alertas/${alertaId}` +
-    `?updateMask.fieldPaths=estado&updateMask.fieldPaths=atendidaEn`;
+    `?updateMask.fieldPaths=estado&updateMask.fieldPaths=atendidaEn&updateMask.fieldPaths=resultado&updateMask.fieldPaths=notaAtencion`;
   const body = {
     fields: {
       estado: { stringValue: 'atendida' },
-      atendidaEn: { timestampValue: new Date().toISOString() }
+      atendidaEn: { timestampValue: new Date().toISOString() },
+      resultado: { stringValue: resultado || '' },
+      notaAtencion: { stringValue: nota || '' }
     }
   };
   const resp = await fetch(url, {
@@ -101,7 +103,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { idToken, clienteUid, alertaId } = req.body || {};
+  const { idToken, clienteUid, alertaId, resultado, nota } = req.body || {};
   if (!idToken || !clienteUid || !alertaId) {
     res.status(400).json({ error: 'Faltan datos (idToken, clienteUid o alertaId)' });
     return;
@@ -115,8 +117,8 @@ export default async function handler(req, res) {
     }
 
     const accessToken = await obtenerAccessToken();
-    const resultado = await marcarAtendida(accessToken, clienteUid, alertaId);
-    res.status(200).json({ ok: true, resultado });
+    const rMarcar = await marcarAtendida(accessToken, clienteUid, alertaId, resultado, nota);
+    res.status(200).json({ ok: true, resultado: rMarcar });
   } catch (err) {
     console.error('Error marcando alerta como atendida:', err);
     res.status(500).json({ error: err.message || 'Error interno del servidor' });

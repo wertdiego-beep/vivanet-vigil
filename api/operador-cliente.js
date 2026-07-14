@@ -92,7 +92,8 @@ async function obtenerCliente(accessToken, clienteUid) {
     telefono: f.telefono?.stringValue || '',
     modo: f.modo?.stringValue || 'empresa',
     rolEmpresa: f.rolEmpresa?.stringValue || '',
-    grupoFamiliarId: f.grupoFamiliarId?.stringValue || ''
+    grupoFamiliarId: f.grupoFamiliarId?.stringValue || '',
+    claveSeguridad: f.claveSeguridad?.stringValue || ''
   };
 }
 
