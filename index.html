@@ -1994,10 +1994,18 @@ function renderHistorialAlarmas() {
   cont.innerHTML = lista.map((a) => {
     const cliente = (_histData.clientes || []).find((c) => c.uid === a.clienteUid);
     const nombre = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
+    const resTxt = a.resultado === 'real' ? ' · 🚨 Real' : (a.resultado === 'falsa' ? ' · ⚪ Falsa alarma' : '');
     return `
-      <div class="evento">
-        <div class="ev-ic ${a.estado === 'activa' ? 'a' : 'g'}">${iconos[a.estado] || '📍'}</div>
-        <div><strong>${nombre}</strong><small>${estadoTxt[a.estado] || a.estado || '—'} · ${formatearHoraOperador(a.creadaEn)}</small></div>
+      <div class="evento" style="flex-direction:column; align-items:stretch;">
+        <div style="display:flex; gap:10px; align-items:flex-start;">
+          <div class="ev-ic ${a.estado === 'activa' ? 'a' : 'g'}">${iconos[a.estado] || '📍'}</div>
+          <div style="flex:1;">
+            <strong>${nombre}</strong>
+            <small style="display:block;">${estadoTxt[a.estado] || a.estado || '—'} · ${formatearHoraOperador(a.creadaEn)}${resTxt}</small>
+            ${a.atendidaPor ? `<small style="display:block;">Atendida por ${a.atendidaPor}</small>` : ''}
+            ${a.notaAtencion ? `<small style="display:block; color:var(--gris);">📝 ${a.notaAtencion}</small>` : ''}
+          </div>
+        </div>
       </div>`;
   }).join('');
 }
@@ -2186,7 +2194,7 @@ function protocoloResolver(resultado) {
   const user = auth.currentUser; if (!user) return;
   user.getIdToken().then((idToken) => fetch('/api/operador-atender', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken, clienteUid, alertaId, resultado, nota })
+    body: JSON.stringify({ idToken, clienteUid, alertaId, resultado, nota, operador: (auth.currentUser && auth.currentUser.email) || '' })
   })).then(() => { cerrarProtocolo(); if (typeof cargarPanelOperador === 'function') cargarPanelOperador(); }).catch((err) => console.error('Error resolviendo protocolo:', err));
 }
 
