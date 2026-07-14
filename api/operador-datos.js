@@ -163,6 +163,9 @@ async function listarAlertasRecientes(accessToken) {
         creadaEn: f.creadaEn?.timestampValue || null,
         atendidaEn: f.atendidaEn?.timestampValue || null,
         canceladaEn: f.canceladaEn?.timestampValue || null,
+        resultado: f.resultado?.stringValue || '',
+        notaAtencion: f.notaAtencion?.stringValue || '',
+        atendidaPor: f.atendidaPor?.stringValue || '',
         ubicacion: ubic
           ? {
               lat: parseFloat(ubic.lat?.doubleValue ?? ubic.lat?.integerValue ?? 0),
