@@ -166,7 +166,8 @@ async function listarAlertasRecientes(accessToken) {
         ubicacion: ubic
           ? {
               lat: parseFloat(ubic.lat?.doubleValue ?? ubic.lat?.integerValue ?? 0),
-              lng: parseFloat(ubic.lng?.doubleValue ?? ubic.lng?.integerValue ?? 0)
+              lng: parseFloat(ubic.lng?.doubleValue ?? ubic.lng?.integerValue ?? 0),
+              precision: parseFloat(ubic.precision?.doubleValue ?? ubic.precision?.integerValue ?? 0)
             }
           : null
       };

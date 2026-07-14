@@ -88,7 +88,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { idToken, alertaId, lat, lng, accion } = req.body || {};
+  const { idToken, alertaId, lat, lng, accion, precision } = req.body || {};
 
   if (!idToken || !alertaId || typeof alertaId !== 'string') {
     res.status(400).json({ error: 'Faltan idToken o alertaId' });
@@ -123,7 +123,7 @@ export default async function handler(req, res) {
       mascara = 'updateMask.fieldPaths=estado&updateMask.fieldPaths=canceladaEn';
     } else {
       campos = {
-        ubicacion: { mapValue: { fields: { lat: { doubleValue: lat }, lng: { doubleValue: lng } } } },
+        ubicacion: { mapValue: { fields: { lat: { doubleValue: lat }, lng: { doubleValue: lng }, precision: { doubleValue: (typeof precision === "number" && isFinite(precision)) ? precision : 0 } } } },
         ultimaActualizacion: { timestampValue: ahora }
       };
       mascara = 'updateMask.fieldPaths=ubicacion&updateMask.fieldPaths=ultimaActualizacion';
