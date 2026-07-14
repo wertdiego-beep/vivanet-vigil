@@ -2938,15 +2938,15 @@ let gpsAvisoMostrado = false;
 let mejorPrecisionSOS = Infinity;
 function usarPosicionSOS(lat, lon, precision) {
   precision = (typeof precision === 'number' && isFinite(precision)) ? precision : 9999;
-  // No reemplazar un GPS fino por una ubicación de red imprecisa: solo
-  // aceptamos la posición si su precisión (en metros) es igual o mejor a
-  // la mejor vista hasta ahora (con un pequeño margen).
-  if (precision > mejorPrecisionSOS + 5) return;
-  mejorPrecisionSOS = Math.min(mejorPrecisionSOS, precision);
+  // Seguimos la posición ACTUAL (la persona puede moverse). Solo ignoramos un
+  // salto MUY burdo y aislado (ubicación de antena/wifi) si veníamos con un
+  // buen GPS, para que el pin no se vaya "a otro lado".
+  if (precision > 150 && mejorPrecisionSOS < 80) return;
+  mejorPrecisionSOS = precision;
   const newLatLng = new L.LatLng(lat, lon);
   marker.setLatLng(newLatLng);
   map.setView(newLatLng, 17);
-  if (!sosModoPrueba) actualizarUbicacionAlerta(lat, lon, mejorPrecisionSOS);
+  if (!sosModoPrueba) actualizarUbicacionAlerta(lat, lon, precision);
 }
 
 function iniciarSeguimientoVivo() {
@@ -2965,7 +2965,7 @@ function iniciarSeguimientoVivo() {
   navigator.geolocation.getCurrentPosition(
     (p) => usarPosicionSOS(p.coords.latitude, p.coords.longitude, p.coords.accuracy),
     () => {}, // silencioso: el watch de abajo sigue intentando
-    { enableHighAccuracy: true, maximumAge: 15000, timeout: 8000 }
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
   );
 
   // 2) Seguimiento fino: GPS de alta precisión con plazo realista (30 s,
@@ -2981,7 +2981,7 @@ function iniciarSeguimientoVivo() {
       // code 2 (sin señal) y 3 (timeout): el watch sigue reintentando solo
       console.warn('GPS:', error.code, error.message);
     },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 }
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
   );
 }
 
