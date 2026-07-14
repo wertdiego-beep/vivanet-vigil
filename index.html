@@ -1701,8 +1701,13 @@ function obtenerCalleGPS(lat, lng){
   const k = claveCoord(lat, lng);
   if (_calleCache[k]) return Promise.resolve(_calleCache[k]);
   const rev = (zoom) => fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=${zoom}&addressdetails=1&lat=${lat}&lon=${lng}`, { headers: { 'Accept-Language': 'es' } }).then((r) => r.json()).catch(() => ({}));
-  // zoom 18 = punto EXACTO (calle + número si existe); zoom 16 = calle importante para el cruce.
-  return rev(18).then((d18) => rev(16).then((d16) => {
+  // 1) Esquina REAL desde el servidor (Overpass sin CORS): "Calle c/ Cruce".
+  return fetch(`/api/calle-gps?lat=${lat}&lng=${lng}`)
+    .then((r) => r.json())
+    .then((d) => { if (d && d.texto) { _calleCache[k] = d.texto; return d.texto; } throw new Error('sin esquina'); })
+    .catch(() =>
+  // 2) Respaldo: Nominatim (zoom 18 = punto exacto; zoom 16 = calle importante).
+  rev(18).then((d18) => rev(16).then((d16) => {
     const a18 = d18.address || {}, a16 = d16.address || {};
     const exacta = limpiarVia(a18.road || null);
     const numero = a18.house_number || null;
@@ -1721,7 +1726,7 @@ function obtenerCalleGPS(lat, lng){
     }
     if (texto) _calleCache[k] = texto;
     return texto;
-  }));
+  })));
 }
 
 function renderOperadorAlertas(alertas, clientes) {
