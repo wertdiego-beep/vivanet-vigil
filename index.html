@@ -146,6 +146,21 @@ body.op-tema-contraste.modo-operador #s-operador{--blanco:#0c0c0c;--fondo:#00000
 body.op-tema-contraste #s-operador .op-side{background:#080808}
 body.op-tema-contraste #s-operador .op-agenda .ag-head,body.op-tema-contraste #s-operador .op-agenda .ag-tec{background:#0a0a0a}
 body.op-tema-contraste #s-operador input,body.op-tema-contraste #s-operador textarea,body.op-tema-contraste #s-operador select{background:#141414;border-color:#3a3a3a;color:#fff}
+/* ── 3 diseños/disposiciones del panel (independiente del color) ── */
+/* Minimalista: tarjetas planas sin bordes, títulos suaves, más aire */
+body.op-dis-minimal #s-operador .card{border:none;box-shadow:none;background:transparent;border-radius:0;padding:2px 0;margin-bottom:26px}
+body.op-dis-minimal #s-operador .op-topbar{border-bottom:none}
+body.op-dis-minimal #s-operador .card-title{font-family:'Inter',sans-serif;text-transform:none;letter-spacing:0;font-weight:600;font-size:.95rem;color:var(--tinta);margin-bottom:12px}
+body.op-dis-minimal #s-operador .op-content{padding:26px 30px 50px}
+body.op-dis-minimal #s-operador .evento{border-bottom:1px solid var(--linea)}
+body.op-dis-minimal #s-operador .op-kpi-inline{border:none;background:transparent;padding:4px 2px}
+/* Compacto: todo más apretado, cabe más en pantalla */
+body.op-dis-compacto #s-operador .op-content{padding:12px 14px 24px}
+body.op-dis-compacto #s-operador .card{padding:12px 14px;border-radius:12px}
+body.op-dis-compacto #s-operador .card-title{font-size:.7rem;margin-bottom:8px}
+body.op-dis-compacto #s-operador .op-grid2{gap:10px}
+body.op-dis-compacto #s-operador .evento{padding:7px 0}
+body.op-dis-compacto #s-operador .map-container{height:380px !important}
 @media(max-width:860px){
   #s-operador .op-side{width:62px;min-width:62px;padding:14px 7px}
   #s-operador .op-logo{justify-content:center;padding:2px 0 16px}
@@ -607,13 +622,24 @@ textarea{min-height:96px;resize:vertical}
         <div class="op-topbar">
           <div class="op-title" id="opTitulo">Monitoreo en vivo</div>
           <span class="op-live">EN VIVO</span>
-          <div style="margin-left:auto; position:relative;">
+          <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+            <div style="position:relative;">
+              <button onclick="toggleMenuDiseno(event)" style="display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:10px; background:var(--blanco); border:1px solid var(--linea); color:var(--tinta); font-size:.78rem; font-weight:700; font-family:'Chakra Petch',sans-serif; cursor:pointer;">🧩 Diseño</button>
+              <div id="disenoMenu" style="display:none; position:absolute; right:0; top:calc(100% + 8px); background:var(--blanco); border:1px solid var(--linea); border-radius:12px; padding:6px; min-width:210px; z-index:2000; box-shadow:0 14px 36px rgba(0,0,0,.35);">
+                <div style="font-size:.6rem; color:var(--gris); text-transform:uppercase; letter-spacing:.08em; padding:6px 10px 4px;">Elige el diseño</div>
+                <button class="tema-op" onclick="setDisenoOperador('actual')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;">▦ Actual</button>
+                <button class="tema-op" onclick="setDisenoOperador('minimal')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;">◻ Minimalista</button>
+                <button class="tema-op" onclick="setDisenoOperador('compacto')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;">▤ Compacto</button>
+              </div>
+            </div>
+            <div style="position:relative;">
             <button onclick="toggleMenuTema(event)" style="display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:10px; background:var(--blanco); border:1px solid var(--linea); color:var(--tinta); font-size:.78rem; font-weight:700; font-family:'Chakra Petch',sans-serif; cursor:pointer;">🎨 Interfaz</button>
             <div id="temaMenu" style="display:none; position:absolute; right:0; top:calc(100% + 8px); background:var(--blanco); border:1px solid var(--linea); border-radius:12px; padding:6px; min-width:200px; z-index:2000; box-shadow:0 14px 36px rgba(0,0,0,.35);">
               <div style="font-size:.6rem; color:var(--gris); text-transform:uppercase; letter-spacing:.08em; padding:6px 10px 4px;">Elige tu interfaz</div>
               <button class="tema-op" onclick="setTemaOperador('oscuro')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;"><span style="width:16px;height:16px;border-radius:5px;background:#161a28;border:1px solid #303752;"></span>Oscuro</button>
               <button class="tema-op" onclick="setTemaOperador('claro')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;"><span style="width:16px;height:16px;border-radius:5px;background:#ffffff;border:1px solid #cfd3e0;"></span>Claro</button>
               <button class="tema-op" onclick="setTemaOperador('contraste')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;"><span style="width:16px;height:16px;border-radius:5px;background:#000;border:1px solid #555;"></span>Alto contraste</button>
+            </div>
             </div>
           </div>
         </div>
@@ -1504,6 +1530,7 @@ function toggleMenuTema(e) {
   if (e) e.stopPropagation();
   const m = document.getElementById('temaMenu');
   if (m) m.style.display = (m.style.display === 'none' || !m.style.display) ? 'block' : 'none';
+  const d = document.getElementById('disenoMenu'); if (d) d.style.display = 'none';
 }
 function setTemaOperador(tema) {
   document.body.classList.remove('op-tema-oscuro', 'op-tema-claro', 'op-tema-contraste');
@@ -1515,6 +1542,23 @@ function setTemaOperador(tema) {
 }
 document.addEventListener('click', function () { const m = document.getElementById('temaMenu'); if (m) m.style.display = 'none'; });
 (function () { try { const t = localStorage.getItem('vigilTemaOperador'); if (t) document.body.classList.add('op-tema-' + t); } catch (e) {} })();
+
+// ── Diseño/disposición del panel: 3 modos (actual / minimal / compacto) ──
+function toggleMenuDiseno(e) {
+  if (e) e.stopPropagation();
+  const m = document.getElementById('disenoMenu');
+  if (m) m.style.display = (m.style.display === 'none' || !m.style.display) ? 'block' : 'none';
+  const t = document.getElementById('temaMenu'); if (t) t.style.display = 'none';
+}
+function setDisenoOperador(d) {
+  document.body.classList.remove('op-dis-actual', 'op-dis-minimal', 'op-dis-compacto');
+  document.body.classList.add('op-dis-' + d);
+  try { localStorage.setItem('vigilDisenoOperador', d); } catch (e) {}
+  if (operadorMapa) setTimeout(function () { operadorMapa.invalidateSize(); }, 160);
+  const m = document.getElementById('disenoMenu'); if (m) m.style.display = 'none';
+}
+document.addEventListener('click', function () { const m = document.getElementById('disenoMenu'); if (m) m.style.display = 'none'; });
+(function () { try { const d = localStorage.getItem('vigilDisenoOperador'); if (d) document.body.classList.add('op-dis-' + d); } catch (e) {} })();
 
 function renderOperadorMapa(alertas, clientes) {
   const card = document.getElementById('operadorMapaCard');
