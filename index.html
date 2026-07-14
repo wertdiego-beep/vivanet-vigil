@@ -92,9 +92,9 @@ body.modo-operador #s-operador{
 #s-operador .ev-ic.v{background:var(--violeta-suave);color:#9d8fff}
 #s-operador input,#s-operador textarea,#s-operador select{background:#1c2133;border:1px solid #303752;color:var(--tinta);color-scheme:dark}
 #s-operador input::placeholder,#s-operador textarea::placeholder{color:#5d6480}
-#s-operador .op-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
-#s-operador .op-kpis .stat-box{background:var(--blanco);border:1px solid var(--linea);border-radius:16px;padding:16px 18px;text-align:left}
-#s-operador .op-kpis .stat-box strong{font-size:1.7rem;color:var(--tinta)}
+#s-operador .op-kpis{display:grid;grid-template-columns:repeat(2, minmax(110px,150px));gap:12px;margin-bottom:14px}
+#s-operador .op-kpis .stat-box{background:var(--blanco);border:1px solid var(--linea);border-radius:14px;padding:10px 14px;text-align:left}
+#s-operador .op-kpis .stat-box strong{font-size:1.25rem;color:var(--tinta)}
 #s-operador .op-kpis .stat-box.alerta{border-color:rgba(255,77,94,.4)}
 #s-operador .op-kpis .stat-box.alerta strong{color:#ff4d5e}
 #s-operador .op-grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;align-items:start}
@@ -589,14 +589,14 @@ textarea{min-height:96px;resize:vertical}
           <!-- ── Vista: Monitoreo ── -->
           <section class="op-view active" id="op-view-monitoreo">
             <div id="operadorStats" class="op-kpis"></div>
-            <div class="op-grid2">
+            <div class="op-grid2" style="grid-template-columns:2.2fr 1fr;">
               <div class="card" id="operadorMapaCard" style="margin-bottom:0;">
                 <div class="card-title">Mapa de la central</div>
                 <div style="font-size:.72rem; color:var(--gris); margin:2px 0 10px;">
                   <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
                   <span style="color:var(--verde);">●</span> Cliente protegido
                 </div>
-                <div class="map-container" style="max-width:none; height:330px; margin:0;">
+                <div class="map-container" style="max-width:none; height:520px; margin:0;">
                   <div id="mapaOperador" style="width:100%; height:100%; border-radius:12px;"></div>
                 </div>
               </div>
@@ -608,9 +608,12 @@ textarea{min-height:96px;resize:vertical}
               </div>
             </div>
             <div class="card" style="margin-top:14px;">
-              <div class="card-title">Historial reciente</div>
+              <div class="card-title" onclick="toggleHistorial()" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none;">
+                <span id="histLabel">Alarmas activas</span>
+                <span id="histChevron" style="font-size:.72rem; letter-spacing:.04em; color:var(--violeta);">Ver historial ▾</span>
+              </div>
               <div id="operadorHistorial">
-                <div class="evento"><div><strong>Cargando historial…</strong></div></div>
+                <div class="evento"><div><strong>Cargando…</strong></div></div>
               </div>
             </div>
           </section>
@@ -1329,13 +1332,9 @@ function renderOperadorStats(stats) {
     pill.textContent = n;
   }
   if (!stats) { cont.innerHTML = ''; return; }
-  const tiempoTxt = stats.tiempoPromedioResp !== null && stats.tiempoPromedioResp !== undefined
-    ? `${stats.tiempoPromedioResp} min`
-    : '—';
   cont.innerHTML = `
     <div class="stat-box ${stats.totalActivas > 0 ? 'alerta' : ''}"><strong>${stats.totalActivas ?? 0}</strong><small>Activas</small></div>
-    <div class="stat-box"><strong>${stats.alertasHoy ?? 0}</strong><small>Hoy</small></div>
-    <div class="stat-box"><strong>${tiempoTxt}</strong><small>Resp. prom.</small></div>`;
+    <div class="stat-box"><strong>${stats.alertasHoy ?? 0}</strong><small>Hoy</small></div>`;
 }
 
 // ── Geocodificación de direcciones de clientes (Nominatim/OSM, gratis) ──
@@ -1667,14 +1666,28 @@ function completarVisita(clienteUid, citaId, i) {
   });
 }
 
+let historialExpandido = false;
+let _histData = { historial: [], clientes: [] };
+function toggleHistorial() {
+  historialExpandido = !historialExpandido;
+  const chev = document.getElementById('histChevron');
+  const lbl = document.getElementById('histLabel');
+  if (chev) chev.textContent = historialExpandido ? 'Ver solo activas ▴' : 'Ver historial ▾';
+  if (lbl) lbl.textContent = historialExpandido ? 'Historial reciente' : 'Alarmas activas';
+  renderOperadorHistorial(_histData.historial, _histData.clientes);
+}
 function renderOperadorHistorial(historial, clientes) {
+  _histData = { historial: historial || [], clientes: clientes || [] };
   const cont = document.getElementById('operadorHistorial');
-  if (!historial || historial.length === 0) {
-    cont.innerHTML = '<div class="evento"><div><strong>Sin alertas registradas todavía</strong></div></div>';
+  const lista = historialExpandido ? (historial || []) : (historial || []).filter((a) => a.estado === 'activa');
+  if (!lista.length) {
+    cont.innerHTML = historialExpandido
+      ? '<div class="evento"><div><strong>Sin alertas registradas todavía</strong></div></div>'
+      : '<div class="evento"><div><strong>Sin alarmas activas ahora</strong><small>Toca “Ver historial” para las anteriores</small></div></div>';
     return;
   }
   const iconos = { activa: '🚨', atendida: '✅', cancelada: '⚪' };
-  cont.innerHTML = historial.map((a) => {
+  cont.innerHTML = lista.map((a) => {
     const cliente = clientes.find((c) => c.uid === a.clienteUid);
     const nombre = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
     return `
