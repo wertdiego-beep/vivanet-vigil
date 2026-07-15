@@ -2090,6 +2090,10 @@ function obtenerCalleGPS(lat, lng){
   })));
 }
 
+function minutosDesde(iso) {
+  if (!iso) return 0;
+  return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+}
 function renderOperadorAlertas(alertas, clientes) {
   const cont = document.getElementById('operadorAlertas');
   revisarNuevasAlertas(alertas, clientes);
@@ -2097,19 +2101,23 @@ function renderOperadorAlertas(alertas, clientes) {
     cont.innerHTML = '<div class="evento"><div><strong>Sin alertas activas</strong><small>Todo tranquilo por ahora</small></div></div>';
     return;
   }
-  cont.innerHTML = alertas.map((a) => {
+  // La que lleva más tiempo esperando va primero (más urgente arriba).
+  cont.innerHTML = alertas.slice().sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0)).map((a) => {
     const cliente = clientes.find((c) => c.uid === a.clienteUid);
     const nombreCliente = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
     const tieneGPS = a.ubicacion && a.ubicacion.lat != null;
     const mapaLink = tieneGPS ? `https://www.google.com/maps?q=${a.ubicacion.lat},${a.ubicacion.lng}` : null;
     const calleCache = tieneGPS ? _calleCache[claveCoord(a.ubicacion.lat, a.ubicacion.lng)] : null;
     const titulo = calleCache || (tieneGPS ? 'Ubicando dirección…' : nombreCliente);
+    const mins = minutosDesde(a.creadaEn);
+    const urgente = mins >= 3;
+    const tiempoTxt = mins <= 0 ? 'recién' : ('hace ' + mins + ' min');
     return `
-      <div class="evento" onclick="volarAAlerta('${a.alertaId}')" title="Ver en el mapa">
+      <div class="evento" onclick="volarAAlerta('${a.alertaId}')" title="Ver en el mapa" style="${urgente ? 'border-left:3px solid var(--rojo); border-radius:0 8px 8px 0; padding-left:9px;' : ''}">
         <div class="ev-ic a">🚨</div>
         <div style="flex:1;">
-          <strong id="alertaCalle-${a.alertaId}">${titulo}</strong>
-          <small>${nombreCliente} · ${formatearHoraOperador(a.creadaEn)}${(tieneGPS && a.ubicacion.precision > 0) ? ` · ±${Math.round(a.ubicacion.precision)} m` : ''}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
+          <strong id="alertaCalle-${a.alertaId}">${titulo}</strong>${urgente ? ` <span style="font-size:.58rem; font-weight:700; color:#fff; background:var(--rojo); padding:2px 7px; border-radius:99px; font-family:'Chakra Petch',sans-serif; letter-spacing:.06em; vertical-align:middle;">URGENTE</span>` : ''}
+          <small>${nombreCliente} · <span style="${urgente ? 'color:var(--rojo); font-weight:600;' : ''}">${tiempoTxt}</span>${(tieneGPS && a.ubicacion.precision > 0) ? ` · ±${Math.round(a.ubicacion.precision)} m` : ''}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
         </div>
         <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); abrirProtocolo('${a.clienteUid}','${a.alertaId}')">Atender</button>
       </div>`;
