@@ -765,6 +765,7 @@ textarea{min-height:96px;resize:vertical}
                   <input type="date" id="alarmasFechaHasta" style="margin:0;" onchange="renderHistorialAlarmas()">
                 </div>
                 <button style="width:auto; padding:10px 12px; font-size:.75rem; background:rgba(0,0,0,.06); border-radius:10px; color:var(--gris);" onclick="document.getElementById('alarmasFechaDesde').value=''; document.getElementById('alarmasFechaHasta').value=''; renderHistorialAlarmas();">Limpiar</button>
+                <button style="width:auto; padding:10px 12px; font-size:.75rem; background:var(--violeta); color:#fff; border-radius:10px;" onclick="exportarAlarmasCSV()">Exportar</button>
               </div>
               <div id="operadorHistorialAlarmas">
                 <div class="evento"><div><strong>Cargando alarmas…</strong></div></div>
@@ -1970,6 +1971,41 @@ function filtrarHistorialMonitoreo() {
 
 // Historial de alarmas filtrable por rango de fechas (desde/hasta), sobre los
 // datos de alarmas ya cargados (sin lecturas extra a Firestore).
+// Exporta el historial de alarmas (con el mismo filtro de fechas) a CSV para Excel.
+function exportarAlarmasCSV() {
+  const desde = (document.getElementById('alarmasFechaDesde') || {}).value || '';
+  const hasta = (document.getElementById('alarmasFechaHasta') || {}).value || '';
+  const enRango = (a) => {
+    const dia = a.creadaEn ? formatoFechaISO(new Date(a.creadaEn)) : '';
+    if (desde && (!dia || dia < desde)) return false;
+    if (hasta && (!dia || dia > hasta)) return false;
+    return true;
+  };
+  const lista = (_histData.historial || [])
+    .filter((a) => (!desde && !hasta) ? true : enRango(a))
+    .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
+  if (!lista.length) { alert('No hay alarmas en ese rango para exportar.'); return; }
+  const esc = (v) => '"' + (v == null ? '' : String(v)).replace(/"/g, '""') + '"';
+  const filas = [['Fecha y hora', 'Cliente', 'Estado', 'Resultado', 'Atendida por', 'Nota', 'Latitud', 'Longitud']];
+  lista.forEach((a) => {
+    const cli = (_histData.clientes || []).find((c) => c.uid === a.clienteUid);
+    const nombre = cli ? (cli.local || cli.nombre || 'Cliente') : 'Cliente';
+    filas.push([
+      formatearHoraOperador(a.creadaEn), nombre, a.estado || '', a.resultado || '',
+      a.atendidaPor || '', a.notaAtencion || '',
+      a.ubicacion ? a.ubicacion.lat : '', a.ubicacion ? a.ubicacion.lng : ''
+    ]);
+  });
+  const csv = '\ufeff' + filas.map((f) => f.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const hoy = formatoFechaISO(new Date());
+  link.href = url; link.download = `alarmas-vigil-${hoy}.csv`;
+  document.body.appendChild(link); link.click(); link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function renderHistorialAlarmas() {
   const cont = document.getElementById('operadorHistorialAlarmas');
   if (!cont) return;
