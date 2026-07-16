@@ -634,6 +634,10 @@ textarea{min-height:96px;resize:vertical}
         <div class="op-topbar">
           <div class="op-title" id="opTitulo">Monitoreo en vivo</div>
           <span class="op-live">EN VIVO</span>
+          <div id="buscarMonitoreoWrap" style="position:relative; width:330px; max-width:34vw;">
+            <input type="text" id="buscarMonitoreo" placeholder="Buscar cliente por nombre, local o dirección…" autocomplete="off" oninput="buscarClienteMonitoreo()" onfocus="buscarClienteMonitoreo()" style="margin:0; padding:8px 12px; font-size:.8rem;">
+            <div id="buscarMonitoreoRes" style="display:none; position:absolute; top:calc(100% + 5px); left:0; right:0; background:var(--blanco); border:1px solid var(--linea); border-radius:12px; max-height:260px; overflow-y:auto; z-index:3000; box-shadow:0 14px 34px rgba(0,0,0,.45);"></div>
+          </div>
           <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
             <div style="position:relative;">
               <button onclick="toggleMenuDiseno(event)" style="display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:10px; background:var(--blanco); border:1px solid var(--linea); color:var(--tinta); font-size:.78rem; font-weight:700; font-family:'Chakra Petch',sans-serif; cursor:pointer;">🧩 Diseño</button>
@@ -682,10 +686,6 @@ textarea{min-height:96px;resize:vertical}
                 <div style="font-size:.72rem; color:var(--gris); margin:2px 0 10px;">
                   <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
                   <button id="toggleClientesBtn" onclick="toggleClientesMapa()" title="Mostrar u ocultar los clientes en el mapa" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:var(--verde-suave); color:var(--verde); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif;"><span style="color:var(--verde);">●</span> Cliente protegido</button>
-                </div>
-                <div style="position:relative; margin-bottom:10px;">
-                  <input type="text" id="buscarMonitoreo" placeholder="Buscar cliente por nombre, local o dirección…" autocomplete="off" oninput="buscarClienteMonitoreo()" onfocus="buscarClienteMonitoreo()" style="margin:0;">
-                  <div id="buscarMonitoreoRes" style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--blanco); border:1px solid var(--linea); border-radius:12px; max-height:250px; overflow-y:auto; z-index:1200; box-shadow:0 12px 30px rgba(0,0,0,.35);"></div>
                 </div>
                 <div class="map-container" style="max-width:none; height:520px; margin:0;">
                   <div id="mapaOperador" style="width:100%; height:100%; border-radius:12px;"></div>
@@ -2994,6 +2994,10 @@ document.querySelectorAll('.nav button[data-s]').forEach(b=>b.addEventListener('
 // ══ NAVEGACIÓN INTERNA DEL PANEL OPERADOR (sidebar) ══
 const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico' };
 function opGo(v){
+  const bm = document.getElementById('buscarMonitoreoWrap');
+  if (bm) bm.style.display = (v === 'monitoreo') ? 'block' : 'none';
+  const br = document.getElementById('buscarMonitoreoRes');
+  if (br) br.style.display = 'none';
   document.querySelectorAll('.op-nav[data-opview]').forEach(b=>b.classList.toggle('on', b.dataset.opview===v));
   document.querySelectorAll('.op-view').forEach(s=>s.classList.toggle('active', s.id==='op-view-'+v));
   const t = document.getElementById('opTitulo');
