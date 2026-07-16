@@ -124,7 +124,7 @@ function derivarAlertasActivas(alertasRecientes) {
   // como emergencia vigente.
   const corte = Date.now() - 12 * 3600 * 1000;
   return alertasRecientes
-    .filter((a) => a.estado === 'activa' && a.creadaEn && new Date(a.creadaEn).getTime() >= corte)
+    .filter((a) => (a.estado === 'activa' || a.estado === 'verificando') && a.creadaEn && new Date(a.creadaEn).getTime() >= corte)
     .slice(0, 50);
 }
 

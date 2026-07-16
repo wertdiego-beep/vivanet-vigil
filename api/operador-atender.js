@@ -86,11 +86,12 @@ async function verificarOperador(idToken) {
 async function asignarAlerta(accessToken, clienteUid, alertaId, operador) {
   const url =
     `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/alertas/${alertaId}` +
-    `?updateMask.fieldPaths=asignadaA&updateMask.fieldPaths=asignadaEn`;
+    `?updateMask.fieldPaths=asignadaA&updateMask.fieldPaths=asignadaEn&updateMask.fieldPaths=estado`;
   const body = {
     fields: {
       asignadaA: { stringValue: operador || '' },
-      asignadaEn: { timestampValue: new Date().toISOString() }
+      asignadaEn: { timestampValue: new Date().toISOString() },
+      estado: { stringValue: 'verificando' }
     }
   };
   const resp = await fetch(url, {
