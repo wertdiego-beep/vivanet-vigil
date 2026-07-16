@@ -12,6 +12,9 @@ import crypto from 'crypto';
 
 const PROJECT_ID = 'vivanet-f8ac2';
 const CENTRAL_UID = 'ziDCZASJ7GaMoBhUDw7uPbKmFgE2'; // cuenta de Diego (central)
+// Todos los operadores de la central reciben el push (no solo la cuenta
+// original). Se definen en Vercel con OPERADORES_UIDS (uids separados por coma).
+const OPERADORES = (process.env.OPERADORES_UIDS || CENTRAL_UID).split(',').map((s) => s.trim()).filter(Boolean);
 
 function base64url(input) {
   return Buffer.from(input)
@@ -68,11 +71,11 @@ async function obtenerAccessToken() {
   return data.access_token;
 }
 
-// Lee el/los token(s) FCM guardados en el documento de la central directamente
+// Lee el token FCM guardado en el documento de un usuario directamente
 // desde Firestore vía REST, usando el access token de la cuenta de servicio
 // (esto no pasa por las reglas de seguridad del cliente).
-async function obtenerTokenCentral(accessToken) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${CENTRAL_UID}`;
+async function obtenerTokenUsuario(accessToken, uid) {
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`;
   const resp = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
@@ -121,12 +124,12 @@ export default async function handler(req, res) {
     const accessToken = await obtenerAccessToken();
     const resultados = {};
 
-    const tokenCentral = await obtenerTokenCentral(accessToken);
-    if (tokenCentral) {
-      resultados.central = await enviarPush(accessToken, tokenCentral, tituloCentral, cuerpoCentral);
-    } else {
-      resultados.central = { ok: false, motivo: 'La central no ha activado notificaciones push todavía' };
-    }
+    // Push a TODOS los operadores que tengan notificaciones activadas.
+    const tokens = await Promise.all(OPERADORES.map((uid) => obtenerTokenUsuario(accessToken, uid)));
+    const envios = await Promise.all(tokens.filter(Boolean).map((t) => enviarPush(accessToken, t, tituloCentral, cuerpoCentral)));
+    resultados.central = envios.length
+      ? { ok: envios.some((e) => e.ok), enviados: envios.length }
+      : { ok: false, motivo: 'Ningún operador ha activado notificaciones push todavía' };
 
     if (propioToken) {
       resultados.propio = await enviarPush(
