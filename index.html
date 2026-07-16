@@ -2441,12 +2441,17 @@ function renderReporteDia() {
        <strong style="display:block; font-size:1.15rem; font-family:'Chakra Petch',sans-serif; color:${color};">${num}</strong>
        <span style="font-size:.66rem; color:var(--gris);">${txt}</span>
      </div>`;
+  const desconectados = (operadorClientesData || []).filter((c) => {
+    if (!c.ultimaSenal) return false;
+    return (Date.now() - new Date(c.ultimaSenal).getTime()) / 86400000 >= 7;
+  }).length;
   cont.innerHTML =
     box(deHoy.length, 'alarmas hoy', 'var(--tinta)') +
     box(reales, 'reales', 'var(--rojo)') +
     box(falsas, 'falsas', 'var(--gris)') +
     box(pendientes, 'pendientes', pendientes ? '#ffb547' : 'var(--verde)') +
-    box(promTxt, 'atención promedio', 'var(--violeta)');
+    box(promTxt, 'atención promedio', 'var(--violeta)') +
+    box(desconectados, 'apps sin señal +7 días', desconectados ? '#ff4d5e' : 'var(--verde)');
 }
 
 function renderHistorialAlarmas() {
@@ -2608,6 +2613,16 @@ document.getElementById('operadorBuscarCliente').addEventListener('input', (e) =
   aplicarBusquedaOperador();
 });
 
+// Semáforo de salud: ¿hace cuánto la app del cliente dio señal de vida?
+// 🟢 hoy/ayer · 🟡 3+ días · 🔴 7+ días · gris = nunca ha reportado.
+function saludCliente(ultimaSenal) {
+  if (!ultimaSenal) return { color: '#5d6480', txt: 'sin datos', titulo: 'Este cliente aún no reporta señal de vida (app antigua o nunca ha abierto la app actualizada).' };
+  const dias = (Date.now() - new Date(ultimaSenal).getTime()) / 86400000;
+  if (dias >= 7) return { color: '#ff4d5e', txt: `${Math.floor(dias)} días sin señal`, titulo: 'La app de este cliente lleva más de una semana sin dar señales: su botón SOS puede NO estar funcionando. Llámalo.' };
+  if (dias >= 3) return { color: '#ffb547', txt: `${Math.floor(dias)} días sin señal`, titulo: 'Varios días sin señal de la app. Vale la pena verificar.' };
+  return { color: 'var(--verde)', txt: 'activo', titulo: 'La app del cliente dio señal de vida hace menos de 3 días.' };
+}
+
 function renderListaClientesOperador(contId, lista, icono) {
   const cont = document.getElementById(contId);
   if (!lista || lista.length === 0) {
@@ -2615,11 +2630,15 @@ function renderListaClientesOperador(contId, lista, icono) {
     cont.innerHTML = `<div class="evento"><div><strong>${msg}</strong></div></div>`;
     return;
   }
-  cont.innerHTML = lista.map((c) => `
+  cont.innerHTML = lista.map((c) => {
+    const sal = saludCliente(c.ultimaSenal);
+    return `
     <button class="evento" style="width:100%; text-align:left; background:none; cursor:pointer;" onclick="verClienteOperador('${c.uid}')">
       <div class="ev-ic v">${icono}</div>
-      <div><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || ''}</small></div>
-    </button>`).join('');
+      <div style="flex:1;"><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || ''}</small></div>
+      <span title="${sal.titulo}" style="display:inline-flex; align-items:center; gap:5px; font-size:.62rem; color:${sal.color}; white-space:nowrap;"><span style="width:9px;height:9px;border-radius:50%;background:${sal.color};display:inline-block;"></span>${sal.txt}</span>
+    </button>`;
+  }).join('');
 }
 
 // ══ DETALLE DE CLIENTE (panel operador) ══
@@ -3162,7 +3181,23 @@ if (guardarClaveBtn) {
 }
 
 // ══ DATOS REALES DESDE FIRESTORE ══
+// Señal de vida (heartbeat): registra que la app de este cliente está viva.
+// Así la central detecta clientes cuyo botón SOS quedó inoperativo (sesión
+// cerrada, celular cambiado, app desinstalada) ANTES de una emergencia.
+// Máximo una escritura cada 30 min para no gastar cuota de Firestore.
+function reportarSenalVida(uid) {
+  try {
+    const k = 'vigilUltimaSenal';
+    const prev = parseInt(localStorage.getItem(k) || '0', 10);
+    if (Date.now() - prev < 30 * 60 * 1000) return;
+    localStorage.setItem(k, String(Date.now()));
+    db.collection('usuarios').doc(uid).set({ ultimaSenal: new Date().toISOString() }, { merge: true }).catch(() => {});
+  } catch (e) {}
+}
+setInterval(() => { if (auth.currentUser) reportarSenalVida(auth.currentUser.uid); }, 20 * 60 * 1000);
+
 function cargarDatosUsuario(uid) {
+  reportarSenalVida(uid);
   const ref = db.collection('usuarios').doc(uid);
 
   ref.get().then((doc) => {
