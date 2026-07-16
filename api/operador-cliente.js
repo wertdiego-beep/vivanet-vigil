@@ -99,7 +99,8 @@ async function obtenerCliente(accessToken, clienteUid) {
     rolEmpresa: f.rolEmpresa?.stringValue || '',
     grupoFamiliarId: f.grupoFamiliarId?.stringValue || '',
     claveSeguridad: f.claveSeguridad?.stringValue || '',
-    notaCentral: f.notaCentral?.stringValue || ''
+    notaCentral: f.notaCentral?.stringValue || '',
+    claveCoaccion: f.claveCoaccion?.stringValue || ''
   };
 }
 
