@@ -687,6 +687,7 @@ textarea{min-height:96px;resize:vertical}
                   <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
                   <button id="toggleClientesBtn" onclick="toggleClientesMapa()" title="Mostrar u ocultar los clientes en el mapa" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:var(--verde-suave); color:var(--verde); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif;"><span style="color:var(--verde);">●</span> Cliente protegido</button>
                   <button id="zonaBtn" onclick="toggleModoZona()" title="Marca un área en el mapa (por ejemplo, entre una calle y otra) y mira el historial de alarmas de ahí" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">📐 Marcar zona</button>
+                  <button id="probarSirenaBtn" onclick="probarSirena()" title="Prueba la sirena y deja el sonido habilitado en este navegador" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">🔊 Probar sirena</button>
                 </div>
                 <div class="map-container" style="max-width:none; height:520px; margin:0;">
                   <div id="mapaOperador" style="width:100%; height:100%; border-radius:12px;"></div>
@@ -1673,6 +1674,26 @@ function detenerAlarma() {
   document.body.classList.remove('op-alarma-flash');
   mostrarBannerAlarma(false);
 }
+// Prueba de sirena: suena unos segundos SIN marcar alarma real. Ademas deja
+// el audio del navegador desbloqueado (los navegadores exigen un clic antes
+// de permitir sonido: este boton es ese clic).
+let _pruebaSirenaTimer = null;
+function probarSirena() {
+  const b = document.getElementById('probarSirenaBtn');
+  if (alarmaActiva) { alert('Hay una alarma real sonando ahora.'); return; }
+  iniciarAudioOp();
+  if (!audioCtxOp) { alert('Este navegador no permite audio.'); return; }
+  if (_pruebaSirenaTimer) { clearInterval(_pruebaSirenaTimer.i); clearTimeout(_pruebaSirenaTimer.t); _pruebaSirenaTimer = null; }
+  beepSirena();
+  const i = setInterval(() => { if (alarmaActiva) { clearInterval(i); return; } beepSirena(); }, 900);
+  if (b) { b.textContent = '🔊 Sonando… (sonido habilitado ✓)'; b.style.color = 'var(--verde)'; b.style.borderColor = 'var(--verde)'; }
+  const t = setTimeout(() => {
+    clearInterval(i); _pruebaSirenaTimer = null;
+    if (b) { b.textContent = '🔊 Sirena OK'; b.style.color = 'var(--verde)'; }
+  }, 3000);
+  _pruebaSirenaTimer = { i, t };
+}
+
 function revisarNuevasAlertas(alertas, clientes) {
   const activas = (alertas || []).filter(function (a) { return a.estado === 'activa'; });
   const ids = new Set(activas.map(function (a) { return a.alertaId; }));
