@@ -638,6 +638,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="historial"><span>🕘</span><em>Historial</em></button>
         <button class="op-nav" data-opview="equipo"><span>🔑</span><em>Equipo técnico</em></button>
         <div class="op-side-foot">
+          <button class="op-nav" id="opPushBtn" onclick="opActivarPush()" title="Recibe una notificación en este dispositivo cuando llegue un SOS, aunque el panel esté cerrado"><span>🔔</span><em>Avisos SOS</em></button>
           <button class="op-nav" onclick="go('s-mas')"><span>👤</span><em>Mi cuenta</em></button>
           <button class="op-nav op-out" onclick="cerrarSesion()"><span>↩︎</span><em>Cerrar sesión</em></button>
         </div>
@@ -786,6 +787,8 @@ textarea{min-height:96px;resize:vertical}
           <!-- ── Vista: Historial de tickets ── -->
           <section class="op-view" id="op-view-historial">
             <div class="card" style="margin-bottom:14px;">
+              <div class="card-title">Reporte del día</div>
+              <div id="reporteDia" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;"></div>
               <div class="card-title">Historial de alarmas</div>
               <div style="display:flex; gap:8px; align-items:end; margin-bottom:10px; max-width:420px;">
                 <div style="flex:1;">
@@ -1713,6 +1716,29 @@ setInterval(() => {
   if (r) r.textContent = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }, 1000);
 
+// Push del operador: guarda el token FCM de ESTE dispositivo en el perfil del
+// operador. /api/send-push avisa a todos los operadores con token guardado,
+// así el SOS llega aunque el panel esté cerrado.
+function opPintarPush(txt) {
+  const b = document.getElementById('opPushBtn');
+  if (b) { const em = b.querySelector('em'); if (em) em.textContent = txt; }
+}
+async function opActivarPush() {
+  const user = auth.currentUser; if (!user) return;
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) { opPintarPush('Push no disponible'); return; }
+  try {
+    const permiso = await Notification.requestPermission();
+    if (permiso !== 'granted') { opPintarPush('Permiso denegado'); return; }
+    const registration = await navigator.serviceWorker.ready;
+    const token = await firebase.messaging().getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
+    if (!token) { opPintarPush('Error de token'); return; }
+    await db.collection('usuarios').doc(user.uid).set({ fcmToken: token }, { merge: true });
+    opPintarPush('Avisos activos ✓');
+  } catch (e) { console.error('Push operador:', e); opPintarPush('Error al activar'); }
+}
+// Si ya estaban concedidos los permisos, mostrarlo al entrar al panel.
+setTimeout(() => { try { if (Notification.permission === 'granted') opPintarPush('Avisos activos ✓'); } catch (e) {} }, 1500);
+
 function revisarNuevasAlertas(alertas, clientes) {
   const activas = (alertas || []).filter(function (a) { return a.estado === 'activa'; });
   const ids = new Set(activas.map(function (a) { return a.alertaId; }));
@@ -2336,7 +2362,38 @@ function exportarAlarmasCSV() {
   URL.revokeObjectURL(url);
 }
 
+// Reporte del día: se calcula en el navegador con los datos ya cargados
+// (sin lecturas extra). Total, reales, falsas, pendientes y tiempo promedio
+// desde que suena el SOS hasta que un operador lo cierra.
+function renderReporteDia() {
+  const cont = document.getElementById('reporteDia');
+  if (!cont) return;
+  const hoy = formatoFechaISO(new Date());
+  const deHoy = (_histData.historial || []).filter((a) => a.creadaEn && formatoFechaISO(new Date(a.creadaEn)) === hoy);
+  const reales = deHoy.filter((a) => a.resultado === 'real').length;
+  const falsas = deHoy.filter((a) => a.resultado === 'falsa').length;
+  const pendientes = deHoy.filter((a) => a.estado === 'activa' || a.estado === 'verificando').length;
+  const tiempos = deHoy
+    .filter((a) => a.atendidaEn && a.creadaEn)
+    .map((a) => (new Date(a.atendidaEn) - new Date(a.creadaEn)) / 60000)
+    .filter((m) => m >= 0 && m < 24 * 60);
+  const prom = tiempos.length ? (tiempos.reduce((x, y) => x + y, 0) / tiempos.length) : null;
+  const promTxt = prom == null ? '—' : (prom < 1 ? '<1 min' : Math.round(prom) + ' min');
+  const box = (num, txt, color) =>
+    `<div style="border:1px solid var(--linea); border-radius:12px; padding:8px 16px; min-width:104px;">
+       <strong style="display:block; font-size:1.15rem; font-family:'Chakra Petch',sans-serif; color:${color};">${num}</strong>
+       <span style="font-size:.66rem; color:var(--gris);">${txt}</span>
+     </div>`;
+  cont.innerHTML =
+    box(deHoy.length, 'alarmas hoy', 'var(--tinta)') +
+    box(reales, 'reales', 'var(--rojo)') +
+    box(falsas, 'falsas', 'var(--gris)') +
+    box(pendientes, 'pendientes', pendientes ? '#ffb547' : 'var(--verde)') +
+    box(promTxt, 'atención promedio', 'var(--violeta)');
+}
+
 function renderHistorialAlarmas() {
+  renderReporteDia();
   const cont = document.getElementById('operadorHistorialAlarmas');
   if (!cont) return;
   const desde = (document.getElementById('alarmasFechaDesde') || {}).value || '';
@@ -3342,7 +3399,7 @@ function enviarPushSOS(emailUsuario) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tituloCentral: '🚨 Alerta SOS',
-        cuerpoCentral: `${emailUsuario} activó el botón de pánico. Revisa Telegram para la ubicación en vivo.`,
+        cuerpoCentral: `${emailUsuario} activó el botón de pánico. Abre el panel Vigil: la ubicación se ve en vivo en el mapa.`,
         propioToken: data.fcmToken || null,
         tituloPropio: 'Alerta enviada',
         cuerpoPropio: 'Tu alerta SOS fue enviada a la central Vigil.'
