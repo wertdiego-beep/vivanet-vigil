@@ -681,7 +681,7 @@ textarea{min-height:96px;resize:vertical}
                 <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;"><span>Mapa de la central</span><span id="operadorStats"></span></div>
                 <div style="font-size:.72rem; color:var(--gris); margin:2px 0 10px;">
                   <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
-                  <span style="color:var(--verde);">●</span> Cliente protegido
+                  <button id="toggleClientesBtn" onclick="toggleClientesMapa()" title="Mostrar u ocultar los clientes en el mapa" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:var(--verde-suave); color:var(--verde); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif;"><span style="color:var(--verde);">●</span> Cliente protegido</button>
                 </div>
                 <div style="position:relative; margin-bottom:10px;">
                   <input type="text" id="buscarMonitoreo" placeholder="Buscar cliente por nombre, local o dirección…" autocomplete="off" oninput="buscarClienteMonitoreo()" onfocus="buscarClienteMonitoreo()" style="margin:0;">
@@ -1540,10 +1540,11 @@ function agregarMarcadorCliente(cliente, coords) {
   const emoji = cliente.modo === 'familia' ? '👨‍👩‍👧' : '🏪';
   const nombre = cliente.local || cliente.nombre || 'Cliente';
   const marker = L.marker([coords.lat, coords.lng], { icon: icono })
-    .addTo(operadorMapa)
     .bindPopup(`${emoji} <b>${nombre}</b><br>
       <span style="color:var(--verde);font-weight:700">● Protegido</span><br>
       <span style="color:var(--gris)">${cliente.direccion || ''}</span>`);
+  // Solo se dibuja si el operador tiene los clientes visibles (botón de la leyenda).
+  if (mostrarClientesMapa) marker.addTo(operadorMapa);
   operadorMarcadoresClientes[cliente.uid] = marker;
 }
 
@@ -1718,6 +1719,22 @@ document.addEventListener('click', function (e) {
   const inp = document.getElementById('buscarMonitoreo');
   if (cont && inp && !cont.contains(e.target) && e.target !== inp) cont.style.display = 'none';
 });
+
+// ── Mostrar/ocultar los clientes en el mapa (botón de la leyenda) ──
+let mostrarClientesMapa = true;
+function toggleClientesMapa() {
+  mostrarClientesMapa = !mostrarClientesMapa;
+  Object.values(operadorMarcadoresClientes).forEach((m) => {
+    if (!operadorMapa) return;
+    if (mostrarClientesMapa) m.addTo(operadorMapa); else operadorMapa.removeLayer(m);
+  });
+  const b = document.getElementById('toggleClientesBtn');
+  if (b) {
+    b.style.background = mostrarClientesMapa ? 'var(--verde-suave)' : 'transparent';
+    b.style.color = mostrarClientesMapa ? 'var(--verde)' : 'var(--gris)';
+    b.style.opacity = mostrarClientesMapa ? '1' : '.6';
+  }
+}
 
 function renderOperadorMapa(alertas, clientes) {
   const card = document.getElementById('operadorMapaCard');
