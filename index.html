@@ -702,6 +702,7 @@ textarea{min-height:96px;resize:vertical}
                   <button id="toggleClientesBtn" onclick="toggleClientesMapa()" title="Mostrar u ocultar los clientes en el mapa" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:var(--verde-suave); color:var(--verde); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif;"><span style="color:var(--verde);">●</span> Cliente protegido</button>
                   <button id="zonaBtn" onclick="toggleModoZona()" title="Marca un área en el mapa (por ejemplo, entre una calle y otra) y mira el historial de alarmas de ahí" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">📐 Marcar zona</button>
                   <button id="probarSirenaBtn" onclick="probarSirena()" title="Prueba la sirena y deja el sonido habilitado en este navegador" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">🔊 Probar sirena</button>
+                  <button id="calorBtn" onclick="toggleMapaCalor()" title="Pinta en el mapa las zonas con más alarmas históricas" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">🔥 Zonas calientes</button>
                 </div>
                 <div class="map-container" style="max-width:none; height:520px; margin:0;">
                   <div id="mapaOperador" style="width:100%; height:100%; border-radius:12px;"></div>
@@ -2089,6 +2090,7 @@ function renderOperadorHistorial(historial, clientes) {
   // Dibuja en el mapa las alarmas filtradas (solo cuando hay rango de fechas).
   if (zonaPuntos.length >= 3) renderZonaResultados();
   else if (typeof plotHistorialEnMapa === 'function') plotHistorialEnMapa(hayRango ? lista : [], clientes);
+  if (typeof renderMapaCalor === 'function' && mapaCalorOn) renderMapaCalor();
   if (!lista.length) {
     cont.innerHTML = hayRango
       ? '<div class="evento"><div><strong>Sin alarmas en ese rango de fechas.</strong></div></div>'
@@ -2271,6 +2273,11 @@ function nombrarZona() {
   }
 }
 
+// Centra el mapa en el punto de una alarma de la lista de la zona.
+function volarAPuntoZona(lat, lng) {
+  if (operadorMapa) operadorMapa.flyTo([lat, lng], 17, { duration: 0.7 });
+}
+
 function renderZonaResultados() {
   const cont = document.getElementById('zonaResultados');
   if (!cont || zonaPuntos.length < 3) return;
@@ -2312,12 +2319,57 @@ function renderZonaResultados() {
       const cli = clientes.find((c) => c.uid === a.clienteUid);
       const nombre = cli ? (cli.local || cli.nombre || 'Cliente') : 'Cliente';
       const res = a.resultado === 'real' ? ' · Real' : (a.resultado === 'falsa' ? ' · Falsa' : '');
-      return `<div style="display:flex; gap:8px; align-items:center; font-size:.74rem; border-bottom:1px solid var(--linea); padding-bottom:5px;">
+      const cz = coordsDeAlerta(a, clientes);
+      return `<div onclick="${cz ? `volarAPuntoZona(${cz.lat},${cz.lng})` : ''}" title="Ver en el mapa" style="display:flex; gap:8px; align-items:center; font-size:.74rem; border-bottom:1px solid var(--linea); padding-bottom:5px; cursor:pointer;">
           <span>${iconos[a.estado] || '•'}</span>
           <strong style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${nombre}</strong>
           <span style="color:var(--gris); white-space:nowrap;">${formatearHoraOperador(a.creadaEn)}${res}</span>
         </div>`;
     }).join('') + '</div>';
+}
+
+/* ── MAPA DE CALOR DE ALARMAS ─────────────────────────────────────
+   Agrupa las alarmas históricas en celdas de ~150 m y pinta un círculo
+   por celda: más alarmas = más grande y más rojo. Sin librerías extra
+   y sin lecturas nuevas (usa el historial ya cargado). ───────────── */
+let mapaCalorOn = false;
+let capaCalor = null;
+function toggleMapaCalor() {
+  mapaCalorOn = !mapaCalorOn;
+  const b = document.getElementById('calorBtn');
+  if (b) {
+    b.style.background = mapaCalorOn ? 'rgba(229,52,75,.16)' : 'transparent';
+    b.style.color = mapaCalorOn ? '#ff4d5e' : 'var(--gris)';
+    b.style.borderColor = mapaCalorOn ? '#ff4d5e' : 'var(--linea)';
+  }
+  renderMapaCalor();
+}
+function renderMapaCalor() {
+  if (!operadorMapa) return;
+  if (!capaCalor) capaCalor = L.layerGroup().addTo(operadorMapa);
+  capaCalor.clearLayers();
+  if (!mapaCalorOn) return;
+  const celdas = {};
+  (_histData.historial || []).forEach((a) => {
+    const c = coordsDeAlerta(a, _histData.clientes);
+    if (!c) return;
+    const k = c.lat.toFixed(3) + ',' + c.lng.toFixed(3); // celda ~110 m
+    if (!celdas[k]) celdas[k] = { lat: 0, lng: 0, n: 0 };
+    celdas[k].lat += c.lat; celdas[k].lng += c.lng; celdas[k].n++;
+  });
+  const valores = Object.values(celdas);
+  if (!valores.length) return;
+  const max = Math.max(...valores.map((v) => v.n));
+  valores.forEach((v) => {
+    const lat = v.lat / v.n, lng = v.lng / v.n;
+    const t = v.n / max; // 0..1
+    L.circle([lat, lng], {
+      radius: 80 + t * 220,
+      color: 'transparent',
+      fillColor: t > 0.66 ? '#E5344B' : (t > 0.33 ? '#ff8c42' : '#ffb547'),
+      fillOpacity: 0.16 + t * 0.3
+    }).addTo(capaCalor).bindPopup(`<b>${v.n} alarma${v.n === 1 ? '' : 's'}</b><br><span style="color:var(--gris)">en esta zona (historial cargado)</span>`);
+  });
 }
 
 // Re-filtra el historial reciente del Monitoreo (lista + mapa) al cambiar fechas.
@@ -2509,7 +2561,7 @@ function renderOperadorAlertas(alertas, clientes) {
           ${a.asignadaA ? `<small style="display:block; color:var(--verde);">👤 Atendiendo: ${a.asignadaA}</small>` : ''}
           <small>${nombreCliente} · <span style="${urgente ? 'color:var(--rojo); font-weight:600;' : ''}">${tiempoTxt}</span>${(tieneGPS && a.ubicacion.precision > 0) ? ` · ±${Math.round(a.ubicacion.precision)} m` : ''}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
         </div>
-        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); abrirProtocolo('${a.clienteUid}','${a.alertaId}')">${a.estado === 'verificando' ? 'Continuar' : 'Atender'}</button>
+        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); abrirProtocolo('${a.clienteUid}','${a.alertaId}')">${a.estado === 'verificando' ? 'Continuar' : 'Atender'}</button>${cliente && cliente.telefono ? `<a href="tel:${cliente.telefono}" onclick="event.stopPropagation()" title="Llamar al cliente ya" style="display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:10px; border:1px solid var(--linea); background:var(--verde-suave); color:var(--verde); text-decoration:none; font-size:1rem; margin-left:6px;">📞</a>` : ''}
       </div>`;
   }).join('');
 
