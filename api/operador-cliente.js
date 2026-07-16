@@ -10,6 +10,11 @@ import crypto from 'crypto';
 
 const PROJECT_ID = 'vivanet-f8ac2';
 const CENTRAL_UID = 'ziDCZASJ7GaMoBhUDw7uPbKmFgE2'; // cuenta de Diego (central)
+// Operadores autorizados de la central. Se definen en Vercel con la variable
+// OPERADORES_UIDS (uids separados por coma). Si no existe, queda solo la
+// cuenta central original, así nada cambia hasta que agregues operadores.
+const OPERADORES = (process.env.OPERADORES_UIDS || CENTRAL_UID).split(',').map((s) => s.trim()).filter(Boolean);
+const esOperador = (uid) => !!uid && OPERADORES.includes(uid);
 const FIREBASE_API_KEY = 'AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g'; // clave pública del cliente web (no es secreta)
 
 function base64url(input) {
@@ -156,7 +161,7 @@ export default async function handler(req, res) {
 
   try {
     const uid = await verificarOperador(idToken);
-    if (!uid || uid !== CENTRAL_UID) {
+    if (!esOperador(uid)) {
       res.status(403).json({ error: 'No autorizado' });
       return;
     }
