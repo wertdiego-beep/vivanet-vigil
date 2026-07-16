@@ -104,7 +104,8 @@ async function listarClientes(accessToken) {
         telefono: f.telefono?.stringValue || '',
         modo: f.modo?.stringValue || 'empresa',
         rolEmpresa: f.rolEmpresa?.stringValue || '',
-        grupoFamiliarId: f.grupoFamiliarId?.stringValue || ''
+        grupoFamiliarId: f.grupoFamiliarId?.stringValue || '',
+        ultimaSenal: f.ultimaSenal?.timestampValue || f.ultimaSenal?.stringValue || null
       };
     })
     .filter((c) => !esOperador(c.uid));
