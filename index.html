@@ -2547,6 +2547,11 @@ function renderProtocolo(c, contactos) {
       ${contactosHtml}
     </div>
     <div class="card" style="margin-bottom:12px;">
+      <div class="card-title">📌 Nota fija del cliente</div>
+      <textarea id="notaCentralTxt" placeholder="Datos útiles permanentes: perro bravo, portón trasero, horario del local…" style="min-height:56px;">${(c.notaCentral || '').replace(/</g,'&lt;')}</textarea>
+      <button id="notaCentralBtn" class="btn-full" style="width:auto;margin:6px 0 0;padding:7px 14px;font-size:.75rem;background:transparent;color:var(--tinta);border:1px solid var(--linea);" onclick="guardarNotaCentral('${c.uid || ''}')">Guardar nota</button>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
       <div class="card-title">Pasos</div>
       <p style="color:var(--gris); font-size:.75rem; margin:0 0 8px; line-height:1.5;">La clave es opcional y de apoyo: si la persona no la recuerda (bajo estrés es normal), verifica por voz o datos personales y despacha igual. La clave nunca bloquea la ayuda.</p>
       <label style="display:flex;gap:9px;align-items:center;margin:7px 0;font-size:.9rem;"><input type="checkbox" style="width:auto;margin:0;"> Verificar identidad (clave o datos personales)</label>
@@ -2562,6 +2567,20 @@ function renderProtocolo(c, contactos) {
       <button class="btn-full" style="margin:0;background:var(--rojo);" onclick="protocoloResolver('real')">Confirmar emergencia (real)</button>
       <button class="btn-full" style="margin:0;background:transparent;color:var(--tinta);border:1px solid var(--linea);" onclick="protocoloResolver('falsa')">Falsa alarma</button>
     </div>`;
+}
+function guardarNotaCentral(clienteUid) {
+  if (!clienteUid && protocoloActual) clienteUid = protocoloActual.clienteUid;
+  if (!clienteUid) return;
+  const nota = (document.getElementById('notaCentralTxt') || {}).value || '';
+  const user = auth.currentUser; if (!user) return;
+  user.getIdToken().then((idToken) => fetch('/api/operador-atender', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken, clienteUid, accion: 'nota-cliente', nota })
+  })).then((r) => r.json()).then((d) => {
+    const btn = document.getElementById('notaCentralBtn');
+    if (d && d.ok) { if (btn) { btn.textContent = 'Guardada ✓'; setTimeout(() => { btn.textContent = 'Guardar nota'; }, 2000); } }
+    else alert('No se pudo guardar la nota.');
+  }).catch(() => alert('No se pudo guardar la nota.'));
 }
 function protocoloResolver(resultado) {
   if (!protocoloActual) return;
