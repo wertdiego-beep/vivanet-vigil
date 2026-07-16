@@ -2019,7 +2019,7 @@ function renderOperadorHistorial(historial, clientes) {
   };
   const lista = hayRango
     ? (historial || []).filter(enRango)
-    : (historialExpandido ? (historial || []) : (historial || []).filter((a) => a.estado === 'activa'));
+    : (historialExpandido ? (historial || []) : (historial || []).filter((a) => a.estado === 'activa' || a.estado === 'verificando'));
   // Dibuja en el mapa las alarmas filtradas (solo cuando hay rango de fechas).
   if (zonaPuntos.length >= 3) renderZonaResultados();
   else if (typeof plotHistorialEnMapa === 'function') plotHistorialEnMapa(hayRango ? lista : [], clientes);
@@ -2031,7 +2031,7 @@ function renderOperadorHistorial(historial, clientes) {
           : '<div class="evento"><div><strong>Sin alarmas activas ahora</strong><small>Toca “Ver historial” o filtra por fecha</small></div></div>');
     return;
   }
-  const iconos = { activa: '🚨', atendida: '✅', cancelada: '⚪' };
+  const iconos = { activa: '🚨', verificando: '🔎', atendida: '✅', cancelada: '⚪' };
   cont.innerHTML = lista.map((a) => {
     const cliente = clientes.find((c) => c.uid === a.clienteUid);
     const nombre = cliente ? (cliente.local || cliente.nombre || 'Cliente') : 'Cliente';
@@ -2051,7 +2051,7 @@ function plotHistorialEnMapa(lista, clientes, noEncuadrar) {
   if (!operadorCapaHist) operadorCapaHist = L.layerGroup().addTo(operadorMapa);
   operadorCapaHist.clearLayers();
   if (!lista || !lista.length) return;
-  const colores = { activa: '#E5344B', atendida: '#00C776', cancelada: '#9aa1bd' };
+  const colores = { activa: '#E5344B', verificando: '#7c6cff', atendida: '#00C776', cancelada: '#9aa1bd' };
   const pts = [];
   lista.forEach((a) => {
     let coords = null;
@@ -2233,7 +2233,7 @@ function renderZonaResultados() {
   }
   const reales = lista.filter((a) => a.resultado === 'real').length;
   const falsas = lista.filter((a) => a.resultado === 'falsa').length;
-  const iconos = { activa: '🚨', atendida: '✅', cancelada: '⚪' };
+  const iconos = { activa: '🚨', verificando: '🔎', atendida: '✅', cancelada: '⚪' };
   cont.innerHTML =
     `<div style="display:flex; gap:14px; flex-wrap:wrap; align-items:baseline; font-size:.74rem; margin-bottom:8px;">
        <span><strong style="font-size:1.05rem; color:var(--violeta);">${lista.length}</strong> alarma${lista.length === 1 ? '' : 's'} en la zona</span>
@@ -2301,8 +2301,8 @@ function renderHistorialAlarmas() {
   if (!cont) return;
   const desde = (document.getElementById('alarmasFechaDesde') || {}).value || '';
   const hasta = (document.getElementById('alarmasFechaHasta') || {}).value || '';
-  const iconos = { activa: '🚨', atendida: '✅', cancelada: '⚪' };
-  const estadoTxt = { activa: 'Activa', atendida: 'Atendida', cancelada: 'Cancelada' };
+  const iconos = { activa: '🚨', verificando: '🔎', atendida: '✅', cancelada: '⚪' };
+  const estadoTxt = { activa: 'Activa', verificando: 'En verificación', atendida: 'Atendida', cancelada: 'Cancelada' };
   const lista = (_histData.historial || [])
     .filter((a) => {
       if (!desde && !hasta) return true;
@@ -2406,11 +2406,11 @@ function renderOperadorAlertas(alertas, clientes) {
       <div class="evento" onclick="volarAAlerta('${a.alertaId}')" title="Ver en el mapa" style="${urgente ? 'border-left:3px solid var(--rojo); border-radius:0 8px 8px 0; padding-left:9px;' : ''}">
         <div class="ev-ic a">🚨</div>
         <div style="flex:1;">
-          <strong id="alertaCalle-${a.alertaId}">${titulo}</strong>${urgente ? ` <span style="font-size:.58rem; font-weight:700; color:#fff; background:var(--rojo); padding:2px 7px; border-radius:99px; font-family:'Chakra Petch',sans-serif; letter-spacing:.06em; vertical-align:middle;">URGENTE</span>` : ''}
+          <strong id="alertaCalle-${a.alertaId}">${titulo}</strong>${a.estado === 'verificando' ? ` <span style="font-size:.58rem; font-weight:700; color:#fff; background:var(--violeta); padding:2px 7px; border-radius:99px; font-family:'Chakra Petch',sans-serif; letter-spacing:.06em; vertical-align:middle;">EN VERIFICACIÓN</span>` : (urgente ? ` <span style="font-size:.58rem; font-weight:700; color:#fff; background:var(--rojo); padding:2px 7px; border-radius:99px; font-family:'Chakra Petch',sans-serif; letter-spacing:.06em; vertical-align:middle;">URGENTE</span>` : '')}
           ${a.asignadaA ? `<small style="display:block; color:var(--verde);">👤 Atendiendo: ${a.asignadaA}</small>` : ''}
           <small>${nombreCliente} · <span style="${urgente ? 'color:var(--rojo); font-weight:600;' : ''}">${tiempoTxt}</span>${(tieneGPS && a.ubicacion.precision > 0) ? ` · ±${Math.round(a.ubicacion.precision)} m` : ''}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
         </div>
-        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); abrirProtocolo('${a.clienteUid}','${a.alertaId}')">Atender</button>
+        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); abrirProtocolo('${a.clienteUid}','${a.alertaId}')">${a.estado === 'verificando' ? 'Continuar' : 'Atender'}</button>
       </div>`;
   }).join('');
 
@@ -2603,7 +2603,7 @@ function renderClienteOperadorAlertas(alertas) {
     cont.innerHTML = '<div class="evento"><div><strong>Sin alertas registradas</strong></div></div>';
     return;
   }
-  const iconos = { activa: '🚨', atendida: '✅', cancelada: '⚪' };
+  const iconos = { activa: '🚨', verificando: '🔎', atendida: '✅', cancelada: '⚪' };
   cont.innerHTML = alertas.map((a) => `
     <div class="evento">
       <div class="ev-ic ${a.estado === 'activa' ? 'a' : 'g'}">${iconos[a.estado] || '📍'}</div>
