@@ -266,7 +266,7 @@ export default async function handler(req, res) {
     stats.totalActivas = alertas.length;
     stats.totalClientes = clientes.length;
 
-    const historial = alertasRecientes.slice(0, 20);
+    const historial = alertasRecientes.slice(0, 120);
 
     res.status(200).json({ ok: true, clientes, alertas, historial, stats });
   } catch (err) {
