@@ -669,6 +669,9 @@ textarea{min-height:96px;resize:vertical}
             <div id="protocoloBody" style="padding:16px 18px;"></div>
           </div>
         </div>
+        <div id="conexionBanner" style="display:none; align-items:center; gap:10px; background:#B57500; color:#fff; padding:9px 20px; font-weight:700; font-family:'Chakra Petch',sans-serif; font-size:.78rem; letter-spacing:.02em;">
+          <span style="font-size:1rem;">⚠</span><span id="conexionBannerTxt" style="flex:1;">Sin conexión con el servidor</span>
+        </div>
         <div class="op-content">
 
           <!-- ── Vista: Monitoreo ── -->
@@ -1158,6 +1161,29 @@ if (copiarCodigoTecnicoBtn) {
   });
 }
 
+// ── Estado de conexión: nunca mostrar "todo tranquilo" con datos viejos ──
+let ultimaCargaOk = null;
+function actualizarEstadoConexion(ok) {
+  if (ok) ultimaCargaOk = Date.now();
+  const b = document.getElementById('conexionBanner');
+  if (!b) return;
+  if (ok) { b.style.display = 'none'; return; }
+  b.style.display = 'flex';
+  const t = document.getElementById('conexionBannerTxt');
+  if (t) {
+    const mins = ultimaCargaOk ? Math.round((Date.now() - ultimaCargaOk) / 60000) : null;
+    t.textContent = ultimaCargaOk
+      ? `Sin conexión con el servidor — datos desactualizados (última actualización hace ${mins} min). NO confíes en "sin alertas".`
+      : 'Sin conexión con el servidor — no se pudieron cargar los datos.';
+  }
+}
+// Si los datos quedaron viejos (aunque no haya error), avisar igual.
+setInterval(function () {
+  if (!ultimaCargaOk) return;
+  if ((Date.now() - ultimaCargaOk) > INTERVALO_POLLING_MS * 2.5) actualizarEstadoConexion(false);
+}, 20000);
+window.addEventListener('offline', function () { actualizarEstadoConexion(false); });
+
 async function cargarPanelOperador() {
   const user = auth.currentUser;
   if (!user) return;
@@ -1170,26 +1196,23 @@ async function cargarPanelOperador() {
     });
     const data = await resp.json();
     if (!data.ok) {
+      actualizarEstadoConexion(false);
       document.getElementById('operadorAlertas').innerHTML = '<div class="evento"><div><strong>No se pudieron cargar los datos.</strong></div></div>';
       return;
     }
 
-    // Detecta alertas nuevas (que no estaban en la carga anterior) para sonar un aviso
-    const idsActuales = new Set((data.alertas || []).map((a) => a.alertaId));
-    if (operadorAlertaIdsConocidas !== null) {
-      const hayNuevas = [...idsActuales].some((id) => !operadorAlertaIdsConocidas.has(id));
-      if (hayNuevas) reproducirBeepAlerta();
-    }
-    operadorAlertaIdsConocidas = idsActuales;
-
+    // El aviso de alertas nuevas (sirena + banner) lo maneja revisarNuevasAlertas()
+    // desde renderOperadorAlertas(); antes había un segundo beep aquí que sonaba doble.
     renderOperadorStats(data.stats);
     renderOperadorAlertas(data.alertas, data.clientes);
     renderOperadorMapa(data.alertas, data.clientes);
     renderOperadorClientes(data.clientes);
     renderOperadorHistorial(data.historial, data.clientes);
     ajustarPollingOperador((data.alertas || []).length > 0);
+    actualizarEstadoConexion(true);
   } catch (err) {
     console.error('Error cargando panel operador:', err);
+    actualizarEstadoConexion(false);
   }
 
   cargarCitasOperador();
