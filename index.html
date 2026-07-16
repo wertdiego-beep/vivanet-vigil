@@ -175,6 +175,18 @@ body.op-alarma-flash #s-operador .op-main{animation:opAlarmaFlash 1s ease-in-out
   #s-operador .op-content{padding:14px 14px 40px}
   #s-operador .op-kpis{gap:8px}
 }
+/* ── Celular: topbar en dos filas, mapa más bajo, botones táctiles ── */
+@media(max-width:560px){
+  #s-operador .op-topbar{flex-wrap:wrap;height:auto;min-height:0;padding:10px 12px;gap:8px;row-gap:8px}
+  #s-operador #buscarMonitoreoWrap{order:5;width:100%!important;max-width:none!important}
+  #s-operador .op-title{font-size:.88rem}
+  #s-operador .map-container{height:330px!important}
+  #s-operador .op-content{padding:10px 10px 60px}
+  #s-operador .op-side{width:56px;min-width:56px}
+  #s-operador .op-kpi-inline{padding:3px 8px;font-size:.62rem}
+  #s-operador #zonaPanel button{padding:8px 12px!important;font-size:.78rem!important}
+  #s-operador #toggleClientesBtn,#s-operador #zonaBtn,#s-operador #probarSirenaBtn{padding:7px 12px;font-size:.76rem;margin-top:4px}
+}
 .app-head{padding:22px 22px 14px;display:flex;align-items:center;justify-content:space-between}
 .brand{display:flex;align-items:center;gap:10px;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:.03em}
 .brand .mark{width:34px;height:34px;border-radius:9px;background:var(--violeta);color:#fff;display:grid;place-items:center;font-size:1rem}
