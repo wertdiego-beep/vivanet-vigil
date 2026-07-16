@@ -683,6 +683,10 @@ textarea{min-height:96px;resize:vertical}
                   <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
                   <span style="color:var(--verde);">●</span> Cliente protegido
                 </div>
+                <div style="position:relative; margin-bottom:10px;">
+                  <input type="text" id="buscarMonitoreo" placeholder="Buscar cliente por nombre, local o dirección…" autocomplete="off" oninput="buscarClienteMonitoreo()" onfocus="buscarClienteMonitoreo()" style="margin:0;">
+                  <div id="buscarMonitoreoRes" style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--blanco); border:1px solid var(--linea); border-radius:12px; max-height:250px; overflow-y:auto; z-index:1200; box-shadow:0 12px 30px rgba(0,0,0,.35);"></div>
+                </div>
                 <div class="map-container" style="max-width:none; height:520px; margin:0;">
                   <div id="mapaOperador" style="width:100%; height:100%; border-radius:12px;"></div>
                 </div>
@@ -1673,6 +1677,47 @@ function revisarNuevasAlertas(alertas, clientes) {
   if (nueva) iniciarAlarma('Nueva alerta SOS · ' + nueva);
   else if (ids.size === 0) detenerAlarma();
 }
+
+// ── Buscador de clientes en Monitoreo: al elegir uno, el mapa vuela hasta él ──
+function buscarClienteMonitoreo() {
+  const inp = document.getElementById('buscarMonitoreo');
+  const cont = document.getElementById('buscarMonitoreoRes');
+  if (!inp || !cont) return;
+  const q = inp.value.trim().toLowerCase();
+  if (!q) { cont.style.display = 'none'; return; }
+  const norm = (t) => (t || '').toString().toLowerCase();
+  // Busca por local, nombre o dirección; tolera espacios extra.
+  const res = (operadorClientesData || []).filter((c) =>
+    norm(c.local).includes(q) || norm(c.nombre).includes(q) || norm(c.direccion).includes(q)
+  ).slice(0, 8);
+  if (!res.length) {
+    cont.innerHTML = '<div class="evento" style="margin:0; padding:10px 12px;"><div><small>Sin resultados</small></div></div>';
+    cont.style.display = 'block';
+    return;
+  }
+  cont.innerHTML = res.map((c) => `
+    <div class="evento" style="cursor:pointer; margin:0; padding:9px 12px;" onclick="volarACliente('${c.uid}')">
+      <div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div>
+      <div style="flex:1;"><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || 'Sin dirección'}</small></div>
+    </div>`).join('');
+  cont.style.display = 'block';
+}
+function volarACliente(uid) {
+  const cont = document.getElementById('buscarMonitoreoRes');
+  if (cont) cont.style.display = 'none';
+  const m = operadorMarcadoresClientes[uid];
+  if (m && operadorMapa) {
+    operadorMapa.flyTo(m.getLatLng(), 17, { duration: 0.8 });
+    m.openPopup();
+    return;
+  }
+  alert('Ese cliente todavía no tiene punto en el mapa (su dirección aún no se ha ubicado).');
+}
+document.addEventListener('click', function (e) {
+  const cont = document.getElementById('buscarMonitoreoRes');
+  const inp = document.getElementById('buscarMonitoreo');
+  if (cont && inp && !cont.contains(e.target) && e.target !== inp) cont.style.display = 'none';
+});
 
 function renderOperadorMapa(alertas, clientes) {
   const card = document.getElementById('operadorMapaCard');
