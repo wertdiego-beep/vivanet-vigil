@@ -686,9 +686,20 @@ textarea{min-height:96px;resize:vertical}
                 <div style="font-size:.72rem; color:var(--gris); margin:2px 0 10px;">
                   <span style="color:var(--rojo);">●</span> SOS activo&nbsp;&nbsp;
                   <button id="toggleClientesBtn" onclick="toggleClientesMapa()" title="Mostrar u ocultar los clientes en el mapa" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:var(--verde-suave); color:var(--verde); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif;"><span style="color:var(--verde);">●</span> Cliente protegido</button>
+                  <button id="zonaBtn" onclick="toggleModoZona()" title="Marca un área en el mapa (por ejemplo, entre una calle y otra) y mira el historial de alarmas de ahí" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">📐 Marcar zona</button>
                 </div>
                 <div class="map-container" style="max-width:none; height:520px; margin:0;">
                   <div id="mapaOperador" style="width:100%; height:100%; border-radius:12px;"></div>
+                </div>
+                <div id="zonaPanel" style="display:none; margin-top:10px; padding:11px 12px; border:1px solid var(--linea); border-radius:12px; background:rgba(124,108,255,.07);">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px;">
+                    <strong id="zonaTitulo" style="font-family:'Chakra Petch',sans-serif; font-size:.82rem;">Zona marcada</strong>
+                    <span style="display:flex; gap:6px;">
+                      <button onclick="deshacerPuntoZona()" style="width:auto; padding:4px 10px; font-size:.7rem; border-radius:8px; background:rgba(0,0,0,.06); color:var(--gris); cursor:pointer;">Deshacer punto</button>
+                      <button onclick="limpiarZona()" style="width:auto; padding:4px 10px; font-size:.7rem; border-radius:8px; background:rgba(0,0,0,.06); color:var(--gris); cursor:pointer;">Quitar zona</button>
+                    </span>
+                  </div>
+                  <div id="zonaResultados"></div>
                 </div>
               </div>
               <div class="card" style="margin-bottom:0;">
@@ -1744,6 +1755,7 @@ function renderOperadorMapa(alertas, clientes) {
     operadorMapa = L.map('mapaOperador').setView(MAPA_CENTRO_DEFECTO, 13);
     // Tiles oscuros (CARTO) para calzar con el tema del panel
     operadorTileLayer = L.tileLayer(urlTilesOperador(temaActualOperador()), { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(operadorMapa);
+    operadorMapa.on('click', clickMapaZona);
   }
   if (!operadorCapaPrecision) operadorCapaPrecision = L.layerGroup().addTo(operadorMapa);
   operadorCapaPrecision.clearLayers();
@@ -2009,7 +2021,8 @@ function renderOperadorHistorial(historial, clientes) {
     ? (historial || []).filter(enRango)
     : (historialExpandido ? (historial || []) : (historial || []).filter((a) => a.estado === 'activa'));
   // Dibuja en el mapa las alarmas filtradas (solo cuando hay rango de fechas).
-  if (typeof plotHistorialEnMapa === 'function') plotHistorialEnMapa(hayRango ? lista : [], clientes);
+  if (zonaPuntos.length >= 3) renderZonaResultados();
+  else if (typeof plotHistorialEnMapa === 'function') plotHistorialEnMapa(hayRango ? lista : [], clientes);
   if (!lista.length) {
     cont.innerHTML = hayRango
       ? '<div class="evento"><div><strong>Sin alarmas en ese rango de fechas.</strong></div></div>'
@@ -2033,7 +2046,7 @@ function renderOperadorHistorial(historial, clientes) {
 // Dibuja en el mapa las alarmas del historial filtrado (capa aparte de las
 // alertas activas). Color por estado y encuadra el mapa a esos puntos.
 let operadorCapaHist = null;
-function plotHistorialEnMapa(lista, clientes) {
+function plotHistorialEnMapa(lista, clientes, noEncuadrar) {
   if (!operadorMapa) return;
   if (!operadorCapaHist) operadorCapaHist = L.layerGroup().addTo(operadorMapa);
   operadorCapaHist.clearLayers();
@@ -2056,8 +2069,191 @@ function plotHistorialEnMapa(lista, clientes) {
       .bindPopup(`<b>${nombre}</b><br><span style="color:var(--gris)">${a.estado || ''} · ${formatearHoraOperador(a.creadaEn)}</span>`);
     pts.push([coords.lat, coords.lng]);
   });
-  if (pts.length) { try { operadorMapa.fitBounds(pts, { padding: [30, 30], maxZoom: 16 }); } catch (e) {} }
+  if (pts.length && !noEncuadrar) { try { operadorMapa.fitBounds(pts, { padding: [30, 30], maxZoom: 16 }); } catch (e) {} }
 }
+/* ── ZONA EN EL MAPA ───────────────────────────────────────────────
+   El operador toca "Marcar zona" y luego toca el mapa en las esquinas
+   del área que le interesa (por ejemplo, entre una calle y otra). Con 3
+   puntos o más se cierra el polígono y se calcula, ahí mismo, todo el
+   historial de alarmas que ocurrió dentro de esa zona. Se combina con el
+   filtro de fechas Desde/Hasta si está puesto. ──────────────────── */
+let zonaModo = false;
+let zonaPuntos = [];
+let zonaCapa = null;
+let _zonaNombreClave = '';
+
+function pintarBotonZona() {
+  const b = document.getElementById('zonaBtn');
+  if (!b) return;
+  b.style.background = zonaModo ? 'rgba(124,108,255,.18)' : 'transparent';
+  b.style.color = zonaModo ? 'var(--violeta)' : 'var(--gris)';
+  b.style.borderColor = zonaModo ? 'var(--violeta)' : 'var(--linea)';
+  b.textContent = zonaModo ? '📐 Toca el mapa para marcar' : '📐 Marcar zona';
+}
+
+function ayudaZona() {
+  const c = document.getElementById('zonaResultados');
+  if (!c) return;
+  const faltan = 3 - zonaPuntos.length;
+  c.innerHTML = zonaPuntos.length
+    ? `<div style="font-size:.75rem; color:var(--gris);">${zonaPuntos.length} punto${zonaPuntos.length === 1 ? '' : 's'} marcado${zonaPuntos.length === 1 ? '' : 's'}. Falta${faltan === 1 ? '' : 'n'} ${faltan} para cerrar la zona.</div>`
+    : '<div style="font-size:.75rem; color:var(--gris);">Toca el mapa en las esquinas del área que quieres revisar (mínimo 3 toques). El historial de alarmas de esa zona sale solo.</div>';
+}
+
+function toggleModoZona() {
+  zonaModo = !zonaModo;
+  if (zonaModo) { zonaPuntos = []; _zonaNombreClave = ''; dibujarZona(); }
+  pintarBotonZona();
+  if (operadorMapa) {
+    operadorMapa.getContainer().style.cursor = zonaModo ? 'crosshair' : '';
+    try { if (zonaModo) operadorMapa.doubleClickZoom.disable(); else operadorMapa.doubleClickZoom.enable(); } catch (e) {}
+  }
+  const p = document.getElementById('zonaPanel');
+  if (p) p.style.display = (zonaModo || zonaPuntos.length >= 3) ? 'block' : 'none';
+  if (zonaModo) {
+    const t = document.getElementById('zonaTitulo');
+    if (t) t.textContent = 'Marcando zona…';
+    ayudaZona();
+  }
+}
+
+function clickMapaZona(e) {
+  if (!zonaModo) return;
+  zonaPuntos.push([e.latlng.lat, e.latlng.lng]);
+  dibujarZona();
+  if (zonaPuntos.length >= 3) renderZonaResultados(); else ayudaZona();
+}
+
+function dibujarZona() {
+  if (!operadorMapa) return;
+  if (!zonaCapa) zonaCapa = L.layerGroup().addTo(operadorMapa);
+  zonaCapa.clearLayers();
+  if (!zonaPuntos.length) return;
+  if (zonaPuntos.length >= 3) {
+    L.polygon(zonaPuntos, { color: '#7c6cff', weight: 2, fillColor: '#7c6cff', fillOpacity: 0.12 }).addTo(zonaCapa);
+  } else if (zonaPuntos.length === 2) {
+    L.polyline(zonaPuntos, { color: '#7c6cff', weight: 2, dashArray: '5,5' }).addTo(zonaCapa);
+  }
+  zonaPuntos.forEach((p) => {
+    L.circleMarker(p, { radius: 5, color: '#fff', weight: 2, fillColor: '#7c6cff', fillOpacity: 1 }).addTo(zonaCapa);
+  });
+}
+
+function deshacerPuntoZona() {
+  zonaPuntos.pop();
+  _zonaNombreClave = '';
+  dibujarZona();
+  if (zonaPuntos.length >= 3) renderZonaResultados();
+  else {
+    const t = document.getElementById('zonaTitulo');
+    if (t) t.textContent = 'Marcando zona…';
+    ayudaZona();
+    if (typeof plotHistorialEnMapa === 'function') plotHistorialEnMapa([], _histData.clientes, true);
+  }
+}
+
+function limpiarZona() {
+  zonaPuntos = [];
+  zonaModo = false;
+  _zonaNombreClave = '';
+  if (zonaCapa) zonaCapa.clearLayers();
+  if (operadorMapa) {
+    operadorMapa.getContainer().style.cursor = '';
+    try { operadorMapa.doubleClickZoom.enable(); } catch (e) {}
+  }
+  pintarBotonZona();
+  const p = document.getElementById('zonaPanel');
+  if (p) p.style.display = 'none';
+  if (typeof plotHistorialEnMapa === 'function') plotHistorialEnMapa([], _histData.clientes, true);
+}
+
+// Coordenada de una alarma: su GPS real, o si no lo tiene, el punto del cliente.
+function coordsDeAlerta(a, clientes) {
+  if (a.ubicacion && a.ubicacion.lat != null) return { lat: a.ubicacion.lat, lng: a.ubicacion.lng };
+  const cli = (clientes || []).find((c) => c.uid === a.clienteUid);
+  if (cli && operadorMarcadoresClientes[cli.uid]) {
+    const ll = operadorMarcadoresClientes[cli.uid].getLatLng();
+    return { lat: ll.lat, lng: ll.lng };
+  }
+  return null;
+}
+
+// ¿El punto cae dentro del polígono? (ray casting; exacto para zonas urbanas)
+function puntoEnZona(lat, lng, poly) {
+  let dentro = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const yi = poly[i][0], xi = poly[i][1], yj = poly[j][0], xj = poly[j][1];
+    if (((yi > lat) !== (yj > lat)) && (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)) dentro = !dentro;
+  }
+  return dentro;
+}
+
+// Le pone nombre de calles a la zona usando el centro del polígono.
+function nombrarZona() {
+  const t = document.getElementById('zonaTitulo');
+  if (!t || zonaPuntos.length < 3) return;
+  const lat = zonaPuntos.reduce((s, p) => s + p[0], 0) / zonaPuntos.length;
+  const lng = zonaPuntos.reduce((s, p) => s + p[1], 0) / zonaPuntos.length;
+  const clave = lat.toFixed(4) + ',' + lng.toFixed(4);
+  if (clave === _zonaNombreClave) return;
+  _zonaNombreClave = clave;
+  t.textContent = 'Zona marcada';
+  if (typeof obtenerCalleGPS === 'function') {
+    obtenerCalleGPS(lat, lng)
+      .then((txt) => { if (txt && _zonaNombreClave === clave) t.textContent = 'Zona: ' + txt; })
+      .catch(() => {});
+  }
+}
+
+function renderZonaResultados() {
+  const cont = document.getElementById('zonaResultados');
+  if (!cont || zonaPuntos.length < 3) return;
+  const panel = document.getElementById('zonaPanel');
+  if (panel) panel.style.display = 'block';
+  const desde = (document.getElementById('histMonDesde') || {}).value || '';
+  const hasta = (document.getElementById('histMonHasta') || {}).value || '';
+  const clientes = _histData.clientes || [];
+  const lista = (_histData.historial || []).filter((a) => {
+    if (desde || hasta) {
+      const dia = a.creadaEn ? formatoFechaISO(new Date(a.creadaEn)) : '';
+      if (desde && (!dia || dia < desde)) return false;
+      if (hasta && (!dia || dia > hasta)) return false;
+    }
+    const c = coordsDeAlerta(a, clientes);
+    return !!c && puntoEnZona(c.lat, c.lng, zonaPuntos);
+  }).sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
+
+  if (typeof plotHistorialEnMapa === 'function') plotHistorialEnMapa(lista, clientes, true);
+  nombrarZona();
+
+  const rango = (desde || hasta) ? `${desde || '…'} a ${hasta || '…'}` : 'todo el historial cargado';
+  if (!lista.length) {
+    cont.innerHTML = `<div style="font-size:.75rem; color:var(--gris);">Sin alarmas en esta zona (${rango}).</div>`;
+    return;
+  }
+  const reales = lista.filter((a) => a.resultado === 'real').length;
+  const falsas = lista.filter((a) => a.resultado === 'falsa').length;
+  const iconos = { activa: '🚨', atendida: '✅', cancelada: '⚪' };
+  cont.innerHTML =
+    `<div style="display:flex; gap:14px; flex-wrap:wrap; align-items:baseline; font-size:.74rem; margin-bottom:8px;">
+       <span><strong style="font-size:1.05rem; color:var(--violeta);">${lista.length}</strong> alarma${lista.length === 1 ? '' : 's'} en la zona</span>
+       <span style="color:var(--rojo);">${reales} real${reales === 1 ? '' : 'es'}</span>
+       <span style="color:var(--gris);">${falsas} falsa${falsas === 1 ? '' : 's'}</span>
+       <span style="color:var(--gris);">${rango}</span>
+     </div>
+     <div style="max-height:190px; overflow-y:auto; display:flex; flex-direction:column; gap:5px;">` +
+    lista.map((a) => {
+      const cli = clientes.find((c) => c.uid === a.clienteUid);
+      const nombre = cli ? (cli.local || cli.nombre || 'Cliente') : 'Cliente';
+      const res = a.resultado === 'real' ? ' · Real' : (a.resultado === 'falsa' ? ' · Falsa' : '');
+      return `<div style="display:flex; gap:8px; align-items:center; font-size:.74rem; border-bottom:1px solid var(--linea); padding-bottom:5px;">
+          <span>${iconos[a.estado] || '•'}</span>
+          <strong style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${nombre}</strong>
+          <span style="color:var(--gris); white-space:nowrap;">${formatearHoraOperador(a.creadaEn)}${res}</span>
+        </div>`;
+    }).join('') + '</div>';
+}
+
 // Re-filtra el historial reciente del Monitoreo (lista + mapa) al cambiar fechas.
 function filtrarHistorialMonitoreo() {
   renderOperadorHistorial(_histData.historial, _histData.clientes);
