@@ -2149,6 +2149,7 @@ function renderOperadorAlertas(alertas, clientes) {
         <div class="ev-ic a">🚨</div>
         <div style="flex:1;">
           <strong id="alertaCalle-${a.alertaId}">${titulo}</strong>${urgente ? ` <span style="font-size:.58rem; font-weight:700; color:#fff; background:var(--rojo); padding:2px 7px; border-radius:99px; font-family:'Chakra Petch',sans-serif; letter-spacing:.06em; vertical-align:middle;">URGENTE</span>` : ''}
+          ${a.asignadaA ? `<small style="display:block; color:var(--verde);">👤 Atendiendo: ${a.asignadaA}</small>` : ''}
           <small>${nombreCliente} · <span style="${urgente ? 'color:var(--rojo); font-weight:600;' : ''}">${tiempoTxt}</span>${(tieneGPS && a.ubicacion.precision > 0) ? ` · ±${Math.round(a.ubicacion.precision)} m` : ''}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
         </div>
         <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); abrirProtocolo('${a.clienteUid}','${a.alertaId}')">Atender</button>
@@ -2212,6 +2213,13 @@ let protocoloActual = null;
 function abrirProtocolo(clienteUid, alertaId) {
   protocoloActual = { clienteUid, alertaId };
   if (typeof detenerAlarma === 'function') detenerAlarma();
+  // Avisar que este operador tomó la alerta (para que otros no la dupliquen).
+  if (auth.currentUser) {
+    auth.currentUser.getIdToken().then((idToken) => fetch('/api/operador-atender', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, clienteUid, alertaId, accion: 'asignar', operador: auth.currentUser.email || '' })
+    })).catch(() => {});
+  }
   const modal = document.getElementById('protocoloModal');
   const body = document.getElementById('protocoloBody');
   body.innerHTML = '<div class="evento"><div><strong>Cargando datos del cliente…</strong></div></div>';
