@@ -81,6 +81,27 @@ async function verificarOperador(idToken) {
   return data.users[0].localId;
 }
 
+// Marca que un operador tomó la alerta (sin cerrarla): así otros operadores
+// ven que ya está siendo atendida y no se duplica el trabajo.
+async function asignarAlerta(accessToken, clienteUid, alertaId, operador) {
+  const url =
+    `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/alertas/${alertaId}` +
+    `?updateMask.fieldPaths=asignadaA&updateMask.fieldPaths=asignadaEn`;
+  const body = {
+    fields: {
+      asignadaA: { stringValue: operador || '' },
+      asignadaEn: { timestampValue: new Date().toISOString() }
+    }
+  };
+  const resp = await fetch(url, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await resp.json();
+  return { ok: resp.ok, status: resp.status, data };
+}
+
 async function marcarAtendida(accessToken, clienteUid, alertaId, resultado, nota, operador) {
   const url =
     `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/alertas/${alertaId}` +
@@ -109,7 +130,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { idToken, clienteUid, alertaId, resultado, nota, operador } = req.body || {};
+  const { idToken, clienteUid, alertaId, resultado, nota, operador, accion } = req.body || {};
   if (!idToken || !clienteUid || !alertaId) {
     res.status(400).json({ error: 'Faltan datos (idToken, clienteUid o alertaId)' });
     return;
@@ -123,6 +144,11 @@ export default async function handler(req, res) {
     }
 
     const accessToken = await obtenerAccessToken();
+    if (accion === 'asignar') {
+      const rAsig = await asignarAlerta(accessToken, clienteUid, alertaId, operador);
+      res.status(200).json({ ok: true, asignada: rAsig });
+      return;
+    }
     const rMarcar = await marcarAtendida(accessToken, clienteUid, alertaId, resultado, nota, operador);
     res.status(200).json({ ok: true, resultado: rMarcar });
   } catch (err) {
