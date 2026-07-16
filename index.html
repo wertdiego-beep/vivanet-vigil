@@ -1000,16 +1000,23 @@ function entrarAVigil() {
   document.getElementById('accountName').textContent = name;
   document.getElementById('accountEmail').textContent = user.email;
 
-  // La cuenta central (Diego) ve el panel operador en vez de la app de cliente.
-  if (user.uid === CENTRAL_UID) {
+  // La central y los operadores autorizados ven el panel operador.
+  const entrarComoOperador = () => {
     document.getElementById('bottomNav').style.display = 'none';
     go('s-operador');
     cargarCodigoOperador(user.uid);
     cargarPanelOperador();
     if (operadorInterval) clearInterval(operadorInterval);
     operadorInterval = setInterval(cargarPanelOperador, INTERVALO_POLLING_MS);
-    return;
-  }
+  };
+  if (user.uid === CENTRAL_UID) { entrarComoOperador(); return; }
+
+  // Otros operadores (lista OPERADORES_UIDS en Vercel): decide el servidor.
+  // Va en paralelo para no demorar la entrada de los clientes normales.
+  user.getIdToken().then((idToken) => fetch('/api/soy-operador', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken })
+  })).then((r) => r.json()).then((d) => { if (d && d.operador) entrarComoOperador(); }).catch(() => {});
 
   // Si es técnico (rolEmpresa === 'tecnico'), ve su panel de visitas asignadas.
   db.collection('usuarios').doc(user.uid).get().then((doc) => {
