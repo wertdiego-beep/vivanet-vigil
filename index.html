@@ -539,7 +539,12 @@ textarea{min-height:96px;resize:vertical}
         <div class="card-title">Clave de seguridad</div>
         <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Una palabra o número que la central te pedirá para confirmar tu identidad en una emergencia. Memorízala; no la compartas por escrito.</p>
         <input type="text" id="accountClave" placeholder="Ej: girasol">
-        <button class="btn-full" id="guardarClave">Guardar clave</button>
+        <div style="margin-top:14px; padding-top:12px; border-top:1px dashed var(--linea);">
+          <strong style="font-size:.85rem;">Clave de coacción (opcional)</strong>
+          <p style="color:var(--gris); font-size:.78rem; margin:4px 0 8px; line-height:1.5;">Una palabra DISTINTA para pedir ayuda sin delatarte: si alguien te obliga a decir que "todo está bien", di esta palabra como si fuera tu clave normal. La central entenderá que estás bajo amenaza y enviará ayuda sin decir nada en la llamada.</p>
+          <input type="text" id="accountClaveCoaccion" placeholder="Ej: naranja (distinta a tu clave normal)">
+        </div>
+        <button class="btn-full" id="guardarClave">Guardar claves</button>
         <div class="error-msg" id="claveInfo" style="color:#048A52;"></div>
       </div>
       <div class="card">
@@ -2650,6 +2655,9 @@ function renderProtocolo(c, contactos) {
   const clave = c.claveSeguridad
     ? `<span style="font-family:'Chakra Petch',sans-serif;font-weight:700;color:var(--tinta);background:var(--violeta-suave);padding:4px 12px;border-radius:8px;letter-spacing:.06em;">${c.claveSeguridad}</span>`
     : `<span style="color:var(--gris);">No configurada</span>`;
+  const claveCoa = c.claveCoaccion
+    ? `<div class="evento" style="border:1px solid rgba(229,52,75,.45); border-radius:12px;"><div class="ev-ic a">⚠️</div><div style="flex:1;"><strong style="color:#ff4d5e;">Clave de COACCIÓN: <span style="font-family:'Chakra Petch',sans-serif;letter-spacing:.06em;">${c.claveCoaccion}</span></strong><small>Si el cliente dice ESTA palabra, está bajo amenaza: actúa normal en la llamada, NO lo delates, y despacha ayuda de inmediato (marca la alerta como REAL).</small></div></div>`
+    : '';
   const contactosHtml = contactos.length
     ? contactos.map((k) => `<div class="evento"><div class="ev-ic v">📞</div><div style="flex:1;"><strong>${k.nombre || 'Contacto'}</strong><small>${k.telefono || 'Sin teléfono'}</small></div>${llamar(k.telefono)}</div>`).join('')
     : '<div class="evento"><div><small>Sin contactos configurados</small></div></div>';
@@ -2659,6 +2667,7 @@ function renderProtocolo(c, contactos) {
       <div class="evento"><div class="ev-ic v">${c.modo === 'familia' ? '👨‍👩‍👧' : '🏪'}</div><div style="flex:1;"><strong>${c.local || c.nombre || 'Cliente'}</strong><small>${c.direccion || 'Sin dirección'}</small></div></div>
       <div class="evento"><div class="ev-ic v">📞</div><div style="flex:1;"><strong>${c.telefono || 'Sin teléfono'}</strong><small>Teléfono del cliente</small></div>${llamar(c.telefono)}</div>
       <div class="evento"><div class="ev-ic a">🔑</div><div style="flex:1;"><strong>Clave de seguridad</strong><small>Opcional · sirve para verificar, nunca bloquea la ayuda</small></div>${clave}</div>
+      ${claveCoa}
     </div>
     <div class="card" style="margin-bottom:12px;">
       <div class="card-title">Contactos de emergencia</div>
@@ -3133,10 +3142,17 @@ if (guardarClaveBtn) {
     const user = auth.currentUser;
     if (!user) return;
     const clave = document.getElementById('accountClave').value.trim();
+    const claveCoa = (document.getElementById('accountClaveCoaccion') || { value: '' }).value.trim();
     const info = document.getElementById('claveInfo');
     info.textContent = '';
-    db.collection('usuarios').doc(user.uid).set({ claveSeguridad: clave }, { merge: true }).then(() => {
-      info.textContent = 'Clave guardada.';
+    if (claveCoa && clave && claveCoa.toLowerCase() === clave.toLowerCase()) {
+      info.style.color = 'var(--rojo)';
+      info.textContent = 'La clave de coacción debe ser DISTINTA a la clave normal.';
+      return;
+    }
+    db.collection('usuarios').doc(user.uid).set({ claveSeguridad: clave, claveCoaccion: claveCoa }, { merge: true }).then(() => {
+      info.style.color = '#048A52';
+      info.textContent = claveCoa ? 'Claves guardadas.' : 'Clave guardada.';
     }).catch((err) => {
       console.error('Error guardando clave de seguridad:', err);
       info.style.color = 'var(--rojo)';
@@ -3169,6 +3185,7 @@ function cargarDatosUsuario(uid) {
       document.getElementById('accountDireccion').textContent = data.direccion || '—';
       if (data.telefono) document.getElementById('accountTelefono').value = data.telefono;
       if (data.claveSeguridad) { const _ac = document.getElementById('accountClave'); if (_ac) _ac.value = data.claveSeguridad; }
+      if (data.claveCoaccion) { const _acc = document.getElementById('accountClaveCoaccion'); if (_acc) _acc.value = data.claveCoaccion; }
       document.getElementById('editNombre').value = data.nombre || '';
       document.getElementById('editLocal').value = data.local || '';
       document.getElementById('editDireccion').value = data.direccion || '';
