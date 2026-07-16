@@ -646,6 +646,7 @@ textarea{min-height:96px;resize:vertical}
         <div class="op-topbar">
           <div class="op-title" id="opTitulo">Monitoreo en vivo</div>
           <span class="op-live">EN VIVO</span>
+          <span id="opReloj" style="font-family:'Chakra Petch',sans-serif; font-size:.78rem; color:var(--gris); letter-spacing:.05em;"></span>
           <div id="buscarMonitoreoWrap" style="position:relative; width:330px; max-width:34vw;">
             <input type="text" id="buscarMonitoreo" placeholder="Buscar cliente por nombre, local o dirección…" autocomplete="off" oninput="buscarClienteMonitoreo()" onfocus="buscarClienteMonitoreo()" style="margin:0; padding:8px 12px; font-size:.8rem;">
             <div id="buscarMonitoreoRes" style="display:none; position:absolute; top:calc(100% + 5px); left:0; right:0; background:var(--blanco); border:1px solid var(--linea); border-radius:12px; max-height:260px; overflow-y:auto; z-index:3000; box-shadow:0 14px 34px rgba(0,0,0,.45);"></div>
@@ -1706,6 +1707,12 @@ function probarSirena() {
   _pruebaSirenaTimer = { i, t };
 }
 
+// Reloj de la central: hora local siempre visible en la barra superior.
+setInterval(() => {
+  const r = document.getElementById('opReloj');
+  if (r) r.textContent = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}, 1000);
+
 function revisarNuevasAlertas(alertas, clientes) {
   const activas = (alertas || []).filter(function (a) { return a.estado === 'activa'; });
   const ids = new Set(activas.map(function (a) { return a.alertaId; }));
@@ -2418,6 +2425,8 @@ function minutosDesde(iso) {
   return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
 }
 function renderOperadorAlertas(alertas, clientes) {
+  // La pestaña del navegador también avisa: "(2) SOS — Vigil"
+  try { document.title = (alertas && alertas.length) ? `(${alertas.length}) SOS — Vigil` : 'Vigil — Seguridad y Monitoreo'; } catch (e) {}
   const cont = document.getElementById('operadorAlertas');
   revisarNuevasAlertas(alertas, clientes);
   if (!alertas || alertas.length === 0) {
