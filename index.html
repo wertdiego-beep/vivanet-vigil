@@ -1012,11 +1012,13 @@ function entrarAVigil() {
   if (user.uid === CENTRAL_UID) { entrarComoOperador(); return; }
 
   // Otros operadores (lista OPERADORES_UIDS en Vercel): decide el servidor.
+  // Reutilizamos /api/operador-datos (responde 403 si no es operador) en vez de
+  // un endpoint nuevo: Vercel Hobby permite máximo 12 funciones serverless.
   // Va en paralelo para no demorar la entrada de los clientes normales.
-  user.getIdToken().then((idToken) => fetch('/api/soy-operador', {
+  user.getIdToken().then((idToken) => fetch('/api/operador-datos', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken })
-  })).then((r) => r.json()).then((d) => { if (d && d.operador) entrarComoOperador(); }).catch(() => {});
+  })).then((r) => r.json()).then((d) => { if (d && d.ok) entrarComoOperador(); }).catch(() => {});
 
   // Si es técnico (rolEmpresa === 'tecnico'), ve su panel de visitas asignadas.
   db.collection('usuarios').doc(user.uid).get().then((doc) => {
