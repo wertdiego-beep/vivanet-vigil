@@ -132,7 +132,7 @@ export default async function handler(req, res) {
   }
 
   const { idToken, clienteUid, alertaId, resultado, nota, operador, accion } = req.body || {};
-  if (!idToken || !clienteUid || !alertaId) {
+  if (!idToken || !clienteUid || (!alertaId && accion !== 'nota-cliente')) {
     res.status(400).json({ error: 'Faltan datos (idToken, clienteUid o alertaId)' });
     return;
   }
@@ -145,6 +145,19 @@ export default async function handler(req, res) {
     }
 
     const accessToken = await obtenerAccessToken();
+    if (accion === 'nota-cliente') {
+      // Nota fija de la central sobre el cliente ("perro bravo", "porton trasero").
+      const urlNota =
+        `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}` +
+        `?updateMask.fieldPaths=notaCentral`;
+      const respNota = await fetch(urlNota, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { notaCentral: { stringValue: (nota || '').slice(0, 500) } } })
+      });
+      res.status(200).json({ ok: respNota.ok });
+      return;
+    }
     if (accion === 'asignar') {
       const rAsig = await asignarAlerta(accessToken, clienteUid, alertaId, operador);
       res.status(200).json({ ok: true, asignada: rAsig });

@@ -98,7 +98,8 @@ async function obtenerCliente(accessToken, clienteUid) {
     modo: f.modo?.stringValue || 'empresa',
     rolEmpresa: f.rolEmpresa?.stringValue || '',
     grupoFamiliarId: f.grupoFamiliarId?.stringValue || '',
-    claveSeguridad: f.claveSeguridad?.stringValue || ''
+    claveSeguridad: f.claveSeguridad?.stringValue || '',
+    notaCentral: f.notaCentral?.stringValue || ''
   };
 }
 
