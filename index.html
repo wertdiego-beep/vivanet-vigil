@@ -474,7 +474,7 @@ textarea{min-height:96px;resize:vertical}
       </div>
       <div class="card-title" style="margin:22px 0 12px">Accesos rápidos</div>
       <div class="quick-grid">
-        <button class="quick" onclick="go('s-soporte')" data-modo="empresa" data-solo-duenio>
+        <button class="quick" onclick="go('s-soporte')" data-modo="ambos" data-solo-duenio>
           <span class="ic ic-amber">🛠</span><strong>Reportar falla</strong><small>Cámara, sensor, alarma…</small>
         </button>
         <button class="quick" onclick="go('s-estado')" data-modo="empresa">
@@ -3130,7 +3130,7 @@ function aplicarPermisoAgendar() {
 
 function aplicarModoNav(modo) {
   document.querySelectorAll('[data-modo]').forEach((el) => {
-    const visible = el.dataset.modo === modo;
+    const visible = el.dataset.modo === modo || el.dataset.modo === 'ambos';
     el.style.display = visible ? '' : 'none';
   });
   aplicarPermisoAgendar();
