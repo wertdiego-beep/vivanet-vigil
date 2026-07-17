@@ -369,6 +369,42 @@ textarea{min-height:96px;resize:vertical}
         </div>
       </button>
     </div>
+    <!-- ══ PLAN Y PAGO (primer ingreso · demo, sin cobro real) ══ -->
+    <div class="screen-scroll" id="s-plan">
+      <div style="text-align:center; margin:10px 0 4px;">
+        <h2 style="font-size:1.35rem;" id="planTitulo">Activa tu plan Vigil</h2>
+        <p style="color:var(--gris); font-size:.85rem;">Un solo plan, todo incluido.</p>
+      </div>
+      <div class="card" style="border:1.5px solid var(--violeta);">
+        <div style="display:flex; align-items:baseline; justify-content:space-between;">
+          <strong style="font-size:1.05rem;">Plan Protección</strong>
+          <span><strong style="font-size:1.5rem;">$9.990</strong><span style="color:var(--gris); font-size:.8rem;"> /mes</span></span>
+        </div>
+        <div style="margin-top:10px; display:flex; flex-direction:column; gap:7px; font-size:.85rem;">
+          <span>✅ Botón SOS con central de monitoreo</span>
+          <span>✅ Ubicación GPS en vivo en cada emergencia</span>
+          <span>✅ <b id="planIntegrantesTxt">Hasta 5 integrantes de tu familia con código</b></span>
+          <span>✅ Avisos a tus contactos de emergencia</span>
+          <span>✅ Clave de coacción y verificación de identidad</span>
+          <span>✅ Soporte y visitas técnicas</span>
+        </div>
+      </div>
+      <div class="card" id="planPagoCard">
+        <div class="card-title">¿Cómo pagar?</div>
+        <p style="color:var(--gris); font-size:.82rem; line-height:1.55; margin-bottom:10px;">Paga por <b>transferencia</b> o <b>efectivo</b> con nuestro equipo. Al confirmarse tu pago, te entregamos el <b>código</b> para incorporar a <span id="planQuienTxt">tu familia</span> a la app.</p>
+        <button class="btn-full" onclick="confirmarPagoDemo()">Ya pagué — obtener mi código</button>
+        <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="entrarDesdePlan()">Pagar después</button>
+        <p style="color:var(--gris); font-size:.68rem; text-align:center; margin-top:8px;">Vista previa del flujo · aún no se realiza ningún cobro real.</p>
+      </div>
+      <div class="card" id="planCodigoCard" style="display:none; text-align:center; border:1.5px solid var(--verde);">
+        <div style="font-size:2rem;">🎉</div>
+        <strong style="display:block; margin:4px 0 2px;">¡Plan activado!</strong>
+        <p style="color:var(--gris); font-size:.82rem;" id="planCodigoIntro">Comparte este código con tu familia para que se incorporen a la app:</p>
+        <div style="font-family:'Chakra Petch',sans-serif; font-size:2rem; font-weight:700; letter-spacing:.25em; background:var(--violeta-suave); color:var(--violeta); border-radius:14px; padding:14px 10px; margin:12px 0;" id="planCodigoValor">——————</div>
+        <button class="btn-full" onclick="copiarCodigoPlan()" id="copiarCodigoPlanBtn">Copiar código</button>
+        <button class="btn-full" style="background:var(--verde);" onclick="entrarDesdePlan()">Entrar a la app</button>
+      </div>
+    </div>
     <!-- ══ COMPLETAR PERFIL (primer ingreso) ══ -->
     <div class="screen-scroll" id="s-perfil">
       <div class="card">
@@ -3048,15 +3084,60 @@ document.getElementById('guardarPerfil').addEventListener('click', () => {
   }, { merge: true }).then(() => {
     document.getElementById('userName').textContent = nombre;
     document.getElementById('accountName').textContent = nombre;
-    document.getElementById('bottomNav').style.display = 'flex';
-    aplicarModoNav(modoSeleccionado);
-    cargarDatosUsuario(user.uid);
-    go('s-inicio');
+    prepararPantallaPlan();
+    go('s-plan');
   }).catch((err) => {
     console.error('Error guardando perfil:', err);
     errorEl.textContent = 'No pudimos guardar tu perfil. Intenta de nuevo.';
   });
 });
+
+// ══ PLAN Y PAGO (demo: mejora el flujo de registro, sin cobro real) ══
+function prepararPantallaPlan() {
+  const esFamilia = modoSeleccionado === 'familia';
+  const t = document.getElementById('planIntegrantesTxt');
+  if (t) t.textContent = esFamilia ? 'Hasta 5 integrantes de tu familia con código' : 'Tu equipo completo con código de empresa';
+  const q = document.getElementById('planQuienTxt');
+  if (q) q.textContent = esFamilia ? 'tu familia' : 'tu equipo';
+  const ci = document.getElementById('planCodigoIntro');
+  if (ci) ci.textContent = esFamilia
+    ? 'Comparte este código con tu familia para que se incorporen a la app:'
+    : 'Comparte este código con tu equipo para que se incorporen a la app:';
+  const pago = document.getElementById('planPagoCard');
+  const cod = document.getElementById('planCodigoCard');
+  if (pago) pago.style.display = '';
+  if (cod) cod.style.display = 'none';
+}
+function confirmarPagoDemo() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const codigo = user.uid.slice(0, 6).toUpperCase();
+  // Guarda el código y deja registrado que pasó por el paso de pago (demo).
+  db.collection('usuarios').doc(user.uid).set({ codigoFamilia: codigo, planEstado: 'confirmado-demo' }, { merge: true }).catch(() => {});
+  const v = document.getElementById('planCodigoValor');
+  if (v) v.textContent = codigo;
+  const pago = document.getElementById('planPagoCard');
+  const cod = document.getElementById('planCodigoCard');
+  if (pago) pago.style.display = 'none';
+  if (cod) cod.style.display = '';
+}
+function copiarCodigoPlan() {
+  const v = document.getElementById('planCodigoValor');
+  const b = document.getElementById('copiarCodigoPlanBtn');
+  if (!v) return;
+  try {
+    navigator.clipboard.writeText(v.textContent.trim()).then(() => {
+      if (b) { b.textContent = 'Copiado ✓'; setTimeout(() => { b.textContent = 'Copiar código'; }, 2000); }
+    });
+  } catch (e) {}
+}
+function entrarDesdePlan() {
+  const user = auth.currentUser;
+  document.getElementById('bottomNav').style.display = 'flex';
+  aplicarModoNav(modoSeleccionado);
+  if (user) cargarDatosUsuario(user.uid);
+  go('s-inicio');
+}
 
 // ══ EDITAR NOMBRE / LOCAL / DIRECCIÓN (desde Mi cuenta) ══
 const guardarEditPerfilBtn = document.getElementById('guardarEditPerfil');
