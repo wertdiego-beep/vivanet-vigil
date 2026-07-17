@@ -788,6 +788,7 @@ textarea{min-height:96px;resize:vertical}
                   <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px;">
                     <strong id="zonaTitulo" style="font-family:'Chakra Petch',sans-serif; font-size:.82rem;">Zona marcada</strong>
                     <span style="display:flex; gap:6px;">
+                      <button onclick="exportarZonaCSV()" style="width:auto; padding:4px 10px; font-size:.7rem; border-radius:8px; background:var(--violeta); color:#fff; cursor:pointer;">Exportar a Excel</button>
                       <button onclick="deshacerPuntoZona()" style="width:auto; padding:4px 10px; font-size:.7rem; border-radius:8px; background:rgba(0,0,0,.06); color:var(--gris); cursor:pointer;">Deshacer punto</button>
                       <button onclick="limpiarZona()" style="width:auto; padding:4px 10px; font-size:.7rem; border-radius:8px; background:rgba(0,0,0,.06); color:var(--gris); cursor:pointer;">Quitar zona</button>
                     </span>
@@ -2385,6 +2386,48 @@ function nombrarZona() {
 // Centra el mapa en el punto de una alarma de la lista de la zona.
 function volarAPuntoZona(lat, lng) {
   if (operadorMapa) operadorMapa.flyTo([lat, lng], 17, { duration: 0.7 });
+}
+
+// Exporta a CSV (Excel) las alarmas que cayeron dentro de la zona marcada,
+// respetando el filtro de fechas Desde/Hasta si está puesto.
+function exportarZonaCSV() {
+  if (zonaPuntos.length < 3) { alert('Primero marca una zona en el mapa (mínimo 3 toques).'); return; }
+  const desde = (document.getElementById('histMonDesde') || {}).value || '';
+  const hasta = (document.getElementById('histMonHasta') || {}).value || '';
+  const clientes = _histData.clientes || [];
+  const lista = (_histData.historial || []).filter((a) => {
+    if (desde || hasta) {
+      const dia = a.creadaEn ? formatoFechaISO(new Date(a.creadaEn)) : '';
+      if (desde && (!dia || dia < desde)) return false;
+      if (hasta && (!dia || dia > hasta)) return false;
+    }
+    const c = coordsDeAlerta(a, clientes);
+    return !!c && puntoEnZona(c.lat, c.lng, zonaPuntos);
+  }).sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
+  if (!lista.length) { alert('No hay alarmas dentro de esta zona para exportar.'); return; }
+  const zonaNombre = (document.getElementById('zonaTitulo') || {}).textContent || 'Zona marcada';
+  const esc = (v) => '"' + (v == null ? '' : String(v)).replace(/"/g, '""') + '"';
+  const filas = [
+    ['Zona', zonaNombre, '', 'Rango', (desde || 'inicio') + ' a ' + (hasta || 'hoy'), '', 'Total alarmas', String(lista.length)],
+    [],
+    ['Fecha y hora', 'Cliente', 'Estado', 'Resultado', 'Atendida por', 'Nota', 'Latitud', 'Longitud']
+  ];
+  lista.forEach((a) => {
+    const cli = clientes.find((c) => c.uid === a.clienteUid);
+    const nombre = cli ? (cli.local || cli.nombre || 'Cliente') : 'Cliente';
+    const co = coordsDeAlerta(a, clientes) || {};
+    filas.push([
+      formatearHoraOperador(a.creadaEn), nombre, a.estado || '', a.resultado || '',
+      a.atendidaPor || '', a.notaAtencion || '', co.lat != null ? co.lat : '', co.lng != null ? co.lng : ''
+    ]);
+  });
+  const csv = '\ufeff' + filas.map((f) => f.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = `zona-sos360-${formatoFechaISO(new Date())}.csv`;
+  document.body.appendChild(link); link.click(); link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function renderZonaResultados() {
