@@ -1,4 +1,4 @@
-// Service Worker de Vigil: permite instalar la app y usarla sin conexión
+// Service Worker de SOS360: permite instalar la app y usarla sin conexión
 // para lo básico, y recibir notificaciones push (Firebase Cloud Messaging)
 // aunque la app esté cerrada. Los datos en vivo (Firestore, chat IA, Telegram)
 // siempre requieren internet.
@@ -25,7 +25,7 @@ const messaging = firebase.messaging();
 // Cuando llega un push y la app está cerrada o en segundo plano,
 // mostramos una notificación del sistema.
 messaging.onBackgroundMessage((payload) => {
-  const titulo = payload.notification?.title || 'Vigil';
+  const titulo = payload.notification?.title || 'SOS360';
   const cuerpo = payload.notification?.body || '';
   self.registration.showNotification(titulo, {
     body: cuerpo,
@@ -44,7 +44,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE_NAME = 'vigil-cache-v2';
+const CACHE_NAME = 'sos360-cache-v2';
 const APP_SHELL = [
   '/manifest.json',
   '/icon-192.png',

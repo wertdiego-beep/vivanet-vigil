@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#4B3F9F">
-<title>Vigil — Seguridad y Monitoreo</title><!-- v142 -->
+<title>SOS360 — Seguridad y Monitoreo</title><!-- v142 -->
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Vigil">
+<meta name="apple-mobile-web-app-title" content="SOS360">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -286,7 +286,7 @@ textarea{min-height:96px;resize:vertical}
 .sos-step{display:flex;gap:12px;align-items:center;font-size:.9rem;background:rgba(255,255,255,.1);border-radius:12px;padding:12px 16px}
 .sos-step .check{font-size:1rem}
 .map-container{width:100%;max-width:300px;height:200px;background:rgba(0,0,0,.2);border-radius:16px;overflow:hidden;margin:10px 0 20px;position:relative;border:2px solid rgba(255,255,255,.2);flex-shrink:0}
-#mapaVigil{width:100%;height:100%}
+#mapaSOS360{width:100%;height:100%}
 .map-label{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:99px;font-size:.7rem;font-family:'Chakra Petch',sans-serif;letter-spacing:.08em;z-index:999}
 /* Pins del mapa de la central */
 .op-pin{width:14px;height:14px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.35);position:relative}
@@ -318,14 +318,14 @@ textarea{min-height:96px;resize:vertical}
 <div class="phone">
   <div class="pill-demo">PROTOTIPO · DEMO</div>
   <div class="app-head" id="appHead" style="display:none;">
-    <div class="brand"><span class="mark">V</span><span id="brandName">VIGIL</span></div>
+    <div class="brand"><span class="mark">S</span><span id="brandName">SOS360</span></div>
     <div class="avatar" id="userAvatar">JC</div>
   </div>
   <div class="screens" id="appScreens">
     <!-- ══ LOGIN ══ -->
     <div class="screen active" id="s-login" style="justify-content:center; text-align:center; padding:40px 20px;">
       <div class="brand" style="justify-content:center; margin-bottom:60px;">
-        <span class="mark" style="background:#2A2745;">V</span>VIGIL
+        <span class="mark" style="background:#2A2745;">S</span>SOS360
       </div>
       <h2 style="font-size:1.8rem; margin-bottom:8px;">Bienvenido</h2>
       <p style="color:var(--gris); margin-bottom:30px;">Ingresa para proteger tu local.</p>
@@ -348,7 +348,7 @@ textarea{min-height:96px;resize:vertical}
     </div>
     <!-- ══ ELEGIR MODO (primer ingreso) ══ -->
     <div class="screen" id="s-modo" style="justify-content:center; text-align:center; padding: 40px 20px;">
-      <h2 style="font-size:1.5rem; margin-bottom:8px;">¿Para qué usarás Vigil?</h2>
+      <h2 style="font-size:1.5rem; margin-bottom:8px;">¿Para qué usarás SOS360?</h2>
       <p style="color:var(--gris); margin-bottom:30px;">Puedes cambiarlo más adelante desde tu cuenta.</p>
       <button class="card" style="text-align:left; width:100%; cursor:pointer;" onclick="seleccionarModo('familia')">
         <div style="display:flex; align-items:center; gap:14px;">
@@ -373,7 +373,7 @@ textarea{min-height:96px;resize:vertical}
           <span style="width:50px; height:50px; background:rgba(255,181,71,.16); color:#B57500; border-radius:14px; display:grid; place-items:center; font-size:1.6rem;">🔑</span>
           <div>
             <strong style="font-size:1.05rem;">Tengo un código</strong>
-            <div style="font-size:.8rem; color:var(--gris);">Mi familia o empresa ya tiene Vigil: quiero incorporarme con su código</div>
+            <div style="font-size:.8rem; color:var(--gris);">Mi familia o empresa ya tiene SOS360: quiero incorporarme con su código</div>
           </div>
         </div>
       </button>
@@ -393,7 +393,7 @@ textarea{min-height:96px;resize:vertical}
       </div>
       <div class="card" style="border:1.5px solid rgba(255,181,71,.55);">
         <div class="card-title">🔧 Código de técnico</div>
-        <p style="color:var(--gris); font-size:.82rem; margin-bottom:8px;">Si la central Vigil te entregó un código de técnico, escríbelo aquí: entrarás directo a tu panel de visitas asignadas.</p>
+        <p style="color:var(--gris); font-size:.82rem; margin-bottom:8px;">Si la central SOS360 te entregó un código de técnico, escríbelo aquí: entrarás directo a tu panel de visitas asignadas.</p>
         <input type="text" id="unirseCodigoTecnicoInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase; font-family:'Chakra Petch',sans-serif; letter-spacing:.2em; text-align:center; font-size:1.2rem;" maxlength="6" autocomplete="off">
         <button class="btn-full" id="unirseTecnicoBtn" style="background:#B57500;" onclick="unirseDesdeRegistro('tecnico')">Entrar como técnico</button>
       </div>
@@ -403,7 +403,7 @@ textarea{min-height:96px;resize:vertical}
     <!-- ══ PLAN Y PAGO (primer ingreso · demo, sin cobro real) ══ -->
     <div class="screen-scroll" id="s-plan">
       <div style="text-align:center; margin:10px 0 4px;">
-        <h2 style="font-size:1.35rem;" id="planTitulo">Activa tu plan Vigil</h2>
+        <h2 style="font-size:1.35rem;" id="planTitulo">Activa tu plan SOS360</h2>
         <p style="color:var(--gris); font-size:.85rem;">Un solo plan, todo incluido.</p>
       </div>
       <div class="card" style="border:1.5px solid var(--violeta);">
@@ -453,7 +453,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="btn-full" id="guardarPerfil">Guardar y continuar</button>
       </div>
     </div>
-    <!-- ══ INICIO VIGIL ══ -->
+    <!-- ══ INICIO SOS360 ══ -->
     <div class="screen-scroll" id="s-inicio">
       <div class="card">
         <div class="estado-row">
@@ -470,7 +470,7 @@ textarea{min-height:96px;resize:vertical}
           <span class="sos-progress" id="sosProg"></span>
           SOS<small>MANTÉN PRESIONADO</small>
         </button>
-        <p class="sos-hint">Mantén presionado 2 segundos para alertar a la central Vigil</p>
+        <p class="sos-hint">Mantén presionado 2 segundos para alertar a la central SOS360</p>
       </div>
       <div class="card-title" style="margin:22px 0 12px">Accesos rápidos</div>
       <div class="quick-grid">
@@ -481,7 +481,7 @@ textarea{min-height:96px;resize:vertical}
           <span class="ic ic-blue">📊</span><strong>Mi sistema</strong><small>Estado y eventos</small>
         </button>
         <button class="quick" onclick="go('s-chat')">
-          <span class="ic">💬</span><strong>Asistente Vigil</strong><small>Respuesta inmediata</small>
+          <span class="ic">💬</span><strong>Asistente SOS360</strong><small>Respuesta inmediata</small>
         </button>
         <button class="quick" onclick="alert('Demo: aquí se integraría Mercado Pago / Webpay para pagar la mantención mensual.')" data-modo="empresa">
           <span class="ic ic-green">💳</span><strong>Pagos</strong><small>Facturas y mantención</small>
@@ -562,9 +562,9 @@ textarea{min-height:96px;resize:vertical}
     <!-- ══ CHAT ══ -->
     <div class="screen-scroll" id="s-chat">
       <div class="card">
-        <div class="card-title">Asistente Vigil · IA</div>
+        <div class="card-title">Asistente SOS360 · IA</div>
         <div class="chat-box" id="chatBox">
-          <div class="msg bot">¡Hola! 👋 Soy el asistente de Vigil. Puedo ayudarte con dudas de tu sistema, coordinar soporte o avisar a la central. ¿En qué te ayudo?</div>
+          <div class="msg bot">¡Hola! 👋 Soy el asistente de SOS360. Puedo ayudarte con dudas de tu sistema, coordinar soporte o avisar a la central. ¿En qué te ayudo?</div>
           <div class="chat-sug">
             <button class="sug" onclick="enviarMensajeChat('¿Cómo armo la alarma al cerrar?')">¿Cómo armo la alarma?</button>
             <button class="sug" onclick="enviarMensajeChat('Mi cámara no da señal')">Cámara sin señal</button>
@@ -647,7 +647,7 @@ textarea{min-height:96px;resize:vertical}
         <div style="display:flex; align-items:center; gap:14px;">
           <span style="width:46px; height:46px; background:var(--violeta-suave); color:var(--violeta); border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">⬇️</span>
           <div>
-            <strong style="font-size:.95rem;">Instalar Vigil en tu celular</strong>
+            <strong style="font-size:.95rem;">Instalar SOS360 en tu celular</strong>
             <div style="font-size:.8rem; color:var(--gris);">Acceso directo, sin abrir el navegador</div>
           </div>
         </div>
@@ -680,7 +680,7 @@ textarea{min-height:96px;resize:vertical}
       <div class="card">
         <div class="card-title">Contactos de emergencia</div>
         <p style="color:var(--gris); font-size:.85rem; margin-bottom:14px;">Cuando presiones el botón SOS, además de avisarle a la central, cada contacto que agregues aquí recibirá un mensaje de Telegram con tu ubicación en vivo (por ejemplo, tus padres o algún familiar).</p>
-        <p style="color:var(--gris); font-size:.78rem; margin-bottom:14px; background:var(--violeta-suave); padding:10px 12px; border-radius:10px;">Para el mensaje de Telegram, el contacto debe escribirle primero cualquier cosa a <strong>@Vigil_alertas_bot</strong>. Si dejas su teléfono, además vas a poder llamarlo directo desde aquí con un toque.</p>
+        <p style="color:var(--gris); font-size:.78rem; margin-bottom:14px; background:var(--violeta-suave); padding:10px 12px; border-radius:10px;">Para el mensaje de Telegram, el contacto debe escribirle primero cualquier cosa a <strong>@SOS360_alertas_bot</strong>. Si dejas su teléfono, además vas a poder llamarlo directo desde aquí con un toque.</p>
         <div id="contactosList">
           <div class="evento"><div><strong>Cargando contactos…</strong></div></div>
         </div>
@@ -706,7 +706,7 @@ textarea{min-height:96px;resize:vertical}
       <aside class="op-side">
         <div class="op-logo">
           <div class="op-logo-mark">V</div>
-          <div class="op-logo-txt"><b>VIGIL</b><small>Central de monitoreo</small></div>
+          <div class="op-logo-txt"><b>SOS360</b><small>Central de monitoreo</small></div>
         </div>
         <button class="op-nav on" data-opview="monitoreo"><span>🗺️</span><em>Monitoreo</em><i class="op-pill" id="opAlertPill"></i></button>
         <button class="op-nav" data-opview="clientes"><span>👥</span><em>Clientes</em></button>
@@ -975,10 +975,10 @@ textarea{min-height:96px;resize:vertical}
     <div id="sosPruebaBanner" style="display:none; background:#FFC107; color:#3a2e00; font-weight:700; font-size:.8rem; padding:8px 14px; border-radius:10px; margin-bottom:10px;">🧪 MODO PRUEBA — No se envió ninguna alerta real</div>
     <div class="pulso">🚨</div>
     <h2 class="cp" id="sosTitulo">ALERTA ENVIADA</h2>
-    <p id="sosSubtitulo">La central Vigil recibió tu emergencia</p>
+    <p id="sosSubtitulo">La central SOS360 recibió tu emergencia</p>
     <div class="map-container">
       <div class="map-label">📍 SEGUIMIENTO EN VIVO</div>
-      <div id="mapaVigil"></div>
+      <div id="mapaSOS360"></div>
     </div>
     <div class="sos-steps">
       <div class="sos-step"><span class="check">✅</span>Central de monitoreo notificada</div>
@@ -1084,9 +1084,9 @@ function recuperarContrasena() {
 // Observador de estado de autenticación (Se ejecuta solo cuando abres la app)
 auth.onAuthStateChanged((user) => {
   if (user) {
-    // Usuario logueado: entra directo a Vigil
+    // Usuario logueado: entra directo a SOS360
     document.getElementById('userAvatar').textContent = user.email.substring(0,2).toUpperCase();
-    entrarAVigil();
+    entrarASOS360();
   } else {
     // Usuario NO logueado: Mostrar Login
     document.getElementById('appHead').style.display = 'none';
@@ -1095,7 +1095,7 @@ auth.onAuthStateChanged((user) => {
   }
 });
 // ══ NAVEGACIÓN ══
-function entrarAVigil() {
+function entrarASOS360() {
   const user = auth.currentUser;
   document.getElementById('appHead').style.display = 'flex';
 
@@ -1195,7 +1195,7 @@ const MAPA_CIUDAD_CONTEXTO = 'La Serena, Chile';  // se agrega a direcciones sin
 // dirección mal escrita terminaba en cualquier punto de Chile y el mapa se
 // alejaba hasta mostrar el continente entero.
 const MAPA_VIEWBOX = '-71.45,-29.70,-71.05,-30.10'; // lonIzq,latArriba,lonDer,latAbajo
-const GEO_CACHE_KEY = 'vigilGeoCache_v2'; // v2: invalida la caché con puntos fuera de la zona
+const GEO_CACHE_KEY = 'sos360GeoCache_v2'; // v2: invalida la caché con puntos fuera de la zona
 const geoEnProceso = new Set();
 let geoCola = [];
 let geoColaActiva = false;
@@ -1685,7 +1685,7 @@ function ajustarEncuadreInicial() {
 
 // ── Interfaz del panel: 3 temas a elección del operador (se recuerda) ──
 function temaActualOperador() {
-  try { return localStorage.getItem('vigilTemaOperador') || 'oscuro'; } catch (e) { return 'oscuro'; }
+  try { return localStorage.getItem('sos360TemaOperador') || 'oscuro'; } catch (e) { return 'oscuro'; }
 }
 function urlTilesOperador(tema) {
   return tema === 'claro'
@@ -1706,13 +1706,13 @@ function toggleMenuTema(e) {
 function setTemaOperador(tema) {
   document.body.classList.remove('op-tema-oscuro', 'op-tema-claro', 'op-tema-contraste');
   document.body.classList.add('op-tema-' + tema);
-  try { localStorage.setItem('vigilTemaOperador', tema); } catch (e) {}
+  try { localStorage.setItem('sos360TemaOperador', tema); } catch (e) {}
   aplicarTilesOperador(tema);
   const m = document.getElementById('temaMenu');
   if (m) m.style.display = 'none';
 }
 document.addEventListener('click', function () { const m = document.getElementById('temaMenu'); if (m) m.style.display = 'none'; });
-(function () { try { const t = localStorage.getItem('vigilTemaOperador'); if (t) document.body.classList.add('op-tema-' + t); } catch (e) {} })();
+(function () { try { const t = localStorage.getItem('sos360TemaOperador'); if (t) document.body.classList.add('op-tema-' + t); } catch (e) {} })();
 
 // ── Diseño/disposición del panel: 3 modos (actual / minimal / compacto) ──
 function toggleMenuDiseno(e) {
@@ -1724,12 +1724,12 @@ function toggleMenuDiseno(e) {
 function setDisenoOperador(d) {
   document.body.classList.remove('op-dis-actual', 'op-dis-minimal', 'op-dis-compacto');
   document.body.classList.add('op-dis-' + d);
-  try { localStorage.setItem('vigilDisenoOperador', d); } catch (e) {}
+  try { localStorage.setItem('sos360DisenoOperador', d); } catch (e) {}
   if (operadorMapa) setTimeout(function () { operadorMapa.invalidateSize(); }, 160);
   const m = document.getElementById('disenoMenu'); if (m) m.style.display = 'none';
 }
 document.addEventListener('click', function () { const m = document.getElementById('disenoMenu'); if (m) m.style.display = 'none'; });
-(function () { try { const d = localStorage.getItem('vigilDisenoOperador'); if (d) document.body.classList.add('op-dis-' + d); } catch (e) {} })();
+(function () { try { const d = localStorage.getItem('sos360DisenoOperador'); if (d) document.body.classList.add('op-dis-' + d); } catch (e) {} })();
 
 // ── Alarma sonora + parpadeo al entrar una NUEVA alerta SOS ──
 let audioCtxOp = null, alarmaInterval = null, alarmaActiva = false, alertasConocidas = null;
@@ -2515,7 +2515,7 @@ function exportarAlarmasCSV() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   const hoy = formatoFechaISO(new Date());
-  link.href = url; link.download = `alarmas-vigil-${hoy}.csv`;
+  link.href = url; link.download = `alarmas-sos360-${hoy}.csv`;
   document.body.appendChild(link); link.click(); link.remove();
   URL.revokeObjectURL(url);
 }
@@ -2645,8 +2645,8 @@ function minutosDesde(iso) {
   return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
 }
 function renderOperadorAlertas(alertas, clientes) {
-  // La pestaña del navegador también avisa: "(2) SOS — Vigil"
-  try { document.title = (alertas && alertas.length) ? `(${alertas.length}) SOS — Vigil` : 'Vigil — Seguridad y Monitoreo'; } catch (e) {}
+  // La pestaña del navegador también avisa: "(2) SOS — SOS360"
+  try { document.title = (alertas && alertas.length) ? `(${alertas.length}) SOS — SOS360` : 'SOS360 — Seguridad y Monitoreo'; } catch (e) {}
   const cont = document.getElementById('operadorAlertas');
   revisarNuevasAlertas(alertas, clientes);
   if (!alertas || alertas.length === 0) {
@@ -3641,7 +3641,7 @@ function abrirSOS(prueba){
   sosModoPrueba = !!prueba;
   document.getElementById('sosPruebaBanner').style.display = sosModoPrueba ? 'block' : 'none';
   document.getElementById('sosTitulo').textContent = sosModoPrueba ? 'PRUEBA DE ALARMA' : 'ALERTA ENVIADA';
-  document.getElementById('sosSubtitulo').textContent = sosModoPrueba ? 'Así se ve tu pantalla si activas el SOS de verdad' : 'La central Vigil recibió tu emergencia';
+  document.getElementById('sosSubtitulo').textContent = sosModoPrueba ? 'Así se ve tu pantalla si activas el SOS de verdad' : 'La central SOS360 recibió tu emergencia';
   document.getElementById('sosActive').classList.add('show');
   if (!sosModoPrueba) crearAlertaSOS();
   iniciarSeguimientoVivo();
@@ -3695,10 +3695,10 @@ function enviarPushSOS(emailUsuario) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tituloCentral: '🚨 Alerta SOS',
-        cuerpoCentral: `${emailUsuario} activó el botón de pánico. Abre el panel Vigil: la ubicación se ve en vivo en el mapa.`,
+        cuerpoCentral: `${emailUsuario} activó el botón de pánico. Abre el panel SOS360: la ubicación se ve en vivo en el mapa.`,
         propioToken: data.fcmToken || null,
         tituloPropio: 'Alerta enviada',
-        cuerpoPropio: 'Tu alerta SOS fue enviada a la central Vigil.'
+        cuerpoPropio: 'Tu alerta SOS fue enviada a la central SOS360.'
       })
     }).catch((err) => console.error('Error enviando push de SOS:', err));
   }).catch((err) => console.error('Error obteniendo token propio para push:', err));
@@ -3824,8 +3824,8 @@ function iniciarSeguimientoVivo() {
   mejorPrecisionSOS = Infinity;
   if (!navigator.geolocation) { alert("Tu dispositivo no soporta geolocalización."); return; }
   if (!map) {
-    map = L.map('mapaVigil').setView([-33.0472, -71.6127], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'Vigil App', maxZoom: 19 }).addTo(map);
+    map = L.map('mapaSOS360').setView([-33.0472, -71.6127], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'SOS360 App', maxZoom: 19 }).addTo(map);
     marker = L.marker([-33.0472, -71.6127]).addTo(map).bindPopup('Ubicación actual').openPopup();
   }
   gpsAvisoMostrado = false;
@@ -3847,7 +3847,7 @@ function iniciarSeguimientoVivo() {
     (error) => {
       if (error.code === 1 && !gpsAvisoMostrado) { // PERMISSION_DENIED
         gpsAvisoMostrado = true;
-        alert("La ubicación está bloqueada para Vigil. Actívala tocando el candado junto a la dirección del sitio → Permisos → Ubicación → Permitir, y vuelve a intentar. La central igual recibió tu alerta.");
+        alert("La ubicación está bloqueada para SOS360. Actívala tocando el candado junto a la dirección del sitio → Permisos → Ubicación → Permitir, y vuelve a intentar. La central igual recibió tu alerta.");
       }
       // code 2 (sin señal) y 3 (timeout): el watch sigue reintentando solo
       console.warn('GPS:', error.code, error.message);
