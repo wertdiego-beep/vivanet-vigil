@@ -1757,6 +1757,20 @@ function toggleMapaFull() {
   const full = card.classList.toggle('mapa-full');
   const b = document.getElementById('mapaFullBtn');
   if (b) b.textContent = full ? '✕ Salir de pantalla completa' : '⛶ Pantalla completa';
+  // Altura explícita: algunos diseños del panel anulan el display:flex de la
+  // tarjeta, así que calculamos la altura a mano (pantalla menos cabecera).
+  const mc = card.querySelector('.map-container');
+  if (mc) {
+    if (full) {
+      const ajustar = () => { mc.style.setProperty('height', Math.max(200, window.innerHeight - mc.getBoundingClientRect().top - 14) + 'px', 'important'); try { operadorMapa.invalidateSize(); } catch (e) {} };
+      setTimeout(ajustar, 60);
+      window._ajustarMapaFull = ajustar;
+      window.addEventListener('resize', ajustar);
+    } else {
+      mc.style.removeProperty('height');
+      if (window._ajustarMapaFull) { window.removeEventListener('resize', window._ajustarMapaFull); window._ajustarMapaFull = null; }
+    }
+  }
   setTimeout(() => { try { if (operadorMapa) operadorMapa.invalidateSize(); } catch (e) {} }, 250);
 }
 document.addEventListener('keydown', (e) => {
