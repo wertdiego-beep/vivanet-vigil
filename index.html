@@ -387,6 +387,10 @@ textarea{min-height:96px;resize:vertical}
         <input type="text" id="unirseNombre" placeholder="Ej: Pedro Wert">
         <label>Código</label>
         <input type="text" id="unirseCodigoInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase; font-family:'Chakra Petch',sans-serif; letter-spacing:.2em; text-align:center; font-size:1.2rem;" maxlength="6" autocomplete="off">
+        <label style="display:flex; gap:9px; align-items:flex-start; margin:4px 0 10px; font-size:.85rem; cursor:pointer;">
+          <input type="checkbox" id="unirseEsTecnico" style="width:auto; margin:3px 0 0;">
+          <span>🔧 <b>Soy técnico</b> — me entregaron un código de técnico de la central y entraré a atender visitas</span>
+        </label>
         <button class="btn-full" id="unirseRegistroBtn" onclick="unirseDesdeRegistro()">Unirme y entrar</button>
         <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="go('s-modo')">Volver</button>
         <div class="error-msg" id="unirseRegistroError"></div>
@@ -903,7 +907,7 @@ textarea{min-height:96px;resize:vertical}
           <section class="op-view" id="op-view-equipo">
             <div class="card">
               <div class="card-title">Código para técnicos</div>
-              <p style="color:var(--gris); font-size:.85rem; margin-bottom:10px;">Entrégale este código a un técnico. Él debe crear su cuenta, elegir "Empresa" y luego, en "Mi cuenta", usar "Unirme a una familia" con este código y el rol Técnico.</p>
+              <p style="color:var(--gris); font-size:.85rem; margin-bottom:10px;">Entrégale este código a un técnico. Él solo debe crear su cuenta, tocar <b>"Tengo un código"</b>, marcar <b>"Soy técnico"</b> y escribir este código: entra directo a su panel de visitas.</p>
               <div style="display:flex; align-items:center; gap:10px;">
                 <div id="operadorCodigoTecnico" style="font-size:1.4rem; font-weight:700; letter-spacing:2px; background:rgba(255,255,255,.06); padding:8px 14px; border-radius:10px;">------</div>
                 <button class="btn-full" id="copiarCodigoTecnico" style="width:auto; margin:0; padding:8px 14px;">Copiar</button>
@@ -3218,17 +3222,25 @@ function unirseDesdeRegistro() {
   err.style.color = 'var(--rojo)';
   err.textContent = '';
   if (!codigo || codigo.length < 4) { err.textContent = 'Escribe el código que te compartieron.'; return; }
+  const esTecnico = !!(document.getElementById('unirseEsTecnico') || {}).checked;
   btn.disabled = true;
   btn.textContent = 'Conectando…';
   user.getIdToken().then((idToken) => fetch('/api/familia-unir', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken, codigo, rol: null })
-  })).then((r) => r.json()).then((data) => {
+    body: JSON.stringify({ idToken, codigo, rol: esTecnico ? 'tecnico' : null })
+  })).then((r) => r.json()).then(async (data) => {
     btn.disabled = false;
     btn.textContent = 'Unirme y entrar';
     if (!data.ok) { err.textContent = data.error || 'Ese código no existe. Revísalo con quien te lo compartió.'; return; }
-    // Guarda el nombre y entra directo a la app como integrante.
+    if (esTecnico) {
+      // Técnico: guarda su nombre y recarga; la app lo llevará directo a su
+      // panel de visitas (rolEmpresa === 'tecnico').
+      await db.collection('usuarios').doc(user.uid).set({ nombre: nombre, modo: 'empresa' }, { merge: true }).catch(() => {});
+      location.reload();
+      return;
+    }
+    // Integrante de familia: guarda el nombre y entra directo a la app.
     db.collection('usuarios').doc(user.uid).set({ nombre: nombre, modo: 'familia' }, { merge: true }).catch(() => {});
     modoSeleccionado = 'familia';
     document.getElementById('bottomNav').style.display = 'flex';
