@@ -980,6 +980,9 @@ textarea{min-height:96px;resize:vertical}
       <div class="map-label">📍 SEGUIMIENTO EN VIVO</div>
       <div id="mapaSOS360"></div>
     </div>
+    <div id="sosEstadoVivo" style="display:none; align-items:center; gap:10px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.3); border-radius:12px; padding:10px 14px; margin:10px 0; font-weight:700; font-size:.9rem;">
+      <span id="sosEstadoIcono" style="font-size:1.2rem;">🟡</span><span id="sosEstadoTxt">Alerta enviada — esperando a la central…</span>
+    </div>
     <div class="sos-steps">
       <div class="sos-step"><span class="check">✅</span>Central de monitoreo notificada</div>
       <div class="sos-step"><span class="check">✅</span>Ubicación GPS compartida</div>
@@ -3649,6 +3652,7 @@ function abrirSOS(prueba){
 function cerrarSOS(){
   document.getElementById('sosActive').classList.remove('show');
   detenerSeguimientoVivo();
+  detenerEscuchaEstado();
   if (!sosModoPrueba) cancelarAlertaSOS();
   sosModoPrueba = false;
 }
@@ -3667,6 +3671,7 @@ function crearAlertaSOS() {
     ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
   }).then((docRef) => {
     alertaActualId = docRef.id;
+    escucharEstadoAlerta(user.uid, docRef.id);
     // Si el GPS ya había entregado una ubicación antes de que la alerta
     // terminara de crearse en Firestore, la aplicamos ahora (evita perderla).
     if (ubicacionPendiente) {
@@ -3788,6 +3793,40 @@ function notificarUbicacionContactosEmergencia(lat, lng) {
       if (c.chatId) notificarUbicacionTelegram(lat, lng, c.chatId);
     });
   }).catch((err) => console.error('Error notificando ubicación a contactos:', err));
+}
+
+// ══ ESTADO DE LA ALERTA EN VIVO (el cliente ve qué hace la central) ══
+let _unsubEstadoAlerta = null;
+function pintarEstadoAlerta(icono, txt) {
+  const cont = document.getElementById('sosEstadoVivo');
+  const i = document.getElementById('sosEstadoIcono');
+  const t = document.getElementById('sosEstadoTxt');
+  if (!cont || !i || !t) return;
+  cont.style.display = 'flex';
+  i.textContent = icono;
+  t.textContent = txt;
+}
+function escucharEstadoAlerta(uid, alertaId) {
+  if (_unsubEstadoAlerta) { _unsubEstadoAlerta(); _unsubEstadoAlerta = null; }
+  pintarEstadoAlerta('🟡', 'Alerta enviada — esperando a la central…');
+  _unsubEstadoAlerta = db.collection('usuarios').doc(uid).collection('alertas').doc(alertaId)
+    .onSnapshot((doc) => {
+      if (!doc.exists) return;
+      const d = doc.data() || {};
+      if (d.estado === 'verificando') {
+        pintarEstadoAlerta('🔵', 'Un operador está atendiendo tu alerta ahora');
+        if (navigator.vibrate) navigator.vibrate(60);
+      } else if (d.estado === 'atendida') {
+        pintarEstadoAlerta('✅', d.resultado === 'real' ? 'Emergencia confirmada — la ayuda fue despachada' : 'Tu alerta fue atendida por la central');
+      } else if (d.estado === 'activa') {
+        pintarEstadoAlerta('🟡', 'Alerta enviada — esperando a la central…');
+      }
+    }, () => {});
+}
+function detenerEscuchaEstado() {
+  if (_unsubEstadoAlerta) { _unsubEstadoAlerta(); _unsubEstadoAlerta = null; }
+  const cont = document.getElementById('sosEstadoVivo');
+  if (cont) cont.style.display = 'none';
 }
 
 function cancelarAlertaSOS() {
