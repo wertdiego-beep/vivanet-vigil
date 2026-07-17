@@ -175,6 +175,10 @@ body.op-alarma-flash #s-operador .op-main{animation:opAlarmaFlash 1s ease-in-out
   #s-operador .op-content{padding:14px 14px 40px}
   #s-operador .op-kpis{gap:8px}
 }
+/* ── Mapa en pantalla completa ── */
+#s-operador #operadorMapaCard.mapa-full{position:fixed;inset:0;z-index:6000;margin:0;border-radius:0;display:flex;flex-direction:column;overflow:hidden}
+#s-operador #operadorMapaCard.mapa-full .map-container{flex:1;height:auto!important;max-width:none;margin:0}
+#s-operador #operadorMapaCard.mapa-full #zonaPanel{max-height:32vh;overflow-y:auto}
 /* ── Celular: topbar en dos filas, mapa más bajo, botones táctiles ── */
 @media(max-width:560px){
   #s-operador .op-topbar{flex-wrap:wrap;height:auto;min-height:0;padding:10px 12px;gap:8px;row-gap:8px}
@@ -708,6 +712,7 @@ textarea{min-height:96px;resize:vertical}
                   <button id="zonaBtn" onclick="toggleModoZona()" title="Marca un área en el mapa (por ejemplo, entre una calle y otra) y mira el historial de alarmas de ahí" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">📐 Marcar zona</button>
                   <button id="probarSirenaBtn" onclick="probarSirena()" title="Prueba la sirena y deja el sonido habilitado en este navegador" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">🔊 Probar sirena</button>
                   <button id="calorBtn" onclick="toggleMapaCalor()" title="Pinta en el mapa las zonas con más alarmas históricas" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">🔥 Zonas calientes</button>
+                  <button id="mapaFullBtn" onclick="toggleMapaFull()" title="Expande el mapa a toda la pantalla (Esc para salir)" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">⛶ Pantalla completa</button>
                 </div>
                 <div class="map-container" style="max-width:none; height:520px; margin:0;">
                   <div id="mapaOperador" style="width:100%; height:100%; border-radius:12px;"></div>
@@ -1744,6 +1749,21 @@ async function opActivarPush() {
 }
 // Si ya estaban concedidos los permisos, mostrarlo al entrar al panel.
 setTimeout(() => { try { if (Notification.permission === 'granted') opPintarPush('Avisos activos ✓'); } catch (e) {} }, 1500);
+
+// Mapa a pantalla completa: para monitorear en un monitor dedicado.
+function toggleMapaFull() {
+  const card = document.getElementById('operadorMapaCard');
+  if (!card) return;
+  const full = card.classList.toggle('mapa-full');
+  const b = document.getElementById('mapaFullBtn');
+  if (b) b.textContent = full ? '✕ Salir de pantalla completa' : '⛶ Pantalla completa';
+  setTimeout(() => { try { if (operadorMapa) operadorMapa.invalidateSize(); } catch (e) {} }, 250);
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const c = document.getElementById('operadorMapaCard');
+  if (c && c.classList.contains('mapa-full')) toggleMapaFull();
+});
 
 function revisarNuevasAlertas(alertas, clientes) {
   const activas = (alertas || []).filter(function (a) { return a.estado === 'activa'; });
