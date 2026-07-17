@@ -379,22 +379,26 @@ textarea{min-height:96px;resize:vertical}
       </button>
     </div>
     <!-- ══ UNIRSE CON CÓDIGO (primer ingreso) ══ -->
-    <div class="screen" id="s-unirse" style="justify-content:center; padding:40px 20px;">
+    <div class="screen-scroll" id="s-unirse">
       <div class="card">
         <div class="card-title">Únete con tu código</div>
-        <p style="color:var(--gris); font-size:.85rem; margin-bottom:10px;">Pídele el código de 6 letras a la persona dueña del plan (por ejemplo, papá o mamá) y escríbelo aquí. Quedarás conectado a su misma cuenta, con sus contactos de emergencia.</p>
         <label>Tu nombre</label>
         <input type="text" id="unirseNombre" placeholder="Ej: Pedro Wert">
-        <label>Código</label>
-        <input type="text" id="unirseCodigoInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase; font-family:'Chakra Petch',sans-serif; letter-spacing:.2em; text-align:center; font-size:1.2rem;" maxlength="6" autocomplete="off">
-        <label style="display:flex; gap:9px; align-items:flex-start; margin:4px 0 10px; font-size:.85rem; cursor:pointer;">
-          <input type="checkbox" id="unirseEsTecnico" style="width:auto; margin:3px 0 0;">
-          <span>🔧 <b>Soy técnico</b> — me entregaron un código de técnico de la central y entraré a atender visitas</span>
-        </label>
-        <button class="btn-full" id="unirseRegistroBtn" onclick="unirseDesdeRegistro()">Unirme y entrar</button>
-        <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="go('s-modo')">Volver</button>
-        <div class="error-msg" id="unirseRegistroError"></div>
       </div>
+      <div class="card" style="border:1.5px solid var(--violeta);">
+        <div class="card-title">👨‍👩‍👧 Código de familia</div>
+        <p style="color:var(--gris); font-size:.82rem; margin-bottom:8px;">Pídele el código de 6 letras a la persona dueña del plan (por ejemplo, papá o mamá). Quedarás en su misma cuenta, con sus contactos de emergencia.</p>
+        <input type="text" id="unirseCodigoInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase; font-family:'Chakra Petch',sans-serif; letter-spacing:.2em; text-align:center; font-size:1.2rem;" maxlength="6" autocomplete="off">
+        <button class="btn-full" id="unirseRegistroBtn" onclick="unirseDesdeRegistro('familia')">Unirme a mi familia</button>
+      </div>
+      <div class="card" style="border:1.5px solid rgba(255,181,71,.55);">
+        <div class="card-title">🔧 Código de técnico</div>
+        <p style="color:var(--gris); font-size:.82rem; margin-bottom:8px;">Si la central Vigil te entregó un código de técnico, escríbelo aquí: entrarás directo a tu panel de visitas asignadas.</p>
+        <input type="text" id="unirseCodigoTecnicoInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase; font-family:'Chakra Petch',sans-serif; letter-spacing:.2em; text-align:center; font-size:1.2rem;" maxlength="6" autocomplete="off">
+        <button class="btn-full" id="unirseTecnicoBtn" style="background:#B57500;" onclick="unirseDesdeRegistro('tecnico')">Entrar como técnico</button>
+      </div>
+      <div class="error-msg" id="unirseRegistroError" style="text-align:center;"></div>
+      <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="go('s-modo')">Volver</button>
     </div>
     <!-- ══ PLAN Y PAGO (primer ingreso · demo, sin cobro real) ══ -->
     <div class="screen-scroll" id="s-plan">
@@ -3212,17 +3216,18 @@ if (recibirAlertasFamiliaChk) {
 // ══ UNIRSE CON CÓDIGO DURANTE EL REGISTRO ══
 // El integrante (hijo) no pasa por perfil ni por el paso de pago: entra
 // directo a la app conectado al plan del titular que ya pagó.
-function unirseDesdeRegistro() {
+function unirseDesdeRegistro(tipo) {
   const user = auth.currentUser;
   if (!user) return;
+  const esTecnico = tipo === 'tecnico';
   const err = document.getElementById('unirseRegistroError');
-  const btn = document.getElementById('unirseRegistroBtn');
+  const btn = document.getElementById(esTecnico ? 'unirseTecnicoBtn' : 'unirseRegistroBtn');
+  const txtOriginal = btn.textContent;
   const nombre = document.getElementById('unirseNombre').value.trim() || user.email.split('@')[0];
-  const codigo = document.getElementById('unirseCodigoInput').value.trim().toUpperCase();
+  const codigo = document.getElementById(esTecnico ? 'unirseCodigoTecnicoInput' : 'unirseCodigoInput').value.trim().toUpperCase();
   err.style.color = 'var(--rojo)';
   err.textContent = '';
-  if (!codigo || codigo.length < 4) { err.textContent = 'Escribe el código que te compartieron.'; return; }
-  const esTecnico = !!(document.getElementById('unirseEsTecnico') || {}).checked;
+  if (!codigo || codigo.length < 4) { err.textContent = esTecnico ? 'Escribe el código de técnico que te entregó la central.' : 'Escribe el código que te compartieron.'; return; }
   btn.disabled = true;
   btn.textContent = 'Conectando…';
   user.getIdToken().then((idToken) => fetch('/api/familia-unir', {
@@ -3231,7 +3236,7 @@ function unirseDesdeRegistro() {
     body: JSON.stringify({ idToken, codigo, rol: esTecnico ? 'tecnico' : null })
   })).then((r) => r.json()).then(async (data) => {
     btn.disabled = false;
-    btn.textContent = 'Unirme y entrar';
+    btn.textContent = txtOriginal;
     if (!data.ok) { err.textContent = data.error || 'Ese código no existe. Revísalo con quien te lo compartió.'; return; }
     if (esTecnico) {
       // Técnico: guarda su nombre y recarga; la app lo llevará directo a su
@@ -3249,7 +3254,7 @@ function unirseDesdeRegistro() {
     go('s-inicio');
   }).catch(() => {
     btn.disabled = false;
-    btn.textContent = 'Unirme y entrar';
+    btn.textContent = txtOriginal;
     err.textContent = 'No pudimos conectarte. Revisa tu internet e intenta de nuevo.';
   });
 }
