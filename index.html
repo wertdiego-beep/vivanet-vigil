@@ -368,6 +368,29 @@ textarea{min-height:96px;resize:vertical}
           </div>
         </div>
       </button>
+      <button class="card" style="text-align:left; width:100%; cursor:pointer;" onclick="go('s-unirse')">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="width:50px; height:50px; background:rgba(255,181,71,.16); color:#B57500; border-radius:14px; display:grid; place-items:center; font-size:1.6rem;">🔑</span>
+          <div>
+            <strong style="font-size:1.05rem;">Tengo un código</strong>
+            <div style="font-size:.8rem; color:var(--gris);">Mi familia o empresa ya tiene Vigil: quiero incorporarme con su código</div>
+          </div>
+        </div>
+      </button>
+    </div>
+    <!-- ══ UNIRSE CON CÓDIGO (primer ingreso) ══ -->
+    <div class="screen" id="s-unirse" style="justify-content:center; padding:40px 20px;">
+      <div class="card">
+        <div class="card-title">Únete con tu código</div>
+        <p style="color:var(--gris); font-size:.85rem; margin-bottom:10px;">Pídele el código de 6 letras a la persona dueña del plan (por ejemplo, papá o mamá) y escríbelo aquí. Quedarás conectado a su misma cuenta, con sus contactos de emergencia.</p>
+        <label>Tu nombre</label>
+        <input type="text" id="unirseNombre" placeholder="Ej: Pedro Wert">
+        <label>Código</label>
+        <input type="text" id="unirseCodigoInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase; font-family:'Chakra Petch',sans-serif; letter-spacing:.2em; text-align:center; font-size:1.2rem;" maxlength="6" autocomplete="off">
+        <button class="btn-full" id="unirseRegistroBtn" onclick="unirseDesdeRegistro()">Unirme y entrar</button>
+        <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="go('s-modo')">Volver</button>
+        <div class="error-msg" id="unirseRegistroError"></div>
+      </div>
     </div>
     <!-- ══ PLAN Y PAGO (primer ingreso · demo, sin cobro real) ══ -->
     <div class="screen-scroll" id="s-plan">
@@ -3179,6 +3202,43 @@ if (recibirAlertasFamiliaChk) {
       info.style.color = 'var(--rojo)';
       info.textContent = 'No pudimos guardar el cambio.';
     });
+  });
+}
+
+// ══ UNIRSE CON CÓDIGO DURANTE EL REGISTRO ══
+// El integrante (hijo) no pasa por perfil ni por el paso de pago: entra
+// directo a la app conectado al plan del titular que ya pagó.
+function unirseDesdeRegistro() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const err = document.getElementById('unirseRegistroError');
+  const btn = document.getElementById('unirseRegistroBtn');
+  const nombre = document.getElementById('unirseNombre').value.trim() || user.email.split('@')[0];
+  const codigo = document.getElementById('unirseCodigoInput').value.trim().toUpperCase();
+  err.style.color = 'var(--rojo)';
+  err.textContent = '';
+  if (!codigo || codigo.length < 4) { err.textContent = 'Escribe el código que te compartieron.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Conectando…';
+  user.getIdToken().then((idToken) => fetch('/api/familia-unir', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken, codigo, rol: null })
+  })).then((r) => r.json()).then((data) => {
+    btn.disabled = false;
+    btn.textContent = 'Unirme y entrar';
+    if (!data.ok) { err.textContent = data.error || 'Ese código no existe. Revísalo con quien te lo compartió.'; return; }
+    // Guarda el nombre y entra directo a la app como integrante.
+    db.collection('usuarios').doc(user.uid).set({ nombre: nombre, modo: 'familia' }, { merge: true }).catch(() => {});
+    modoSeleccionado = 'familia';
+    document.getElementById('bottomNav').style.display = 'flex';
+    aplicarModoNav('familia');
+    cargarDatosUsuario(user.uid);
+    go('s-inicio');
+  }).catch(() => {
+    btn.disabled = false;
+    btn.textContent = 'Unirme y entrar';
+    err.textContent = 'No pudimos conectarte. Revisa tu internet e intenta de nuevo.';
   });
 }
 
