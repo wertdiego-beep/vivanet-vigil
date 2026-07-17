@@ -193,7 +193,7 @@ export default async function handler(req, res) {
       const r = await enviarPush(
         accessToken,
         persona.fcmToken,
-        '🚨 Alerta familiar Vigil',
+        '🚨 Alerta familiar SOS360',
         `${nombre} activó el botón de pánico. Revisa su ubicación o llámalo.`
       );
       resultados.push({ uid: persona.uid, ok: r.ok });

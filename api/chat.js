@@ -1,5 +1,5 @@
 // Función serverless de Vercel: /api/chat
-// Recibe el mensaje del usuario desde el chat de Vigil y responde usando Gemini,
+// Recibe el mensaje del usuario desde el chat de SOS360 y responde usando Gemini,
 // manteniendo la clave de la API oculta en el servidor (variable de entorno GEMINI_API_KEY).
 
 export default async function handler(req, res) {
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   }
 
   const systemPrompt =
-    'Eres el asistente virtual de Vigil, una app de seguridad y monitoreo para locales comerciales en Chile. ' +
+    'Eres el asistente virtual de SOS360, una app de seguridad y monitoreo para locales comerciales en Chile. ' +
     'Ayudas con dudas sobre alarmas, cámaras y sensores, puedes sugerir crear un ticket de soporte o agendar una visita técnica, ' +
     'y respondes de forma breve, clara y amable, en español de Chile. ' +
     'No inventes datos que no tengas: si no sabes algo específico del sistema del usuario, dilo y ofrece crear un ticket de soporte. ' +
