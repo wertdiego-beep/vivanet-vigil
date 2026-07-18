@@ -108,7 +108,6 @@ async function enviarPush(accessToken, token, titulo, cuerpo) {
 }
 
 const FIREBASE_API_KEY = 'AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g'; // clave pública del cliente web
-const OPERADORES = (process.env.OPERADORES_UIDS || CENTRAL_UID).split(',').map((s) => s.trim()).filter(Boolean);
 
 // ── DIFUSIÓN MASIVA: un operador envía un aviso push a TODOS los clientes de
 // su empresa que tengan notificaciones activadas (espec. 27 y 40 del pliego).
