@@ -548,13 +548,13 @@ textarea{min-height:96px;resize:vertical}
         <button class="quick" id="qChatCentral" onclick="abrirChatCentral()" style="display:none">
           <span class="ic ic-blue">💬</span><strong>Chat central</strong><small>Escríbenos directo</small>
         </button>
-        <button class="quick" onclick="go('s-soporte')" data-modo="ambos" data-solo-duenio>
+        <button class="quick" onclick="go('s-soporte')" data-modo="ambos" data-solo-duenio data-cli="soporte">
           <span class="ic ic-amber">🛠</span><strong>Reportar falla</strong><small>Cámara, sensor, alarma…</small>
         </button>
         <button class="quick" onclick="go('s-estado')" data-modo="empresa">
           <span class="ic ic-blue">📊</span><strong>Mi sistema</strong><small>Estado y eventos</small>
         </button>
-        <button class="quick" onclick="go('s-chat')">
+        <button class="quick" onclick="go('s-chat')" data-cli="asistente">
           <span class="ic">💬</span><strong>Asistente SOS360</strong><small>Respuesta inmediata</small>
         </button>
         <button class="quick" onclick="alert('Demo: aquí se integraría Mercado Pago / Webpay para pagar la mantención mensual.')" data-modo="empresa">
@@ -745,7 +745,7 @@ textarea{min-height:96px;resize:vertical}
             <div style="font-size:.8rem; color:var(--gris);">Simula la pantalla de alarma sin avisar a la central ni a tus contactos</div>
           </div>
         </div>
-        <button class="btn-full" onclick="abrirSOS(true)">Iniciar prueba</button>
+        <button class="btn-full" id="btnProbarSOS" onclick="abrirSOS(true)">Iniciar prueba</button>
       </div>
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
@@ -1153,8 +1153,8 @@ textarea{min-height:96px;resize:vertical}
     <button data-s="s-estado" data-modo="empresa"><span class="nic">📊</span>Estado</button>
     <button data-s="s-contactos" data-modo="familia" style="display:none"><span class="nic">📞</span>Contactos</button>
     <button onclick="abrirSOS()" style="width:auto"><span class="sos-mini">SOS</span></button>
-    <button data-s="s-soporte" data-modo="empresa" data-solo-duenio><span class="nic">🛠</span>Soporte</button>
-    <button data-s="s-chat" data-modo="familia" style="display:none"><span class="nic">💬</span>Chat</button>
+    <button data-s="s-soporte" data-modo="empresa" data-solo-duenio data-cli="soporte"><span class="nic">🛠</span>Soporte</button>
+    <button data-s="s-chat" data-modo="familia" style="display:none" data-cli="asistente"><span class="nic">💬</span>Chat</button>
     <button data-s="s-mas"><span class="nic">☰</span>Más</button>
   </div>
 </div>
@@ -3676,9 +3676,15 @@ function cargarConfigCliente() {
     configCliente = d;
     const f = d.funciones || {};
     const mostrar = (id, on) => { const b = document.getElementById(id); if (b) b.style.display = on ? '' : 'none'; };
+    // Estas nacen apagadas: solo se ven si la central las prende.
     mostrar('qReporte', f.reportes === true);
     mostrar('qComunidad', f.comunidad === true);
     mostrar('qChatCentral', f.chat === true);
+    // Estas nacen encendidas: solo se ocultan si la central las apaga (=== false).
+    document.querySelectorAll('[data-cli="soporte"]').forEach((b) => { b.style.display = f.soporte === false ? 'none' : ''; });
+    document.querySelectorAll('[data-cli="asistente"]').forEach((b) => { b.style.display = f.asistente === false ? 'none' : ''; });
+    window._sosPruebaHabilitado = f.modoprueba !== false;
+    const bp = document.getElementById('btnProbarSOS'); if (bp) bp.style.display = f.modoprueba === false ? 'none' : '';
   }).catch(() => {});
 }
 // Comprime la imagen en el navegador (max 900px, jpeg) para caber en Firestore.
@@ -4151,11 +4157,14 @@ function saAsignarOperador() {
 
 /* ── ⚙️ FUNCIONES DE LA APP (interruptores globales del superadmin) ── */
 const FUNCIONES_DEF = [
-  { k: 'difusion',   n: '📣 Mensajes masivos', d: 'Los operadores pueden enviar avisos push a todos sus clientes (espec. 27 y 40 del pliego).' },
-  { k: 'respuestas', n: '💬 Respuestas predeterminadas', d: 'Botones con textos listos al cerrar una alerta (espec. 41).' },
-  { k: 'reportes',   n: '📷 Reportes por categoría con foto', d: 'Los clientes reportan incidentes con foto; el panel los gestiona (espec. 15/20/31/38).' },
-  { k: 'chat',       n: '💭 Chat cliente–operador', d: 'Chat escrito entre el cliente y tu central (espec. 22).' },
-  { k: 'comunidad',  n: '🏘 Vista comunitaria', d: 'Los vecinos ven y comentan los reportes de su comuna (espec. 23/26).' }
+  { g: 'Central / operador', k: 'difusion',   n: '📣 Mensajes masivos', d: 'Los operadores pueden enviar avisos push a todos sus clientes (espec. 27 y 40).' },
+  { g: 'Central / operador', k: 'respuestas', n: '💬 Respuestas predeterminadas', d: 'Botones con textos listos al cerrar una alerta (espec. 41).' },
+  { g: 'App del cliente',    k: 'reportes',   n: '📷 Reportar incidentes', d: 'El cliente reporta con foto y categoría; tu panel los gestiona (espec. 15/20/31/38).' },
+  { g: 'App del cliente',    k: 'chat',       n: '💭 Chat con la central', d: 'Chat escrito entre el cliente y tu central (espec. 22).' },
+  { g: 'App del cliente',    k: 'comunidad',  n: '🏘 Mi comuna', d: 'Los vecinos ven y comentan los reportes de su comuna (espec. 23/26).' },
+  { g: 'App del cliente',    k: 'soporte',    n: '🛠 Reportar falla y soporte', d: 'El cliente puede reportar fallas de su equipo y agendar visita técnica.', on: true },
+  { g: 'App del cliente',    k: 'asistente',  n: '🤖 Asistente virtual (IA)', d: 'Chat con el asistente IA dentro de la app (espec. resp. 24h).', on: true },
+  { g: 'App del cliente',    k: 'modoprueba', n: '🧪 Modo prueba del SOS', d: 'El cliente puede practicar el botón SOS sin enviar una alerta real.', on: true }
 ];
 let funcionesApp = {};
 function saCargarCategorias() {
@@ -4187,22 +4196,25 @@ function saCargarFunciones() {
   saFetch({ accion: 'sa-funciones', modo: 'get' }).then((d) => {
     if (!d.ok) return;
     funcionesApp = d.funciones || {};
+    let ultimoGrupo = '';
     cont.innerHTML = FUNCIONES_DEF.map((f) => {
-      const on = f.dev ? false : funcionesApp[f.k] !== false && funcionesApp[f.k] !== undefined ? funcionesApp[f.k] : (funcionesApp[f.k] === undefined ? false : true);
-      const activa = !f.dev && funcionesApp[f.k] === true;
-      return `
-      <div style="display:flex; align-items:center; gap:12px; border:1px solid var(--linea); border-radius:12px; padding:10px 14px; ${f.dev ? 'opacity:.5;' : ''}">
+      // Valor efectivo: si nunca se guardó, usa el defecto (on:true = encendida).
+      const activa = funcionesApp[f.k] === undefined ? (f.on === true) : (funcionesApp[f.k] === true);
+      let cab = '';
+      if (f.g && f.g !== ultimoGrupo) { ultimoGrupo = f.g; cab = `<div style="font-size:.62rem; color:var(--gris); text-transform:uppercase; letter-spacing:.09em; margin:10px 0 2px;">${f.g}</div>`; }
+      return cab + `
+      <div style="display:flex; align-items:center; gap:12px; border:1px solid var(--linea); border-radius:12px; padding:10px 14px;">
         <div style="flex:1;"><strong style="font-size:.85rem;">${f.n}</strong><small style="display:block; color:var(--gris);">${f.d}</small></div>
-        ${f.dev ? '<small style="color:var(--gris); white-space:nowrap;">Próximamente</small>' : `
-        <button onclick="saToggleFuncion('${f.k}')" id="fn-${f.k}" style="width:52px; height:28px; border-radius:99px; border:none; cursor:pointer; position:relative; background:${activa ? 'var(--verde)' : '#3a4059'}; transition:background .2s;">
+        <button onclick="saToggleFuncion('${f.k}', ${f.on === true})" id="fn-${f.k}" style="width:52px; height:28px; border-radius:99px; border:none; cursor:pointer; position:relative; background:${activa ? 'var(--verde)' : '#3a4059'}; transition:background .2s;">
           <span style="position:absolute; top:3px; ${activa ? 'right:3px' : 'left:3px'}; width:22px; height:22px; border-radius:50%; background:#fff;"></span>
-        </button>`}
+        </button>
       </div>`;
     }).join('');
   });
 }
-function saToggleFuncion(k) {
-  funcionesApp[k] = !(funcionesApp[k] === true);
+function saToggleFuncion(k, defOn) {
+  const actual = funcionesApp[k] === undefined ? (defOn === true) : (funcionesApp[k] === true);
+  funcionesApp[k] = !actual;
   const b = document.getElementById('fn-' + k);
   if (b) {
     const on = funcionesApp[k] === true;
@@ -4418,6 +4430,7 @@ sosBtn.addEventListener('touchstart',startSOS,{passive:false});
 ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>sosBtn.addEventListener(ev,stopSOS));
 let sosModoPrueba = false;
 function abrirSOS(prueba){
+  if (prueba && window._sosPruebaHabilitado === false) { alert('El modo prueba está desactivado por la central.'); return; }
   sosModoPrueba = !!prueba;
   document.getElementById('sosPruebaBanner').style.display = sosModoPrueba ? 'block' : 'none';
   document.getElementById('sosTitulo').textContent = sosModoPrueba ? 'PRUEBA DE ALARMA' : 'ALERTA ENVIADA';
