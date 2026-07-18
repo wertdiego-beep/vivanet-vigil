@@ -226,10 +226,29 @@ export default async function handler(req, res) {
 
     const accessToken = await obtenerAccessToken();
     const codigoNormalizado = codigo.trim().toUpperCase();
+
+    // ¿Es un código de EQUIPO de empresa? (el jefe lo entrega a su personal)
+    const empUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
+    const empResp = await fetch(empUrl, {
+      method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'empresas' }], where: { fieldFilter: { field: { fieldPath: 'codigoEquipo' }, op: 'EQUAL', value: { stringValue: codigoNormalizado } } }, limit: 1 } })
+    }).then((r) => r.json());
+    const empDoc = (empResp || []).find((x) => x.document);
+    if (empDoc) {
+      const empId = empDoc.document.name.split('/').pop();
+      const rolValido = ['jefe', 'gerente', 'empleado', 'tecnico', 'supervisor', 'guardia'].includes(rol) ? rol : 'empleado';
+      await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}?updateMask.fieldPaths=empresaId&updateMask.fieldPaths=rolEmpresa&updateMask.fieldPaths=modo`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { empresaId: { stringValue: empId }, rolEmpresa: { stringValue: rolValido }, modo: { stringValue: 'empresa' } } })
+      });
+      res.status(200).json({ ok: true, tipoEmpresa: true, empresaId: empId });
+      return;
+    }
+
     const titular = await buscarTitularPorCodigo(accessToken, codigoNormalizado);
 
     if (!titular) {
-      res.status(404).json({ error: 'No encontramos ninguna familia con ese código' });
+      res.status(404).json({ error: 'No encontramos ninguna familia ni empresa con ese código' });
       return;
     }
     if (titular.uid === uid) {

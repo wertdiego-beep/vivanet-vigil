@@ -108,6 +108,7 @@ async function listarClientes(accessToken) {
         rolEmpresa: f.rolEmpresa?.stringValue || '',
         grupoFamiliarId: f.grupoFamiliarId?.stringValue || '',
         ultimaSenal: f.ultimaSenal?.timestampValue || f.ultimaSenal?.stringValue || null,
+        operadorDe: f.operadorDe?.stringValue || '',
         // Multitenant: usuarios sin empresa pertenecen a la empresa original.
         empresaId: f.empresaId?.stringValue || 'sos360-la-serena'
       };
@@ -481,11 +482,44 @@ export default async function handler(req, res) {
       }
     }
 
+    if (accion === 'emp-codigo') {
+      // Código de equipo de la empresa del operador (para sumar personal).
+      const rutaEmp = `${base0}/empresas/${empresaOperador}`;
+      let doc = await fetch(rutaEmp, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      let cod = doc.fields?.codigoEquipo?.stringValue;
+      if (!cod || req.body.regenerar) {
+        cod = Math.random().toString(36).slice(2, 8).toUpperCase();
+        await fetch(`${rutaEmp}?updateMask.fieldPaths=codigoEquipo`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { codigoEquipo: { stringValue: cod } } })
+        });
+      }
+      res.status(200).json({ ok: true, codigo: cod });
+      return;
+    }
+    if (accion === 'emp-operador') {
+      // El jefe/gerente promueve (o quita) a un integrante como operador de la central.
+      const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRol !== 'jefe' && miRol !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente puede nombrar operadores.' }); return; }
+      const destino = (req.body.personalUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(destino)) { res.status(400).json({ error: 'Persona no válida' }); return; }
+      const docD = await fetch(`${base0}/usuarios/${destino}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const empD = docD.fields?.empresaId?.stringValue || 'sos360-la-serena';
+      if (!esSA && empD !== empresaOperador) { res.status(403).json({ error: 'Esa persona es de otra empresa.' }); return; }
+      // operadorDe = empresa (lo habilita como operador) o vacío (lo quita).
+      await fetch(`${base0}/usuarios/${destino}?updateMask.fieldPaths=operadorDe`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { operadorDe: { stringValue: req.body.quitar ? '' : empD } } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
     if (accion === 'emp-personal') {
+      // Personal de la empresa: incluye si es operador o no.
       // Personal de la empresa del operador: integrantes con rolEmpresa.
       const clientesTodos = await listarClientes(accessToken);
       const personal = clientesTodos.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa)
-        .map((c) => ({ uid: c.uid, nombre: c.local || c.nombre || 'Sin nombre', rol: c.rolEmpresa }));
+        .map((c) => ({ uid: c.uid, nombre: c.local || c.nombre || 'Sin nombre', rol: c.rolEmpresa, esOperador: !!c.operadorDe }));
       res.status(200).json({ ok: true, personal, empresa: empresaOperador });
       return;
     }
