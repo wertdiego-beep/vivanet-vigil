@@ -1042,6 +1042,15 @@ textarea{min-height:96px;resize:vertical}
                 <b>Roles disponibles:</b> 👑 Jefe/a (manda todo) · 🎩 Gerente (gestiona personal) · 🛡 Supervisor (coordina turnos) · 👮 Guardia · 👤 Empleado/a · 🔧 Técnico.
               </div>
             </div>
+            <div class="card">
+              <div class="card-title">🔑 Código de equipo</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Entrégale este código a tu personal. Ellos crean su cuenta, tocan "Tengo un código", lo escriben, y quedan dentro de tu empresa. Después les asignas su cargo aquí arriba.</p>
+              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <div id="empCodigo" style="font-family:'Chakra Petch',sans-serif; font-size:1.6rem; font-weight:700; letter-spacing:.2em; background:var(--violeta-suave); color:var(--violeta); padding:10px 20px; border-radius:12px;">——————</div>
+                <button class="btn-full" style="width:auto; margin:0; padding:9px 16px;" onclick="empCopiarCodigo()" id="empCopiarBtn">Copiar</button>
+                <button class="btn-full" style="width:auto; margin:0; padding:9px 16px; background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="empRegenerarCodigo()">Generar nuevo</button>
+              </div>
+            </div>
           </section>
           <!-- ── Vista: Reportes de incidentes ── -->
           <section class="op-view" id="op-view-reportes">
@@ -4360,19 +4369,45 @@ const ROLES_EMP = [
   { k: 'jefe', n: '👑 Jefe/a' }, { k: 'gerente', n: '🎩 Gerente' }, { k: 'supervisor', n: '🛡 Supervisor' },
   { k: 'guardia', n: '👮 Guardia' }, { k: 'empleado', n: '👤 Empleado/a' }, { k: 'tecnico', n: '🔧 Técnico' }
 ];
+function empCargarCodigo(regen) {
+  saFetch({ accion: 'emp-codigo', regenerar: !!regen }).then((d) => {
+    const el = document.getElementById('empCodigo');
+    if (el && d.ok) el.textContent = d.codigo;
+  });
+}
+function empCopiarCodigo() {
+  const el = document.getElementById('empCodigo');
+  const b = document.getElementById('empCopiarBtn');
+  if (!el) return;
+  try { navigator.clipboard.writeText(el.textContent.trim()).then(() => { if (b) { b.textContent = 'Copiado ✓'; setTimeout(() => b.textContent = 'Copiar', 2000); } }); } catch (e) {}
+}
+function empRegenerarCodigo() {
+  if (!confirm('¿Generar un código nuevo? El anterior dejará de funcionar para sumar personal.')) return;
+  empCargarCodigo(true);
+}
+function empHacerOperador(uid, esOp) {
+  const msg = esOp ? '¿Quitar el acceso de operador a esta persona?' : '¿Dar acceso de OPERADOR a esta persona? Podrá ver el panel de la central y atender alertas.';
+  if (!confirm(msg)) return;
+  saFetch({ accion: 'emp-operador', personalUid: uid, quitar: esOp }).then((d) => {
+    if (!d.ok) alert(d.error || 'Error');
+    cargarPersonal();
+  });
+}
 function cargarPersonal() {
+  empCargarCodigo(false);
   const cont = document.getElementById('personalLista');
   if (!cont) return;
   saFetch({ accion: 'emp-personal' }).then((d) => {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     if (!d.personal.length) { cont.innerHTML = '<div class="evento"><div><strong>Aún no tienes personal con cargo.</strong><small>Cuando alguien se una con tu código de empresa, aparecerá aquí para asignarle un rol.</small></div></div>'; return; }
     cont.innerHTML = d.personal.map((p, i) => `
-      <div style="display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--linea); padding:10px 0;">
+      <div style="display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--linea); padding:10px 0; flex-wrap:wrap;">
         <div style="width:34px; height:34px; border-radius:50%; background:var(--violeta-suave); color:#9d8fff; display:grid; place-items:center; font-weight:700;">${(p.nombre || '?').slice(0,1).toUpperCase()}</div>
-        <strong style="flex:1; font-size:.88rem;">${p.nombre}</strong>
+        <strong style="flex:1; font-size:.88rem; min-width:120px;">${p.nombre} ${p.esOperador ? '<span style="font-size:.62rem; color:var(--verde); background:var(--verde-suave); padding:2px 8px; border-radius:99px;">OPERADOR</span>' : ''}</strong>
         <select onchange="cambiarRol('${p.uid}', this.value)" style="width:auto; margin:0; padding:7px 10px; font-size:.8rem;">
           ${ROLES_EMP.map((r) => `<option value="${r.k}" ${p.rol === r.k ? 'selected' : ''}>${r.n}</option>`).join('')}
         </select>
+        <button onclick="empHacerOperador('${p.uid}', ${p.esOperador === true})" style="padding:6px 12px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid ${p.esOperador ? 'rgba(229,52,75,.5)' : 'var(--violeta)'}; background:${p.esOperador ? 'rgba(229,52,75,.1)' : 'var(--violeta-suave)'}; color:${p.esOperador ? '#ff4d5e' : '#9d8fff'};">${p.esOperador ? 'Quitar operador' : 'Hacer operador'}</button>
       </div>`).join('');
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
