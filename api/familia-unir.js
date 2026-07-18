@@ -150,7 +150,7 @@ async function obtenerUsuarioCompleto(accessToken, uid) {
   if (!resp.ok) return null;
   const doc = await resp.json();
   const f = doc.fields || {};
-  return { uid, nombre: f.nombre?.stringValue || '', telefono: f.telefono?.stringValue || '' };
+  return { uid, nombre: f.nombre?.stringValue || '', telefono: f.telefono?.stringValue || '', empresaId: f.empresaId?.stringValue || 'sos360-la-serena' };
 }
 
 // Devuelve todos los usuarios ya vinculados a un grupo familiar (hijos existentes del titular)
@@ -186,10 +186,11 @@ async function listarIntegrantesGrupo(accessToken, grupoId) {
     });
 }
 
-async function marcarGrupoFamiliar(accessToken, uid, grupoFamiliarId, rol) {
+async function marcarGrupoFamiliar(accessToken, uid, grupoFamiliarId, rol, empresaId) {
   const rolValido = ['jefe', 'gerente', 'empleado', 'tecnico'].includes(rol) ? rol : null;
-  const fieldPaths = ['grupoFamiliarId'];
-  const fields = { grupoFamiliarId: { stringValue: grupoFamiliarId } };
+  const fieldPaths = ['grupoFamiliarId', 'empresaId'];
+  // Multitenant: el integrante/tecnico hereda la empresa de seguridad del titular.
+  const fields = { grupoFamiliarId: { stringValue: grupoFamiliarId }, empresaId: { stringValue: empresaId || 'sos360-la-serena' } };
   if (rolValido) {
     fieldPaths.push('rolEmpresa');
     fields.rolEmpresa = { stringValue: rolValido };
@@ -243,7 +244,8 @@ export default async function handler(req, res) {
     const integrantesExistentes = [titularCompleto, ...hermanosExistentes].filter(Boolean);
     const yo = await obtenerUsuarioCompleto(accessToken, uid);
 
-    await marcarGrupoFamiliar(accessToken, uid, titular.uid, rol);
+    const empresaTitular = titularCompleto?.empresaId || 'sos360-la-serena';
+    await marcarGrupoFamiliar(accessToken, uid, titular.uid, rol, empresaTitular);
 
     // Copia los contactos externos que el titular ya tenía configurados (abuela, vecino, etc.)
     const contactosExternos = await listarContactos(accessToken, titular.uid);

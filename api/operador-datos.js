@@ -105,7 +105,9 @@ async function listarClientes(accessToken) {
         modo: f.modo?.stringValue || 'empresa',
         rolEmpresa: f.rolEmpresa?.stringValue || '',
         grupoFamiliarId: f.grupoFamiliarId?.stringValue || '',
-        ultimaSenal: f.ultimaSenal?.timestampValue || f.ultimaSenal?.stringValue || null
+        ultimaSenal: f.ultimaSenal?.timestampValue || f.ultimaSenal?.stringValue || null,
+        // Multitenant: usuarios sin empresa pertenecen a la empresa original.
+        empresaId: f.empresaId?.stringValue || 'sos360-la-serena'
       };
     })
     .filter((c) => !esOperador(c.uid));
@@ -251,16 +253,24 @@ export default async function handler(req, res) {
 
     const accessToken = await obtenerAccessToken();
 
+    // Multitenant: cada operador solo ve los datos de SU empresa de seguridad.
+    const perfilOp = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const empresaOperador = perfilOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
+
     if (accion === 'codigo') {
       const resultado = await obtenerOGenerarCodigoOperador(accessToken, uid);
       res.status(200).json({ ok: true, codigo: resultado.codigo, creado: resultado.creado });
       return;
     }
 
-    const [clientes, alertasRecientes] = await Promise.all([
+    const [clientesTodos, alertasTodas] = await Promise.all([
       listarClientes(accessToken),
       listarAlertasRecientes(accessToken)
     ]);
+    // Aislamiento: solo clientes de la empresa del operador, y solo SUS alertas.
+    const clientes = clientesTodos.filter((c) => c.empresaId === empresaOperador);
+    const uidsEmpresa = new Set(clientes.map((c) => c.uid));
+    const alertasRecientes = alertasTodas.filter((a) => uidsEmpresa.has(a.clienteUid));
     const alertas = derivarAlertasActivas(alertasRecientes);
 
     const stats = calcularStats(alertasRecientes);

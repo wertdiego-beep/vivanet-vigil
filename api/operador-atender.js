@@ -144,7 +144,20 @@ export default async function handler(req, res) {
       return;
     }
 
-    const accessToken = await obtenerAccessToken();
+    // Multitenant: el operador solo puede actuar sobre clientes de SU empresa.
+    const accessTokenPre = await obtenerAccessToken();
+    const [docOp, docCli] = await Promise.all([
+      fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessTokenPre}` } }).then((r) => r.ok ? r.json() : {}),
+      fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}`, { headers: { Authorization: `Bearer ${accessTokenPre}` } }).then((r) => r.ok ? r.json() : {})
+    ]);
+    const empOp = docOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
+    const empCli = docCli.fields?.empresaId?.stringValue || 'sos360-la-serena';
+    if (empOp !== empCli) {
+      res.status(403).json({ error: 'Este cliente pertenece a otra empresa de seguridad' });
+      return;
+    }
+
+    const accessToken = accessTokenPre; // reutiliza el token ya obtenido
     if (accion === 'nota-cliente') {
       // Nota fija de la central sobre el cliente ("perro bravo", "porton trasero").
       const urlNota =
