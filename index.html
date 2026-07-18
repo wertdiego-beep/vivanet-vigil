@@ -731,6 +731,18 @@ textarea{min-height:96px;resize:vertical}
           </div>
           <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
             <div style="position:relative;">
+              <button onclick="toggleMenuVistas(event)" style="display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:10px; background:var(--blanco); border:1px solid var(--linea); color:var(--tinta); font-size:.78rem; font-weight:700; font-family:'Chakra Petch',sans-serif; cursor:pointer;">👁 Vistas</button>
+              <div id="vistasMenu" style="display:none; position:absolute; right:0; top:calc(100% + 8px); background:var(--blanco); border:1px solid var(--linea); border-radius:12px; padding:10px 12px; min-width:230px; z-index:2000; box-shadow:0 14px 36px rgba(0,0,0,.35);">
+                <div style="font-size:.6rem; color:var(--gris); text-transform:uppercase; letter-spacing:.08em; padding:0 0 6px;">Qué quieres ver en tu panel</div>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;font-size:.82rem;cursor:pointer;"><input type="checkbox" data-vista="monitoreo" onchange="toggleVistaPanel(this)" style="width:auto;margin:0;"> 📺 Monitoreo</label>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;font-size:.82rem;cursor:pointer;"><input type="checkbox" data-vista="clientes" onchange="toggleVistaPanel(this)" style="width:auto;margin:0;"> 👥 Clientes</label>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;font-size:.82rem;cursor:pointer;"><input type="checkbox" data-vista="tecnico" onchange="toggleVistaPanel(this)" style="width:auto;margin:0;"> 🛠 Servicio técnico</label>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;font-size:.82rem;cursor:pointer;"><input type="checkbox" data-vista="historial" onchange="toggleVistaPanel(this)" style="width:auto;margin:0;"> 🕘 Historial</label>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;font-size:.82rem;cursor:pointer;"><input type="checkbox" data-vista="equipo" onchange="toggleVistaPanel(this)" style="width:auto;margin:0;"> 🔑 Equipo técnico</label>
+                <div style="font-size:.66rem; color:var(--gris); margin-top:6px;">Se guarda en este dispositivo. Mínimo una vista activa.</div>
+              </div>
+            </div>
+            <div style="position:relative;">
               <button onclick="toggleMenuDiseno(event)" style="display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:10px; background:var(--blanco); border:1px solid var(--linea); color:var(--tinta); font-size:.78rem; font-weight:700; font-family:'Chakra Petch',sans-serif; cursor:pointer;">🧩 Diseño</button>
               <div id="disenoMenu" style="display:none; position:absolute; right:0; top:calc(100% + 8px); background:var(--blanco); border:1px solid var(--linea); border-radius:12px; padding:6px; min-width:210px; z-index:2000; box-shadow:0 14px 36px rgba(0,0,0,.35);">
                 <div style="font-size:.6rem; color:var(--gris); text-transform:uppercase; letter-spacing:.08em; padding:6px 10px 4px;">Elige el diseño</div>
@@ -1149,6 +1161,7 @@ function entrarASOS360() {
   const entrarComoOperador = () => {
     document.getElementById('bottomNav').style.display = 'none';
     go('s-operador');
+    setTimeout(aplicarVistasPanel, 300);
     cargarCodigoOperador(user.uid);
     cargarPanelOperador();
     if (operadorInterval) clearInterval(operadorInterval);
@@ -3682,6 +3695,50 @@ function go(id){
 document.querySelectorAll('.nav button[data-s]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.s)));
 
 // ══ NAVEGACIÓN INTERNA DEL PANEL OPERADOR (sidebar) ══
+/* ── VISTAS DEL PANEL: cada operador minimiza lo que no le interesa ── */
+const VISTAS_PANEL = ['monitoreo', 'clientes', 'tecnico', 'historial', 'equipo'];
+function vistasOcultas() {
+  try { return JSON.parse(localStorage.getItem('sos360VistasOcultas') || '[]'); } catch (e) { return []; }
+}
+function aplicarVistasPanel() {
+  const ocultas = vistasOcultas();
+  VISTAS_PANEL.forEach((v) => {
+    const b = document.querySelector(`.op-nav[data-opview="${v}"]`);
+    if (b) b.style.display = ocultas.includes(v) ? 'none' : '';
+    const c = document.querySelector(`#vistasMenu input[data-vista="${v}"]`);
+    if (c) c.checked = !ocultas.includes(v);
+  });
+  // Si la vista actual quedó oculta, salta a la primera visible.
+  const activa = document.querySelector('.op-view.active');
+  const actual = activa ? activa.id.replace('op-view-', '') : null;
+  if (actual && ocultas.includes(actual)) {
+    const primera = VISTAS_PANEL.find((v) => !ocultas.includes(v));
+    if (primera) opGo(primera);
+  }
+}
+function toggleVistaPanel(chk) {
+  const v = chk.dataset.vista;
+  let ocultas = vistasOcultas();
+  if (chk.checked) ocultas = ocultas.filter((x) => x !== v);
+  else {
+    if (VISTAS_PANEL.length - ocultas.length <= 1) { chk.checked = true; return; } // minimo una
+    if (!ocultas.includes(v)) ocultas.push(v);
+  }
+  localStorage.setItem('sos360VistasOcultas', JSON.stringify(ocultas));
+  aplicarVistasPanel();
+}
+function toggleMenuVistas(ev) {
+  ev.stopPropagation();
+  const m = document.getElementById('vistasMenu');
+  const d = document.getElementById('disenoMenu');
+  if (d) d.style.display = 'none';
+  if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', (e) => {
+  const m = document.getElementById('vistasMenu');
+  if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
+});
+
 const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Plataforma SOS360' };
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
