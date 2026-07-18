@@ -951,6 +951,24 @@ textarea{min-height:96px;resize:vertical}
               <button class="btn-full" onclick="saAsignarOperador()">Asignar operador</button>
               <div class="error-msg" id="saOpInfo"></div>
             </div>
+            <div class="card">
+              <div class="card-title">Permisos de un operador</div>
+              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">Puedes cortarle funciones a cualquier operador. Lo que desmarques desaparece de su panel y el servidor también lo bloquea.</p>
+              <div style="display:flex; gap:8px;">
+                <input type="email" id="saPermEmail" placeholder="correo del operador" style="margin:0;">
+                <button class="btn-full" style="width:auto; margin:0; padding:10px 16px;" onclick="saCargarPermisos()">Cargar</button>
+              </div>
+              <div id="saPermLista" style="display:none; margin-top:12px;">
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-atender" style="width:auto;margin:0;"> 🚨 Atender y cerrar alertas</label>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-clientes" style="width:auto;margin:0;"> 👥 Ver la lista de clientes</label>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-historial" style="width:auto;margin:0;"> 🕘 Historial y reporte del día</label>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-tecnico" style="width:auto;margin:0;"> 🔧 Servicio y equipo técnico</label>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-exportar" style="width:auto;margin:0;"> 📄 Exportar a Excel</label>
+                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-zonas" style="width:auto;margin:0;"> 📐 Marcar zonas y zonas calientes</label>
+                <button class="btn-full" onclick="saGuardarPermisos()">Guardar permisos</button>
+              </div>
+              <div class="error-msg" id="saPermInfo"></div>
+            </div>
           </section>
 
         </div>
@@ -1358,6 +1376,7 @@ async function cargarPanelOperador() {
     renderOperadorHistorial(data.historial, data.clientes);
     // Nivel plataforma: solo los superadmins ven la pestaña de empresas.
     if (data.esSuperadmin) { const n = document.getElementById('navPlataforma'); if (n) n.style.display = ''; }
+    aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     ajustarPollingOperador((data.alertas || []).length > 0);
     actualizarEstadoConexion(true);
   } catch (err) {
@@ -2745,7 +2764,7 @@ function renderOperadorAlertas(alertas, clientes) {
           ${a.asignadaA ? `<small style="display:block; color:var(--verde);">👤 Atendiendo: ${a.asignadaA}</small>` : ''}
           <small>${nombreCliente} · <span style="${urgente ? 'color:var(--rojo); font-weight:600;' : ''}">${tiempoTxt}</span>${(tieneGPS && a.ubicacion.precision > 0) ? ` · ±${Math.round(a.ubicacion.precision)} m` : ''}${mapaLink ? ` · <a href="${mapaLink}" target="_blank" style="color:var(--violeta);" onclick="event.stopPropagation()">Ver ubicación</a>` : ' · Sin ubicación aún'}</small>
         </div>
-        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem;" onclick="event.stopPropagation(); abrirProtocolo('${a.clienteUid}','${a.alertaId}')">${a.estado === 'verificando' ? 'Continuar' : 'Atender'}</button>${cliente && cliente.telefono ? `<a href="tel:${cliente.telefono}" onclick="event.stopPropagation()" title="Llamar al cliente ya" style="display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:10px; border:1px solid var(--linea); background:var(--verde-suave); color:var(--verde); text-decoration:none; font-size:1rem; margin-left:6px;">📞</a>` : ''}
+        <button class="btn-full" style="width:auto; margin:0; padding:8px 14px; font-size:.75rem; ${permisosOp && permisosOp.atender === false ? 'display:none;' : ''}" onclick="event.stopPropagation(); abrirProtocolo('${a.clienteUid}','${a.alertaId}')">${a.estado === 'verificando' ? 'Continuar' : 'Atender'}</button>${cliente && cliente.telefono ? `<a href="tel:${cliente.telefono}" onclick="event.stopPropagation()" title="Llamar al cliente ya" style="display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:10px; border:1px solid var(--linea); background:var(--verde-suave); color:var(--verde); text-decoration:none; font-size:1rem; margin-left:6px;">📞</a>` : ''}
       </div>`;
   }).join('');
 
@@ -3723,6 +3742,46 @@ function saAsignarOperador() {
     if (d.ok) { info.style.color = '#00C776'; info.textContent = 'Listo: al entrar, esa cuenta verá el panel de su empresa.'; document.getElementById('saOpEmail').value = ''; }
     else info.textContent = d.error || 'No se pudo asignar.';
   });
+}
+
+const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas'];
+function saCargarPermisos() {
+  const email = (document.getElementById('saPermEmail').value || '').trim();
+  const info = document.getElementById('saPermInfo');
+  info.style.color = 'var(--rojo)'; info.textContent = '';
+  if (!email) { info.textContent = 'Escribe el correo del operador.'; return; }
+  saFetch({ accion: 'sa-permisos', modo: 'get', operadorEmail: email }).then((d) => {
+    if (!d.ok) { info.textContent = d.error || 'Error'; return; }
+    PERMISOS_KEYS.forEach((k) => { const c = document.getElementById('perm-' + k); if (c) c.checked = d.permisos[k] !== false; });
+    document.getElementById('saPermLista').style.display = 'block';
+    info.style.color = '#00C776';
+    info.textContent = 'Operador de: ' + (d.empresa || '—');
+  });
+}
+function saGuardarPermisos() {
+  const email = (document.getElementById('saPermEmail').value || '').trim();
+  const info = document.getElementById('saPermInfo');
+  const permisos = {};
+  PERMISOS_KEYS.forEach((k) => { const c = document.getElementById('perm-' + k); permisos[k] = !!(c && c.checked); });
+  saFetch({ accion: 'sa-permisos', modo: 'set', operadorEmail: email, permisos }).then((d) => {
+    info.style.color = d.ok ? '#00C776' : 'var(--rojo)';
+    info.textContent = d.ok ? 'Permisos guardados. Se aplican en su próxima actualización (segundos).' : (d.error || 'Error');
+  });
+}
+
+// Aplica en el panel los permisos que la plataforma le dio a ESTE operador.
+let permisosOp = null;
+function aplicarPermisosOperador(p, esSA) {
+  permisosOp = p || null;
+  if (esSA || !p) return; // el superadmin nunca se corta a sí mismo
+  const nav = (v, on) => { const b = document.querySelector(`.op-nav[data-opview="${v}"]`); if (b) b.style.display = on ? '' : 'none'; };
+  nav('clientes', p.clientes !== false);
+  nav('historial', p.historial !== false);
+  nav('tecnico', p.tecnico !== false);
+  nav('equipo', p.tecnico !== false);
+  document.querySelectorAll('[onclick*="exportarAlarmasCSV"], [onclick*="exportarZonaCSV"]').forEach((b) => { b.style.display = p.exportar === false ? 'none' : ''; });
+  const zb = document.getElementById('zonaBtn'); if (zb) zb.style.display = p.zonas === false ? 'none' : '';
+  const cb = document.getElementById('calorBtn'); if (cb) cb.style.display = p.zonas === false ? 'none' : '';
 }
 
 function opGo(v){
