@@ -840,6 +840,14 @@ textarea{min-height:96px;resize:vertical}
 
           <!-- ── Vista: Clientes ── -->
           <section class="op-view" id="op-view-clientes">
+            <div class="card" id="difusionCard" style="display:none;">
+              <div class="card-title">📣 Difusión a tus clientes</div>
+              <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Envía un aviso por notificación push a todos los clientes de tu empresa que tengan notificaciones activadas (noticias, cortes, campañas de prevención).</p>
+              <input type="text" id="difTitulo" placeholder="Título (ej: Aviso de seguridad en tu sector)" maxlength="60">
+              <textarea id="difCuerpo" placeholder="Mensaje (ej: Esta noche habrá rondas preventivas adicionales en La Pampa. Ante cualquier emergencia usa tu botón SOS.)" maxlength="240" style="min-height:70px;"></textarea>
+              <button class="btn-full" id="difEnviarBtn" onclick="enviarDifusion()">Enviar a todos mis clientes</button>
+              <div class="error-msg" id="difInfo"></div>
+            </div>
             <div class="card">
               <div class="card-title">Buscar cliente</div>
               <input type="text" id="operadorBuscarCliente" placeholder="Nombre, local o dirección…">
@@ -921,6 +929,7 @@ textarea{min-height:96px;resize:vertical}
             </div>
           </section>
 
+          <!-- (difusión masiva se inserta en la vista clientes vía JS de flags) -->
           <!-- ── Vista: Equipo técnico ── -->
           <section class="op-view" id="op-view-equipo">
             <div class="card">
@@ -947,6 +956,12 @@ textarea{min-height:96px;resize:vertical}
               <div class="card-title">🏢 Empresas</div>
               <div id="saEmpresas" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(215px, 1fr)); gap:10px;"></div>
               <div class="error-msg" id="saEmpresaInfo"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">⚙️ Funciones de la app</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Tu tablero de control del producto: activa o desactiva características para toda la plataforma, al instante y sin tocar código.</p>
+              <div id="saFunciones" style="display:flex; flex-direction:column; gap:8px;"></div>
+              <div class="error-msg" id="saFnInfo"></div>
             </div>
             <div class="card">
               <div class="card-title">👤 Operadores</div>
@@ -1375,6 +1390,7 @@ async function cargarPanelOperador() {
     // Nivel plataforma: solo los superadmins ven la pestaña de empresas.
     if (data.esSuperadmin) { const n = document.getElementById('navPlataforma'); if (n) n.style.display = ''; }
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
+    aplicarFuncionesApp(data.funciones);
     ajustarPollingOperador((data.alertas || []).length > 0);
     actualizarEstadoConexion(true);
   } catch (err) {
@@ -2898,6 +2914,13 @@ function renderProtocolo(c, contactos) {
     </div>
     <div class="card" style="margin-bottom:12px;">
       <div class="card-title">Nota</div>
+      ${funcionesApp.respuestas === true ? `
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+        <button onclick="notaRapida(this)" style="padding:5px 11px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; cursor:pointer;">Cliente confirma que está bien</button>
+        <button onclick="notaRapida(this)" style="padding:5px 11px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; cursor:pointer;">No contesta · se despachó móvil</button>
+        <button onclick="notaRapida(this)" style="padding:5px 11px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; cursor:pointer;">Falsa alarma confirmada por el cliente</button>
+        <button onclick="notaRapida(this)" style="padding:5px 11px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; cursor:pointer;">Se avisó a contactos de emergencia</button>
+      </div>` : ''}
       <textarea id="protocoloNota" placeholder="Qué se hizo, con quién se habló, resultado…"></textarea>
     </div>
     <div style="display:flex;gap:10px;">
@@ -2918,6 +2941,11 @@ function guardarNotaCentral(clienteUid) {
     if (d && d.ok) { if (btn) { btn.textContent = 'Guardada ✓'; setTimeout(() => { btn.textContent = 'Guardar nota'; }, 2000); } }
     else alert('No se pudo guardar la nota.');
   }).catch(() => alert('No se pudo guardar la nota.'));
+}
+function notaRapida(btn) {
+  const ta = document.getElementById('protocoloNota');
+  if (!ta) return;
+  ta.value = (ta.value ? ta.value + ' · ' : '') + btn.textContent.trim() + '.';
 }
 function protocoloResolver(resultado) {
   if (!protocoloActual) return;
@@ -3745,6 +3773,7 @@ function saFetch(cuerpo) {
   })).then((r) => r.json());
 }
 function cargarPlataforma() {
+  saCargarFunciones();
   saCargarOperadores();
   const cont = document.getElementById('saEmpresas');
   if (!cont) return;
@@ -3794,6 +3823,77 @@ function saAsignarOperador() {
     if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `Listo: ${email} ahora es operador de ${emp.nombre}.` : (d.error || 'No se pudo asignar.'); }
     if (d.ok) saCargarOperadores();
   });
+}
+
+/* ── ⚙️ FUNCIONES DE LA APP (interruptores globales del superadmin) ── */
+const FUNCIONES_DEF = [
+  { k: 'difusion',   n: '📣 Mensajes masivos', d: 'Los operadores pueden enviar avisos push a todos sus clientes (espec. 27 y 40 del pliego).' },
+  { k: 'respuestas', n: '💬 Respuestas predeterminadas', d: 'Botones con textos listos al cerrar una alerta (espec. 41).' },
+  { k: 'reportes',   n: '📷 Reportes por categoría con foto', d: 'Espec. 20/31/38 · en desarrollo.', dev: true },
+  { k: 'chat',       n: '💭 Chat cliente–operador', d: 'Espec. 22 · en desarrollo.', dev: true },
+  { k: 'comunidad',  n: '🏘 Vista comunitaria', d: 'Espec. 23/26 · en desarrollo.', dev: true }
+];
+let funcionesApp = {};
+function saCargarFunciones() {
+  const cont = document.getElementById('saFunciones');
+  if (!cont) return;
+  saFetch({ accion: 'sa-funciones', modo: 'get' }).then((d) => {
+    if (!d.ok) return;
+    funcionesApp = d.funciones || {};
+    cont.innerHTML = FUNCIONES_DEF.map((f) => {
+      const on = f.dev ? false : funcionesApp[f.k] !== false && funcionesApp[f.k] !== undefined ? funcionesApp[f.k] : (funcionesApp[f.k] === undefined ? false : true);
+      const activa = !f.dev && funcionesApp[f.k] === true;
+      return `
+      <div style="display:flex; align-items:center; gap:12px; border:1px solid var(--linea); border-radius:12px; padding:10px 14px; ${f.dev ? 'opacity:.5;' : ''}">
+        <div style="flex:1;"><strong style="font-size:.85rem;">${f.n}</strong><small style="display:block; color:var(--gris);">${f.d}</small></div>
+        ${f.dev ? '<small style="color:var(--gris); white-space:nowrap;">Próximamente</small>' : `
+        <button onclick="saToggleFuncion('${f.k}')" id="fn-${f.k}" style="width:52px; height:28px; border-radius:99px; border:none; cursor:pointer; position:relative; background:${activa ? 'var(--verde)' : '#3a4059'}; transition:background .2s;">
+          <span style="position:absolute; top:3px; ${activa ? 'right:3px' : 'left:3px'}; width:22px; height:22px; border-radius:50%; background:#fff;"></span>
+        </button>`}
+      </div>`;
+    }).join('');
+  });
+}
+function saToggleFuncion(k) {
+  funcionesApp[k] = !(funcionesApp[k] === true);
+  const b = document.getElementById('fn-' + k);
+  if (b) {
+    const on = funcionesApp[k] === true;
+    b.style.background = on ? 'var(--verde)' : '#3a4059';
+    const dot = b.querySelector('span');
+    if (dot) { dot.style.left = on ? 'auto' : '3px'; dot.style.right = on ? '3px' : 'auto'; }
+  }
+  const info = document.getElementById('saFnInfo');
+  saFetch({ accion: 'sa-funciones', modo: 'set', funciones: funcionesApp }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? 'Guardado. Se aplica a todos en segundos.' : (d.error || 'Error'); }
+  });
+}
+
+// Aplica los interruptores globales en el panel del operador.
+function aplicarFuncionesApp(fn) {
+  funcionesApp = fn || {};
+  const dif = document.getElementById('difusionCard');
+  if (dif) dif.style.display = funcionesApp.difusion === true ? '' : 'none';
+}
+
+// 📣 Difusión masiva a los clientes de la empresa del operador.
+function enviarDifusion() {
+  const t = (document.getElementById('difTitulo').value || '').trim();
+  const c = (document.getElementById('difCuerpo').value || '').trim();
+  const info = document.getElementById('difInfo');
+  const btn = document.getElementById('difEnviarBtn');
+  info.style.color = 'var(--rojo)'; info.textContent = '';
+  if (!t || !c) { info.textContent = 'Escribe el título y el mensaje.'; return; }
+  if (!confirm(`¿Enviar este aviso a TODOS tus clientes con notificaciones?\n\n${t}\n${c}`)) return;
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  auth.currentUser.getIdToken().then((tk) => fetch('/api/send-push', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accion: 'difusion', idToken: tk, titulo: t, cuerpo: c })
+  })).then((r) => r.json()).then((d) => {
+    btn.disabled = false; btn.textContent = 'Enviar a todos mis clientes';
+    if (d.ok) { info.style.color = '#00C776'; info.textContent = `Enviado a ${d.enviados} de ${d.totalConPush} clientes con notificaciones activas.`; document.getElementById('difTitulo').value = ''; document.getElementById('difCuerpo').value = ''; }
+    else info.textContent = d.error || 'No se pudo enviar.';
+  }).catch(() => { btn.disabled = false; btn.textContent = 'Enviar a todos mis clientes'; info.textContent = 'Error de conexión.'; });
 }
 
 const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas'];
