@@ -713,6 +713,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="tecnico"><span>🛠️</span><em>Servicio técnico</em></button>
         <button class="op-nav" data-opview="historial"><span>🕘</span><em>Historial</em></button>
         <button class="op-nav" data-opview="equipo"><span>🔑</span><em>Equipo técnico</em></button>
+        <button class="op-nav" data-opview="plataforma" id="navPlataforma" style="display:none"><span>🏢</span><em>Plataforma</em></button>
         <div class="op-side-foot">
           <button class="op-nav" id="opPushBtn" onclick="opActivarPush()" title="Recibe una notificación en este dispositivo cuando llegue un SOS, aunque el panel esté cerrado"><span>🔔</span><em>Avisos SOS</em></button>
           <button class="op-nav" onclick="go('s-mas')"><span>👤</span><em>Mi cuenta</em></button>
@@ -925,6 +926,30 @@ textarea{min-height:96px;resize:vertical}
                 <div class="ev-ic v">👁️</div>
                 <div><strong>Cuenta central</strong><small>Alertas y clientes en tiempo real</small></div>
               </div>
+            </div>
+          </section>
+
+          <!-- ── Vista: Plataforma (solo superadmin: nosotros) ── -->
+          <section class="op-view" id="op-view-plataforma">
+            <div class="card">
+              <div class="card-title">Empresas de seguridad de la plataforma</div>
+              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">Cada empresa opera su propia central, con sus clientes y técnicos, totalmente aislada de las demás.</p>
+              <div id="saEmpresas"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+              <div style="display:flex; gap:8px; margin-top:12px;">
+                <input type="text" id="saNuevaEmpresa" placeholder="Nombre de la nueva empresa (ej: Seguridad Coquimbo Ltda.)" style="margin:0;">
+                <button class="btn-full" style="width:auto; margin:0; padding:10px 16px;" onclick="saCrearEmpresa()">Crear</button>
+              </div>
+              <div class="error-msg" id="saEmpresaInfo"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">Asignar operador a una empresa</div>
+              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">La persona debe tener su cuenta creada. Al asignarla, entra directo al panel de central de su empresa.</p>
+              <label>Correo del operador</label>
+              <input type="email" id="saOpEmail" placeholder="operador@empresa.cl">
+              <label>Empresa</label>
+              <select id="saOpEmpresa"></select>
+              <button class="btn-full" onclick="saAsignarOperador()">Asignar operador</button>
+              <div class="error-msg" id="saOpInfo"></div>
             </div>
           </section>
 
@@ -1331,6 +1356,8 @@ async function cargarPanelOperador() {
     renderOperadorMapa(data.alertas, data.clientes);
     renderOperadorClientes(data.clientes);
     renderOperadorHistorial(data.historial, data.clientes);
+    // Nivel plataforma: solo los superadmins ven la pestaña de empresas.
+    if (data.esSuperadmin) { const n = document.getElementById('navPlataforma'); if (n) n.style.display = ''; }
     ajustarPollingOperador((data.alertas || []).length > 0);
     actualizarEstadoConexion(true);
   } catch (err) {
@@ -3648,7 +3675,56 @@ function go(id){
 document.querySelectorAll('.nav button[data-s]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.s)));
 
 // ══ NAVEGACIÓN INTERNA DEL PANEL OPERADOR (sidebar) ══
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Plataforma SOS360' };
+/* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
+function saFetch(cuerpo) {
+  return auth.currentUser.getIdToken().then((t) => fetch('/api/operador-datos', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ idToken: t }, cuerpo))
+  })).then((r) => r.json());
+}
+function cargarPlataforma() {
+  const cont = document.getElementById('saEmpresas');
+  if (!cont) return;
+  saFetch({ accion: 'sa-empresas' }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    cont.innerHTML = d.empresas.map((e) => `
+      <div class="evento">
+        <div class="ev-ic ${e.estado === 'activa' ? 'g' : 'a'}">🏢</div>
+        <div style="flex:1;"><strong>${e.nombre}</strong><small>${e.id} · ${e.clientes} cliente${e.clientes === 1 ? '' : 's'} · ${e.estado}</small></div>
+        ${e.id === 'sos360-la-serena' ? '' : `<button class="btn-full" style="width:auto;margin:0;padding:6px 12px;font-size:.72rem;background:${e.estado === 'activa' ? 'rgba(229,52,75,.15)' : 'var(--verde-suave)'};color:${e.estado === 'activa' ? '#ff4d5e' : 'var(--verde)'};" onclick="saToggleEmpresa('${e.id}')">${e.estado === 'activa' ? 'Suspender' : 'Reactivar'}</button>`}
+      </div>`).join('');
+    const sel = document.getElementById('saOpEmpresa');
+    if (sel) sel.innerHTML = d.empresas.filter((e) => e.estado === 'activa').map((e) => `<option value="${e.id}">${e.nombre}</option>`).join('');
+  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
+}
+function saCrearEmpresa() {
+  const inp = document.getElementById('saNuevaEmpresa');
+  const info = document.getElementById('saEmpresaInfo');
+  const nombre = (inp.value || '').trim();
+  info.style.color = 'var(--rojo)'; info.textContent = '';
+  if (!nombre) { info.textContent = 'Escribe el nombre de la empresa.'; return; }
+  saFetch({ accion: 'sa-crear-empresa', empresaNombre: nombre }).then((d) => {
+    if (d.ok) { info.style.color = '#00C776'; info.textContent = 'Empresa creada: ' + d.id; inp.value = ''; cargarPlataforma(); }
+    else info.textContent = d.error || 'No se pudo crear.';
+  });
+}
+function saToggleEmpresa(id) {
+  if (!confirm('¿Cambiar el estado de esta empresa? Si se suspende, su central deja de operar.')) return;
+  saFetch({ accion: 'sa-toggle-empresa', empresaIdDestino: id }).then(() => cargarPlataforma());
+}
+function saAsignarOperador() {
+  const email = (document.getElementById('saOpEmail').value || '').trim();
+  const emp = document.getElementById('saOpEmpresa').value;
+  const info = document.getElementById('saOpInfo');
+  info.style.color = 'var(--rojo)'; info.textContent = '';
+  if (!email || !emp) { info.textContent = 'Completa el correo y la empresa.'; return; }
+  saFetch({ accion: 'sa-asignar-operador', operadorEmail: email, empresaIdDestino: emp }).then((d) => {
+    if (d.ok) { info.style.color = '#00C776'; info.textContent = 'Listo: al entrar, esa cuenta verá el panel de su empresa.'; document.getElementById('saOpEmail').value = ''; }
+    else info.textContent = d.error || 'No se pudo asignar.';
+  });
+}
+
 function opGo(v){
   const bm = document.getElementById('buscarMonitoreoWrap');
   if (bm) bm.style.display = (v === 'monitoreo') ? 'block' : 'none';
@@ -3659,6 +3735,7 @@ function opGo(v){
   const t = document.getElementById('opTitulo');
   if (t) t.textContent = opTitulos[v] || '';
   if (v==='monitoreo' && operadorMapa) setTimeout(()=>operadorMapa.invalidateSize(), 120);
+  if (v==='plataforma') cargarPlataforma();
 }
 document.querySelectorAll('.op-nav[data-opview]').forEach(b=>b.addEventListener('click',()=>opGo(b.dataset.opview)));
 // ══ BOTÓN SOS Y MAPA ══
