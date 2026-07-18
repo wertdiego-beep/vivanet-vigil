@@ -249,10 +249,15 @@ export default async function handler(req, res) {
   try {
     const uid = await verificarOperador(idToken);
     const accessToken = await obtenerAccessToken();
+    const base0 = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
     // Multitenant: perfil del solicitante para saber su empresa y su rol.
-    const perfilOp = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-    const esSA = SUPERADMINS.includes(uid);
+    const perfilOp = await fetch(`${base0}/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    // Superadmins: los de la variable de Vercel + los designados desde el panel.
+    const docSA = await fetch(`${base0}/plataforma/superadmins`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const saExtra = (docSA.fields?.uids?.arrayValue?.values || []).map((v) => v.stringValue);
+    const CUENTA_MAESTRA = SUPERADMINS[0];
+    const esSA = SUPERADMINS.includes(uid) || saExtra.includes(uid);
     const esOp = esOperador(uid) || !!perfilOp.fields?.operadorDe?.stringValue;
 
     // ── Acciones de plataforma (solo superadmin: nosotros, el nivel superior) ──
@@ -364,6 +369,22 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, funciones });
         return;
       }
+      if (accion === 'sa-superadmin') {
+        // Designar o quitar mando máximo. Solo la cuenta maestra puede.
+        if (uid !== CUENTA_MAESTRA) { res.status(403).json({ error: 'Solo la cuenta maestra puede nombrar superadmins.' }); return; }
+        const destino = (req.body.operadorUid || '').trim();
+        if (!/^[A-Za-z0-9]+$/.test(destino)) { res.status(400).json({ error: 'Operador no válido' }); return; }
+        let uids = saExtra.slice();
+        if (req.body.quitar) uids = uids.filter((x) => x !== destino);
+        else if (!uids.includes(destino)) uids.push(destino);
+        await fetch(`${base0}/plataforma/superadmins?updateMask.fieldPaths=uids`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { uids: { arrayValue: { values: uids.map((x) => ({ stringValue: x })) } } } })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
       if (accion === 'sa-operadores') {
         // Lista de TODOS los operadores de la plataforma con sus permisos.
         const resp = await fetch(`${base}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
@@ -380,7 +401,8 @@ export default async function handler(req, res) {
             uid: id,
             nombre: d.fields?.nombre?.stringValue || '',
             empresa: d.fields?.operadorDe?.stringValue || d.fields?.empresaId?.stringValue || 'sos360-la-serena',
-            esSuperadmin: SUPERADMINS.includes(id),
+            esSuperadmin: SUPERADMINS.includes(id) || saExtra.includes(id),
+          esMaestra: id === CUENTA_MAESTRA,
             permisos
           };
         });
@@ -459,6 +481,33 @@ export default async function handler(req, res) {
       }
     }
 
+    if (accion === 'emp-personal') {
+      // Personal de la empresa del operador: integrantes con rolEmpresa.
+      const clientesTodos = await listarClientes(accessToken);
+      const personal = clientesTodos.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa)
+        .map((c) => ({ uid: c.uid, nombre: c.local || c.nombre || 'Sin nombre', rol: c.rolEmpresa }));
+      res.status(200).json({ ok: true, personal, empresa: empresaOperador });
+      return;
+    }
+    if (accion === 'emp-rol') {
+      // Cambiar el rol de un integrante (solo jefe/gerente de la empresa).
+      const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRol !== 'jefe' && miRol !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente puede cambiar roles.' }); return; }
+      const destino = (req.body.personalUid || '').trim();
+      const rol = (req.body.rol || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(destino) || !['jefe', 'gerente', 'empleado', 'tecnico', 'supervisor', 'guardia'].includes(rol)) { res.status(400).json({ error: 'Datos no válidos' }); return; }
+      // Verificar que el destino sea de la misma empresa.
+      const docD = await fetch(`${base0}/usuarios/${destino}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const empD = docD.fields?.empresaId?.stringValue || 'sos360-la-serena';
+      if (!esSA && empD !== empresaOperador) { res.status(403).json({ error: 'Esa persona es de otra empresa.' }); return; }
+      await fetch(`${base0}/usuarios/${destino}?updateMask.fieldPaths=rolEmpresa`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { rolEmpresa: { stringValue: rol } } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
     if (accion === 'reportes') {
       // Reportes de incidentes de los clientes de la empresa del operador.
       const [lista, clientesTodos] = await Promise.all([
@@ -529,7 +578,7 @@ export default async function handler(req, res) {
     const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true };
     Object.keys(praw).forEach((k) => { permisos[k] = praw[k].booleanValue !== false; });
 
-    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, empresaId: empresaOperador, permisos, funciones });
+    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, esMaestra: uid === CUENTA_MAESTRA, miUid: uid, rolEmpresa: perfilOp.fields?.rolEmpresa?.stringValue || '', empresaId: empresaOperador, permisos, funciones });
   } catch (err) {
     console.error('Error en panel operador:', err);
     res.status(500).json({ error: err.message || 'Error interno del servidor' });
