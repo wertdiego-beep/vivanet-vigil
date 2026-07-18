@@ -463,6 +463,44 @@ textarea{min-height:96px;resize:vertical}
         <button class="btn-full" style="background:var(--verde);" onclick="entrarDesdePlan()">Entrar a la app</button>
       </div>
     </div>
+    <!-- ══ REPORTAR INCIDENTE (espec. 20/24/31) ══ -->
+    <div class="screen-scroll" id="s-reporte">
+      <div class="card">
+        <div class="card-title">📷 Reportar incidente</div>
+        <label>¿Qué pasó?</label>
+        <div id="repCategorias" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
+        <label>Cuéntanos más</label>
+        <textarea id="repTexto" placeholder="Describe lo que viste: dónde, cuándo, cómo…" maxlength="500" style="min-height:80px;"></textarea>
+        <label>Foto (opcional)</label>
+        <input type="file" id="repFoto" accept="image/*" capture="environment" onchange="repCargarFoto(this)">
+        <img id="repPreview" style="display:none; width:100%; border-radius:12px; margin:8px 0;">
+        <label style="display:flex; gap:9px; align-items:center; margin:8px 0;"><input type="checkbox" id="repAnonimo" style="width:auto; margin:0;"> 🕶 Enviar como anónimo (nadie verá tu nombre)</label>
+        <button class="btn-full" id="repEnviarBtn" onclick="enviarReporte()">Enviar reporte a la central</button>
+        <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="go('s-inicio')">Volver</button>
+        <div class="error-msg" id="repInfo"></div>
+      </div>
+    </div>
+    <!-- ══ MI COMUNA (espec. 23/26) ══ -->
+    <div class="screen-scroll" id="s-comunidad">
+      <div class="card">
+        <div class="card-title">🏘 Reportes de tu comuna</div>
+        <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">Lo que están reportando los vecinos protegidos por tu misma central.</p>
+        <div id="comunidadLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+        <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="go('s-inicio')">Volver</button>
+      </div>
+    </div>
+    <!-- ══ CHAT CON LA CENTRAL (espec. 22) ══ -->
+    <div class="screen-scroll" id="s-chatcentral">
+      <div class="card" style="display:flex; flex-direction:column; min-height:70vh;">
+        <div class="card-title">💬 Chat con tu central</div>
+        <div id="chatCentralMsgs" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:6px 0; min-height:300px;"></div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <input type="text" id="chatCentralTxt" placeholder="Escribe tu mensaje…" style="margin:0;" onkeydown="if(event.key==='Enter')enviarChatCliente()">
+          <button class="btn-full" style="width:auto; margin:0; padding:10px 16px;" onclick="enviarChatCliente()">➤</button>
+        </div>
+        <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea); margin-top:8px;" onclick="cerrarChatCentral()">Volver</button>
+      </div>
+    </div>
     <!-- ══ COMPLETAR PERFIL (primer ingreso) ══ -->
     <div class="screen-scroll" id="s-perfil">
       <div class="card">
@@ -501,6 +539,15 @@ textarea{min-height:96px;resize:vertical}
       </div>
       <div class="card-title" style="margin:22px 0 12px">Accesos rápidos</div>
       <div class="quick-grid">
+        <button class="quick" id="qReporte" onclick="prepararReporte(); go('s-reporte')" style="display:none">
+          <span class="ic ic-blue">📷</span><strong>Reportar incidente</strong><small>Con foto y categoría</small>
+        </button>
+        <button class="quick" id="qComunidad" onclick="cargarComunidad(); go('s-comunidad')" style="display:none">
+          <span class="ic ic-blue">🏘</span><strong>Mi comuna</strong><small>Reportes de vecinos</small>
+        </button>
+        <button class="quick" id="qChatCentral" onclick="abrirChatCentral()" style="display:none">
+          <span class="ic ic-blue">💬</span><strong>Chat central</strong><small>Escríbenos directo</small>
+        </button>
         <button class="quick" onclick="go('s-soporte')" data-modo="ambos" data-solo-duenio>
           <span class="ic ic-amber">🛠</span><strong>Reportar falla</strong><small>Cámara, sensor, alarma…</small>
         </button>
@@ -740,6 +787,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="tecnico"><span>🛠️</span><em>Servicio técnico</em></button>
         <button class="op-nav" data-opview="historial"><span>🕘</span><em>Historial</em></button>
         <button class="op-nav" data-opview="equipo"><span>🔑</span><em>Equipo técnico</em></button>
+        <button class="op-nav" data-opview="reportes" id="navReportes" style="display:none"><span>📷</span><em>Reportes</em></button>
         <button class="op-nav" data-opview="plataforma" id="navPlataforma" style="display:none"><span>🏢</span><em>Plataforma</em></button>
         <div class="op-side-foot">
           <button class="op-nav" id="opPushBtn" onclick="opActivarPush()" title="Recibe una notificación en este dispositivo cuando llegue un SOS, aunque el panel esté cerrado"><span>🔔</span><em>Avisos SOS</em></button>
@@ -983,6 +1031,14 @@ textarea{min-height:96px;resize:vertical}
             </div>
           </section>
 
+          <!-- ── Vista: Reportes de incidentes ── -->
+          <section class="op-view" id="op-view-reportes">
+            <div class="card">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>📷 Reportes de incidentes</span><button onclick="cargarReportesPanel()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻ Actualizar</button></div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Lo que reportan tus clientes con categoría y foto. Márcalo revisado cuando lo gestiones.</p>
+              <div id="reportesPanelLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+            </div>
+          </section>
           <!-- ── Vista: Plataforma (solo superadmin: nosotros) ── -->
           <section class="op-view" id="op-view-plataforma">
             <div style="margin:2px 0 16px;">
@@ -999,6 +1055,13 @@ textarea{min-height:96px;resize:vertical}
               <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Tu tablero de control del producto: activa o desactiva características para toda la plataforma, al instante y sin tocar código.</p>
               <div id="saFunciones" style="display:flex; flex-direction:column; gap:8px;"></div>
               <div class="error-msg" id="saFnInfo"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">🏷 Categorías de reportes</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Una por línea, con su emoji al inicio (ej: 🥷 Robo o intento de robo). Los clientes las ven al reportar.</p>
+              <textarea id="saCategoriasTxt" style="min-height:110px; font-size:.85rem;"></textarea>
+              <button class="btn-full" onclick="saGuardarCategorias()">Guardar categorías</button>
+              <div class="error-msg" id="saCatInfo"></div>
             </div>
             <div class="card">
               <div class="card-title">👤 Operadores</div>
@@ -3014,6 +3077,7 @@ function renderProtocolo(c, contactos) {
       </div>` : ''}
       <textarea id="protocoloNota" placeholder="Qué se hizo, con quién se habló, resultado…"></textarea>
     </div>
+    ${funcionesApp.chat === true ? `<button class="btn-full" style="margin:0 0 10px;background:transparent;color:var(--tinta);border:1px solid var(--linea);" onclick="abrirChatOperador('${c.uid || ''}', '${(c.local || c.nombre || 'Cliente').replace(/'/g, '')}')">💬 Chat con el cliente</button>` : ''}
     <div style="display:flex;gap:10px;">
       <button class="btn-full" style="margin:0;background:var(--rojo);" onclick="protocoloResolver('real')">Confirmar emergencia (real)</button>
       <button class="btn-full" style="margin:0;background:transparent;color:var(--tinta);border:1px solid var(--linea);" onclick="protocoloResolver('falsa')">Falsa alarma</button>
@@ -3597,8 +3661,157 @@ function reportarSenalVida(uid) {
 }
 setInterval(() => { if (auth.currentUser) reportarSenalVida(auth.currentUser.uid); }, 20 * 60 * 1000);
 
+/* ══ MÓDULOS NUEVOS DEL CLIENTE: reportes, comunidad y chat (flags) ══ */
+let configCliente = { funciones: {}, categorias: [] };
+let catElegida = null;
+function clienteFetch(cuerpo) {
+  return auth.currentUser.getIdToken().then((t) => fetch('/api/send-push', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ idToken: t }, cuerpo))
+  })).then((r) => r.json());
+}
+function cargarConfigCliente() {
+  clienteFetch({ accion: 'config' }).then((d) => {
+    if (!d.ok) return;
+    configCliente = d;
+    const f = d.funciones || {};
+    const mostrar = (id, on) => { const b = document.getElementById(id); if (b) b.style.display = on ? '' : 'none'; };
+    mostrar('qReporte', f.reportes === true);
+    mostrar('qComunidad', f.comunidad === true);
+    mostrar('qChatCentral', f.chat === true);
+  }).catch(() => {});
+}
+// Comprime la imagen en el navegador (max 900px, jpeg) para caber en Firestore.
+function comprimirImagen(file, cb) {
+  const img = new Image();
+  img.onload = () => {
+    const esc = Math.min(1, 900 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * esc); c.height = Math.round(img.height * esc);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    cb(c.toDataURL('image/jpeg', 0.68));
+  };
+  img.src = URL.createObjectURL(file);
+}
+let repFotoB64 = null;
+function repCargarFoto(inp) {
+  if (!inp.files || !inp.files[0]) return;
+  comprimirImagen(inp.files[0], (b64) => {
+    if (b64.length > 700000) { alert('La foto es demasiado grande. Intenta con otra.'); return; }
+    repFotoB64 = b64;
+    const p = document.getElementById('repPreview');
+    p.src = b64; p.style.display = 'block';
+  });
+}
+function prepararReporte() {
+  catElegida = null; repFotoB64 = null;
+  document.getElementById('repTexto').value = '';
+  document.getElementById('repPreview').style.display = 'none';
+  document.getElementById('repAnonimo').checked = false;
+  document.getElementById('repInfo').textContent = '';
+  const cont = document.getElementById('repCategorias');
+  cont.innerHTML = (configCliente.categorias || []).map((c, i) => `
+    <button onclick="elegirCategoria(${i}, this)" style="padding:8px 12px; border-radius:99px; border:1.5px solid var(--linea); background:transparent; font-size:.8rem; cursor:pointer;">${c.icono} ${c.nombre}</button>`).join('');
+}
+function elegirCategoria(i, btn) {
+  catElegida = configCliente.categorias[i];
+  document.querySelectorAll('#repCategorias button').forEach((b) => { b.style.borderColor = 'var(--linea)'; b.style.background = 'transparent'; });
+  btn.style.borderColor = 'var(--violeta)'; btn.style.background = 'var(--violeta-suave)';
+}
+function enviarReporte() {
+  const user = auth.currentUser;
+  const info = document.getElementById('repInfo');
+  const btn = document.getElementById('repEnviarBtn');
+  info.style.color = 'var(--rojo)'; info.textContent = '';
+  if (!user) return;
+  if (!catElegida) { info.textContent = 'Elige una categoría.'; return; }
+  const texto = document.getElementById('repTexto').value.trim();
+  if (!texto) { info.textContent = 'Describe lo que pasó.'; return; }
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  db.collection('usuarios').doc(user.uid).collection('reportes').add({
+    categoria: catElegida.nombre, icono: catElegida.icono, texto: texto,
+    foto: repFotoB64 || null, anonimo: document.getElementById('repAnonimo').checked,
+    estado: 'pendiente', creadaEn: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => {
+    btn.disabled = false; btn.textContent = 'Enviar reporte a la central';
+    info.style.color = '#048A52'; info.textContent = 'Reporte enviado. La central lo revisará.';
+    setTimeout(() => go('s-inicio'), 1500);
+  }).catch((e) => { btn.disabled = false; btn.textContent = 'Enviar reporte a la central'; info.textContent = 'No se pudo enviar: ' + e.message; });
+}
+function cargarComunidad() {
+  const cont = document.getElementById('comunidadLista');
+  cont.innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
+  clienteFetch({ accion: 'comunidad' }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    if (!d.reportes.length) { cont.innerHTML = '<div class="evento"><div><strong>Aún no hay reportes en tu comuna.</strong></div></div>'; return; }
+    cont.innerHTML = d.reportes.map((r, i) => `
+      <div style="border:1px solid var(--linea); border-radius:14px; padding:12px; margin-bottom:10px;">
+        <div style="display:flex; gap:8px; align-items:baseline;">
+          <strong style="font-size:.9rem;">${r.icono} ${r.categoria}</strong>
+          <small style="color:var(--gris);">· ${r.autor} · ${r.creadaEn ? new Date(r.creadaEn).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }) : ''}</small>
+        </div>
+        <p style="font-size:.85rem; margin:6px 0;">${(r.texto || '').replace(/</g, '&lt;')}</p>
+        ${r.foto ? `<img src="${r.foto}" style="width:100%; border-radius:10px; margin:6px 0;">` : ''}
+        <div style="display:flex; gap:8px;">
+          <button onclick="verComentarios('${r.ruta}', ${i})" style="padding:5px 12px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; cursor:pointer;">💬 Comentarios</button>
+          <button onclick="comentarReporte('${r.ruta}', ${i})" style="padding:5px 12px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; cursor:pointer;">✍️ Comentar</button>
+        </div>
+        <div id="coments-${i}" style="margin-top:6px;"></div>
+      </div>`).join('');
+  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
+}
+function verComentarios(ruta, i) {
+  const box = document.getElementById('coments-' + i);
+  box.innerHTML = '<small style="color:var(--gris);">Cargando…</small>';
+  clienteFetch({ accion: 'comentarios', ruta }).then((d) => {
+    if (!d.ok) { box.innerHTML = ''; return; }
+    box.innerHTML = d.comentarios.length
+      ? d.comentarios.map((c) => `<div style="font-size:.78rem; border-left:2px solid var(--linea); padding:3px 8px; margin:4px 0;"><b>${c.autor}:</b> ${(c.texto || '').replace(/</g, '&lt;')}</div>`).join('')
+      : '<small style="color:var(--gris);">Sin comentarios aún.</small>';
+  });
+}
+function comentarReporte(ruta, i) {
+  const texto = prompt('Tu comentario:');
+  if (!texto || !texto.trim()) return;
+  clienteFetch({ accion: 'comentar', ruta, texto: texto.trim() }).then((d) => {
+    if (d.ok) verComentarios(ruta, i);
+    else alert(d.error || 'No se pudo comentar');
+  });
+}
+/* Chat con la central (lado cliente): en vivo con onSnapshot */
+let _unsubChat = null;
+function abrirChatCentral() {
+  go('s-chatcentral');
+  const user = auth.currentUser;
+  if (!user) return;
+  const cont = document.getElementById('chatCentralMsgs');
+  if (_unsubChat) _unsubChat();
+  _unsubChat = db.collection('usuarios').doc(user.uid).collection('chatCentral')
+    .orderBy('creadaEn', 'asc').limitToLast(40)
+    .onSnapshot((snap) => {
+      cont.innerHTML = snap.docs.map((doc) => {
+        const m = doc.data();
+        const mio = m.de === 'cliente';
+        return `<div style="align-self:${mio ? 'flex-end' : 'flex-start'}; max-width:80%; background:${mio ? 'var(--violeta)' : 'var(--fondo)'}; color:${mio ? '#fff' : 'var(--tinta)'}; border:1px solid var(--linea); padding:8px 12px; border-radius:${mio ? '14px 14px 4px 14px' : '14px 14px 14px 4px'}; font-size:.85rem;">${(m.texto || '').replace(/</g, '&lt;')}</div>`;
+      }).join('') || '<small style="color:var(--gris); text-align:center;">Escríbele a tu central: te responden desde el panel.</small>';
+      cont.scrollTop = cont.scrollHeight;
+    }, () => { cont.innerHTML = '<small style="color:var(--gris);">No se pudo cargar el chat.</small>'; });
+}
+function cerrarChatCentral() { if (_unsubChat) { _unsubChat(); _unsubChat = null; } go('s-inicio'); }
+function enviarChatCliente() {
+  const user = auth.currentUser;
+  const inp = document.getElementById('chatCentralTxt');
+  const texto = (inp.value || '').trim();
+  if (!user || !texto) return;
+  inp.value = '';
+  db.collection('usuarios').doc(user.uid).collection('chatCentral').add({
+    de: 'cliente', texto: texto, creadaEn: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => alert('No se pudo enviar.'));
+}
+
 function cargarDatosUsuario(uid) {
   reportarSenalVida(uid);
+  cargarConfigCliente();
   const ref = db.collection('usuarios').doc(uid);
 
   ref.get().then((doc) => {
@@ -3874,7 +4087,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Plataforma SOS360' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Plataforma SOS360', reportes:'Reportes de incidentes' };
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
   return auth.currentUser.getIdToken().then((t) => fetch('/api/operador-datos', {
@@ -3884,6 +4097,7 @@ function saFetch(cuerpo) {
 }
 function cargarPlataforma() {
   saCargarFunciones();
+  saCargarCategorias();
   saCargarOperadores();
   const cont = document.getElementById('saEmpresas');
   if (!cont) return;
@@ -3939,11 +4153,34 @@ function saAsignarOperador() {
 const FUNCIONES_DEF = [
   { k: 'difusion',   n: '📣 Mensajes masivos', d: 'Los operadores pueden enviar avisos push a todos sus clientes (espec. 27 y 40 del pliego).' },
   { k: 'respuestas', n: '💬 Respuestas predeterminadas', d: 'Botones con textos listos al cerrar una alerta (espec. 41).' },
-  { k: 'reportes',   n: '📷 Reportes por categoría con foto', d: 'Espec. 20/31/38 · en desarrollo.', dev: true },
-  { k: 'chat',       n: '💭 Chat cliente–operador', d: 'Espec. 22 · en desarrollo.', dev: true },
-  { k: 'comunidad',  n: '🏘 Vista comunitaria', d: 'Espec. 23/26 · en desarrollo.', dev: true }
+  { k: 'reportes',   n: '📷 Reportes por categoría con foto', d: 'Los clientes reportan incidentes con foto; el panel los gestiona (espec. 15/20/31/38).' },
+  { k: 'chat',       n: '💭 Chat cliente–operador', d: 'Chat escrito entre el cliente y tu central (espec. 22).' },
+  { k: 'comunidad',  n: '🏘 Vista comunitaria', d: 'Los vecinos ven y comentan los reportes de su comuna (espec. 23/26).' }
 ];
 let funcionesApp = {};
+function saCargarCategorias() {
+  const ta = document.getElementById('saCategoriasTxt');
+  if (!ta) return;
+  saFetch({ accion: 'sa-categorias', modo: 'get' }).then((d) => {
+    if (!d.ok) return;
+    const lista = (d.categorias && d.categorias.length) ? d.categorias : [
+      { icono: '🥷', nombre: 'Robo o intento de robo' }, { icono: '👀', nombre: 'Persona o vehículo sospechoso' },
+      { icono: '🔊', nombre: 'Ruidos molestos' }, { icono: '🧨', nombre: 'Vandalismo o daños' },
+      { icono: '💡', nombre: 'Luminaria o infraestructura mala' }, { icono: '📌', nombre: 'Otro' }];
+    ta.value = lista.map((c) => (c.icono + ' ' + c.nombre).trim()).join('\n');
+  });
+}
+function saGuardarCategorias() {
+  const ta = document.getElementById('saCategoriasTxt');
+  const info = document.getElementById('saCatInfo');
+  const categorias = ta.value.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 15).map((l) => {
+    const partes = l.split(' ');
+    return { icono: partes[0], nombre: partes.slice(1).join(' ') || 'Sin nombre' };
+  });
+  saFetch({ accion: 'sa-categorias', modo: 'set', categorias }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? 'Categorías guardadas.' : (d.error || 'Error'); }
+  });
+}
 function saCargarFunciones() {
   const cont = document.getElementById('saFunciones');
   if (!cont) return;
@@ -3984,6 +4221,8 @@ function aplicarFuncionesApp(fn) {
   funcionesApp = fn || {};
   const dif = document.getElementById('difusionCard');
   if (dif) dif.style.display = funcionesApp.difusion === true ? '' : 'none';
+  const nr = document.getElementById('navReportes');
+  if (nr) nr.style.display = funcionesApp.reportes === true ? '' : 'none';
 }
 
 // 📣 Difusión masiva a los clientes de la empresa del operador.
@@ -4066,6 +4305,82 @@ function aplicarPermisosOperador(p, esSA) {
   const cb = document.getElementById('calorBtn'); if (cb) cb.style.display = p.zonas === false ? 'none' : '';
 }
 
+/* ── 📷 REPORTES en el panel del operador ── */
+function cargarReportesPanel() {
+  const cont = document.getElementById('reportesPanelLista');
+  if (!cont) return;
+  saFetch({ accion: 'reportes' }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    if (!d.reportes.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin reportes aún.</strong><small>Cuando un cliente reporte un incidente, aparecerá aquí.</small></div></div>'; return; }
+    cont.innerHTML = d.reportes.map((r) => `
+      <div style="border:1px solid ${r.estado === 'pendiente' ? 'rgba(255,181,71,.5)' : 'var(--linea)'}; border-radius:14px; padding:12px; margin-bottom:10px;">
+        <div style="display:flex; gap:8px; align-items:baseline; flex-wrap:wrap;">
+          <strong style="font-size:.9rem;">${r.icono} ${r.categoria}</strong>
+          <small style="color:var(--gris);">· ${r.cliente} · ${r.creadaEn ? formatearHoraOperador(r.creadaEn) : ''}</small>
+          <span style="font-size:.62rem; font-weight:700; padding:2px 9px; border-radius:99px; background:${r.estado === 'pendiente' ? 'rgba(255,181,71,.16)' : 'var(--verde-suave)'}; color:${r.estado === 'pendiente' ? '#ffb547' : 'var(--verde)'};">${r.estado.toUpperCase()}</span>
+        </div>
+        <p style="font-size:.84rem; margin:6px 0;">${(r.texto || '').replace(/</g, '&lt;')}</p>
+        ${r.foto ? `<img src="${r.foto}" style="max-width:340px; width:100%; border-radius:10px; margin:6px 0;">` : ''}
+        <button onclick="marcarReporte('${r.clienteUid}','${r.id}','${r.estado === 'pendiente' ? 'revisado' : 'pendiente'}')" style="padding:6px 14px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.74rem; cursor:pointer;">${r.estado === 'pendiente' ? '✅ Marcar revisado' : '↩ Volver a pendiente'}</button>
+      </div>`).join('');
+  });
+}
+function marcarReporte(clienteUid, reporteId, estado) {
+  auth.currentUser.getIdToken().then((t) => fetch('/api/operador-atender', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: t, clienteUid, reporteId, accion: 'reporte-estado', estado, operador: auth.currentUser.email || '' })
+  })).then((r) => r.json()).then(() => cargarReportesPanel());
+}
+
+/* ── 💬 CHAT del operador con el cliente (desde el protocolo) ── */
+let chatOpInterval = null, chatOpCliente = null;
+function abrirChatOperador(clienteUid, nombre) {
+  chatOpCliente = clienteUid;
+  let m = document.getElementById('chatOpModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'chatOpModal';
+    m.style.cssText = 'position:fixed;right:20px;bottom:20px;width:340px;max-width:92vw;z-index:6000;background:var(--blanco);border:1px solid var(--linea);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.5);display:flex;flex-direction:column;font-family:Inter,sans-serif;';
+    m.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--linea);"><strong id="chatOpTitulo" style="font-size:.85rem;">Chat</strong><button onclick="cerrarChatOperador()" style="background:none;border:none;color:var(--gris);font-size:1.1rem;cursor:pointer;">✕</button></div><div id="chatOpMsgs" style="height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:7px;padding:10px 12px;"></div><div style="display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--linea);"><input id="chatOpTxt" type="text" placeholder="Mensaje al cliente…" style="margin:0;flex:1;" onkeydown="if(event.key===\'Enter\')enviarChatOperador()"><button class="btn-full" style="width:auto;margin:0;padding:9px 14px;" onclick="enviarChatOperador()">➤</button></div>';
+    document.body.appendChild(m);
+  }
+  m.style.display = 'flex';
+  document.getElementById('chatOpTitulo').textContent = '💬 ' + (nombre || 'Cliente');
+  cargarChatOperador();
+  if (chatOpInterval) clearInterval(chatOpInterval);
+  chatOpInterval = setInterval(cargarChatOperador, 4000);
+}
+function cerrarChatOperador() {
+  const m = document.getElementById('chatOpModal');
+  if (m) m.style.display = 'none';
+  if (chatOpInterval) { clearInterval(chatOpInterval); chatOpInterval = null; }
+}
+function cargarChatOperador() {
+  if (!chatOpCliente) return;
+  auth.currentUser.getIdToken().then((t) => fetch('/api/operador-atender', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: t, clienteUid: chatOpCliente, accion: 'chat-listar' })
+  })).then((r) => r.json()).then((d) => {
+    const cont = document.getElementById('chatOpMsgs');
+    if (!cont || !d.ok) return;
+    cont.innerHTML = (d.mensajes || []).map((msg) => {
+      const mio = msg.de === 'central';
+      return `<div style="align-self:${mio ? 'flex-end' : 'flex-start'};max-width:82%;background:${mio ? 'var(--violeta)' : 'var(--fondo)'};color:${mio ? '#fff' : 'var(--tinta)'};border:1px solid var(--linea);padding:7px 11px;border-radius:12px;font-size:.8rem;">${(msg.texto || '').replace(/</g, '&lt;')}</div>`;
+    }).join('') || '<small style="color:var(--gris);">Sin mensajes aún. Escríbele al cliente.</small>';
+    cont.scrollTop = cont.scrollHeight;
+  }).catch(() => {});
+}
+function enviarChatOperador() {
+  const inp = document.getElementById('chatOpTxt');
+  const texto = (inp.value || '').trim();
+  if (!texto || !chatOpCliente) return;
+  inp.value = '';
+  auth.currentUser.getIdToken().then((t) => fetch('/api/operador-atender', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: t, clienteUid: chatOpCliente, accion: 'chat-enviar', texto, operador: auth.currentUser.email || '' })
+  })).then(() => cargarChatOperador());
+}
+
 function opGo(v){
   const bm = document.getElementById('buscarMonitoreoWrap');
   if (bm) bm.style.display = (v === 'monitoreo') ? 'block' : 'none';
@@ -4077,6 +4392,7 @@ function opGo(v){
   if (t) t.textContent = opTitulos[v] || '';
   if (v==='monitoreo' && operadorMapa) setTimeout(()=>operadorMapa.invalidateSize(), 120);
   if (v==='plataforma') cargarPlataforma();
+  if (v==='reportes') cargarReportesPanel();
 }
 document.querySelectorAll('.op-nav[data-opview]').forEach(b=>b.addEventListener('click',()=>opGo(b.dataset.opview)));
 // ══ BOTÓN SOS Y MAPA ══
