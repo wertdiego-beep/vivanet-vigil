@@ -132,7 +132,8 @@ export default async function handler(req, res) {
   }
 
   const { idToken, clienteUid, alertaId, resultado, nota, operador, accion } = req.body || {};
-  if (!idToken || !clienteUid || (!alertaId && accion !== 'nota-cliente')) {
+  const accionesSinAlerta = ['nota-cliente', 'reporte-estado', 'chat-listar', 'chat-enviar'];
+  if (!idToken || !clienteUid || (!alertaId && !accionesSinAlerta.includes(accion))) {
     res.status(400).json({ error: 'Faltan datos (idToken, clienteUid o alertaId)' });
     return;
   }
@@ -174,6 +175,41 @@ export default async function handler(req, res) {
         body: JSON.stringify({ fields: { notaCentral: { stringValue: (nota || '').slice(0, 500) } } })
       });
       res.status(200).json({ ok: respNota.ok });
+      return;
+    }
+    if (accion === 'reporte-estado') {
+      // Marcar un reporte de incidente como revisado (o pendiente).
+      const repId = (req.body.reporteId || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(repId)) { res.status(400).json({ error: 'Reporte no válido' }); return; }
+      await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/reportes/${repId}?updateMask.fieldPaths=estado&updateMask.fieldPaths=revisadoPor`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { estado: { stringValue: req.body.estado === 'pendiente' ? 'pendiente' : 'revisado' }, revisadoPor: { stringValue: operador || '' } } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
+    if (accion === 'chat-listar') {
+      // Mensajes del chat central-cliente (espec. 22).
+      const docs = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/chatCentral?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const mensajes = (docs.documents || []).map((d) => ({
+        de: d.fields?.de?.stringValue || 'cliente',
+        texto: d.fields?.texto?.stringValue || '',
+        foto: d.fields?.foto?.stringValue || null,
+        creadaEn: d.fields?.creadaEn?.timestampValue || null
+      })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0)).slice(-40);
+      res.status(200).json({ ok: true, mensajes });
+      return;
+    }
+    if (accion === 'chat-enviar') {
+      const texto = (req.body.texto || '').trim().slice(0, 500);
+      if (!texto) { res.status(400).json({ error: 'Mensaje vacío' }); return; }
+      await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${clienteUid}/chatCentral`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { de: { stringValue: 'central' }, texto: { stringValue: texto }, operador: { stringValue: operador || '' }, creadaEn: { timestampValue: new Date().toISOString() } } })
+      });
+      res.status(200).json({ ok: true });
       return;
     }
     if (accion === 'asignar') {

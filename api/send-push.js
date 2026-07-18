@@ -143,9 +143,119 @@ async function manejarDifusion(req, res) {
   res.status(200).json({ ok: true, enviados, totalConPush: destinos.length });
 }
 
+// ── API DE CLIENTE AUTENTICADO: config publica, comunidad y comentarios ──
+async function verificarUsuario(idToken) {
+  const lk = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken })
+  }).then((r) => r.json());
+  return lk.users && lk.users[0] && lk.users[0].localId;
+}
+async function manejarCliente(req, res) {
+  const { idToken, accion } = req.body || {};
+  const uid = await verificarUsuario(idToken);
+  if (!uid) { res.status(401).json({ error: 'Sesión no válida' }); return; }
+  const accessToken = await obtenerAccessToken();
+  const base = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+
+  if (accion === 'config') {
+    // Interruptores y categorías que el cliente necesita conocer.
+    const [fn, cat] = await Promise.all([
+      fetch(`${base}/plataforma/funciones`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
+      fetch(`${base}/plataforma/categorias`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
+    ]);
+    const fraw = fn.fields?.flags?.mapValue?.fields || {};
+    const funciones = {};
+    Object.keys(fraw).forEach((k) => { funciones[k] = fraw[k].booleanValue !== false; });
+    let categorias = [];
+    try { categorias = JSON.parse(cat.fields?.json?.stringValue || '[]'); } catch (e) {}
+    if (!categorias.length) categorias = [
+      { icono: '🥷', nombre: 'Robo o intento de robo' },
+      { icono: '👀', nombre: 'Persona o vehículo sospechoso' },
+      { icono: '🔊', nombre: 'Ruidos molestos' },
+      { icono: '🧨', nombre: 'Vandalismo o daños' },
+      { icono: '💡', nombre: 'Luminaria o infraestructura mala' },
+      { icono: '📌', nombre: 'Otro' }
+    ];
+    res.status(200).json({ ok: true, funciones, categorias });
+    return;
+  }
+
+  if (accion === 'comunidad') {
+    // Reportes recientes de la comuna (misma empresa de seguridad).
+    const docU = await fetch(`${base}/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const miEmpresa = docU.fields?.empresaId?.stringValue || 'sos360-la-serena';
+    const [lista, usuarios] = await Promise.all([
+      fetch(`${base}:runQuery`, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'reportes', allDescendants: true }], limit: 80 } })
+      }).then((r) => r.json()),
+      fetch(`${base}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
+    ]);
+    const empresaDe = {}, nombreDe = {};
+    (usuarios.documents || []).forEach((d) => {
+      const id = d.name.split('/').pop();
+      empresaDe[id] = d.fields?.empresaId?.stringValue || 'sos360-la-serena';
+      nombreDe[id] = d.fields?.local?.stringValue || d.fields?.nombre?.stringValue || 'Vecino';
+    });
+    const reportes = (lista || []).filter((r) => r.document).map((r) => {
+      const parts = r.document.name.split('/');
+      const repId = parts.pop(); parts.pop();
+      const cuid = parts.pop();
+      const f = r.document.fields || {};
+      return {
+        id: repId, clienteUid: cuid,
+        categoria: f.categoria?.stringValue || 'Otro',
+        icono: f.icono?.stringValue || '📌',
+        texto: f.texto?.stringValue || '',
+        foto: f.foto?.stringValue || null,
+        anonimo: f.anonimo?.booleanValue === true,
+        estado: f.estado?.stringValue || 'pendiente',
+        creadaEn: f.creadaEn?.timestampValue || null
+      };
+    }).filter((x) => empresaDe[x.clienteUid] === miEmpresa)
+      .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 15)
+      .map((x) => ({ ...x, autor: x.anonimo ? 'Anónimo' : (nombreDe[x.clienteUid] || 'Vecino'), clienteUid: undefined, ruta: x.clienteUid + '/' + x.id }));
+    res.status(200).json({ ok: true, reportes });
+    return;
+  }
+
+  if (accion === 'comentarios' || accion === 'comentar') {
+    const ruta = (req.body.ruta || '').split('/');
+    if (ruta.length !== 2 || !/^[A-Za-z0-9]+$/.test(ruta[0]) || !/^[A-Za-z0-9]+$/.test(ruta[1])) { res.status(400).json({ error: 'Ruta no válida' }); return; }
+    const coment = `${base}/usuarios/${ruta[0]}/reportes/${ruta[1]}/comentarios`;
+    if (accion === 'comentar') {
+      const texto = (req.body.texto || '').trim().slice(0, 300);
+      if (!texto) { res.status(400).json({ error: 'Escribe el comentario' }); return; }
+      const docU = await fetch(`${base}/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const autor = docU.fields?.nombre?.stringValue || 'Vecino';
+      await fetch(coment, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { autor: { stringValue: autor }, texto: { stringValue: texto }, creadaEn: { timestampValue: new Date().toISOString() } } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
+    const docs = await fetch(`${coment}?pageSize=50`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const comentarios = (docs.documents || []).map((d) => ({
+      autor: d.fields?.autor?.stringValue || 'Vecino',
+      texto: d.fields?.texto?.stringValue || '',
+      creadaEn: d.fields?.creadaEn?.timestampValue || null
+    })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0));
+    res.status(200).json({ ok: true, comentarios });
+    return;
+  }
+  res.status(400).json({ error: 'Acción desconocida' });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Método no permitido' });
+    return;
+  }
+
+  if (req.body && ['config', 'comunidad', 'comentarios', 'comentar'].includes(req.body.accion)) {
+    try { await manejarCliente(req, res); } catch (err) { res.status(500).json({ error: err.message }); }
     return;
   }
 

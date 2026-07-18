@@ -323,6 +323,24 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, uid: cuenta.localId });
         return;
       }
+      if (accion === 'sa-categorias') {
+        // Categorías de reportes configurables por la plataforma (espec. 31/38).
+        if (req.body.modo === 'set') {
+          const json = JSON.stringify(req.body.categorias || []).slice(0, 4000);
+          await fetch(`${base}/plataforma/categorias?updateMask.fieldPaths=json`, {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: { json: { stringValue: json } } })
+          });
+          res.status(200).json({ ok: true });
+          return;
+        }
+        const doc = await fetch(`${base}/plataforma/categorias`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        let categorias = [];
+        try { categorias = JSON.parse(doc.fields?.json?.stringValue || '[]'); } catch (e) {}
+        res.status(200).json({ ok: true, categorias });
+        return;
+      }
       if (accion === 'sa-funciones') {
         // Interruptores globales de funciones de la app (feature flags).
         if (req.body.modo === 'set') {
@@ -437,6 +455,40 @@ export default async function handler(req, res) {
         res.status(403).json({ error: 'Tu empresa está suspendida por la plataforma' });
         return;
       }
+    }
+
+    if (accion === 'reportes') {
+      // Reportes de incidentes de los clientes de la empresa del operador.
+      const [lista, clientesTodos] = await Promise.all([
+        fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'reportes', allDescendants: true }], limit: 80 } })
+        }).then((r) => r.json()),
+        listarClientes(accessToken)
+      ]);
+      const mios = new Set(clientesTodos.filter((c) => c.empresaId === empresaOperador).map((c) => c.uid));
+      const nombreDe = {};
+      clientesTodos.forEach((c) => { nombreDe[c.uid] = c.local || c.nombre || 'Cliente'; });
+      const reportes = (lista || []).filter((r) => r.document).map((r) => {
+        const parts = r.document.name.split('/');
+        const repId = parts.pop(); parts.pop();
+        const cuid = parts.pop();
+        const f = r.document.fields || {};
+        return {
+          id: repId, clienteUid: cuid,
+          cliente: f.anonimo?.booleanValue === true ? 'Anónimo' : (nombreDe[cuid] || 'Cliente'),
+          categoria: f.categoria?.stringValue || 'Otro',
+          icono: f.icono?.stringValue || '📌',
+          texto: f.texto?.stringValue || '',
+          foto: f.foto?.stringValue || null,
+          anonimo: f.anonimo?.booleanValue === true,
+          estado: f.estado?.stringValue || 'pendiente',
+          creadaEn: f.creadaEn?.timestampValue || null
+        };
+      }).filter((x) => mios.has(x.clienteUid))
+        .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 25);
+      res.status(200).json({ ok: true, reportes });
+      return;
     }
 
     if (accion === 'codigo') {
