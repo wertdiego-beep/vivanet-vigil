@@ -3829,6 +3829,21 @@ function saTogglePermiso(i, k) {
   });
 }
 
+// Aplica en el panel los permisos que la plataforma le dio a ESTE operador.
+let permisosOp = null;
+function aplicarPermisosOperador(p, esSA) {
+  permisosOp = p || null;
+  if (esSA || !p) return; // el superadmin nunca se corta a sí mismo
+  const nav = (v, on) => { const b = document.querySelector(`.op-nav[data-opview="${v}"]`); if (b) b.style.display = on ? '' : 'none'; };
+  nav('clientes', p.clientes !== false);
+  nav('historial', p.historial !== false);
+  nav('tecnico', p.tecnico !== false);
+  nav('equipo', p.tecnico !== false);
+  document.querySelectorAll('[onclick*="exportarAlarmasCSV"], [onclick*="exportarZonaCSV"]').forEach((b) => { b.style.display = p.exportar === false ? 'none' : ''; });
+  const zb = document.getElementById('zonaBtn'); if (zb) zb.style.display = p.zonas === false ? 'none' : '';
+  const cb = document.getElementById('calorBtn'); if (cb) cb.style.display = p.zonas === false ? 'none' : '';
+}
+
 function opGo(v){
   const bm = document.getElementById('buscarMonitoreoWrap');
   if (bm) bm.style.display = (v === 'monitoreo') ? 'block' : 'none';
