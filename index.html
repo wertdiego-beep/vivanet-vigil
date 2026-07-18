@@ -944,29 +944,14 @@ textarea{min-height:96px;resize:vertical}
           <!-- ── Vista: Plataforma (solo superadmin: nosotros) ── -->
           <section class="op-view" id="op-view-plataforma">
             <div class="card">
-              <div class="card-title">Empresas de seguridad de la plataforma</div>
-              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">Cada empresa opera su propia central, con sus clientes y técnicos, totalmente aislada de las demás.</p>
-              <div id="saEmpresas"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
-              <div style="display:flex; gap:8px; margin-top:12px;">
-                <input type="text" id="saNuevaEmpresa" placeholder="Nombre de la nueva empresa (ej: Seguridad Coquimbo Ltda.)" style="margin:0;">
-                <button class="btn-full" style="width:auto; margin:0; padding:10px 16px;" onclick="saCrearEmpresa()">Crear</button>
-              </div>
+              <div class="card-title">🏢 Empresas</div>
+              <div id="saEmpresas" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(215px, 1fr)); gap:10px;"></div>
               <div class="error-msg" id="saEmpresaInfo"></div>
             </div>
             <div class="card">
-              <div class="card-title">Asignar operador a una empresa</div>
-              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">La persona debe tener su cuenta creada. Al asignarla, entra directo al panel de central de su empresa.</p>
-              <label>Correo del operador</label>
-              <input type="email" id="saOpEmail" placeholder="operador@empresa.cl">
-              <label>Empresa</label>
-              <select id="saOpEmpresa"></select>
-              <button class="btn-full" onclick="saAsignarOperador()">Asignar operador</button>
-              <div class="error-msg" id="saOpInfo"></div>
-            </div>
-            <div class="card">
-              <div class="card-title">Operadores: prende y apaga sus funciones</div>
-              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">Toca un interruptor y se aplica al instante en el panel de ese operador. Verde = activa · gris = cortada.</p>
-              <div id="saOperadores"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+              <div class="card-title">👤 Operadores</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Toca los íconos para prender o apagar funciones. Verde = activa.</p>
+              <div id="saOperadores" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px;"></div>
               <div class="error-msg" id="saPermInfo"></div>
             </div>
           </section>
@@ -3753,25 +3738,31 @@ function cargarPlataforma() {
   if (!cont) return;
   saFetch({ accion: 'sa-empresas' }).then((d) => {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    window._saEmpresas = d.empresas;
     cont.innerHTML = d.empresas.map((e) => `
-      <div class="evento">
-        <div class="ev-ic ${e.estado === 'activa' ? 'g' : 'a'}">🏢</div>
-        <div style="flex:1;"><strong>${e.nombre}</strong><small>${e.id} · ${e.clientes} cliente${e.clientes === 1 ? '' : 's'} · ${e.estado}</small></div>
-        ${e.id === 'sos360-la-serena' ? '' : `<button class="btn-full" style="width:auto;margin:0;padding:6px 12px;font-size:.72rem;background:${e.estado === 'activa' ? 'rgba(229,52,75,.15)' : 'var(--verde-suave)'};color:${e.estado === 'activa' ? '#ff4d5e' : 'var(--verde)'};" onclick="saToggleEmpresa('${e.id}')">${e.estado === 'activa' ? 'Suspender' : 'Reactivar'}</button>`}
-      </div>`).join('');
-    const sel = document.getElementById('saOpEmpresa');
-    if (sel) sel.innerHTML = d.empresas.filter((e) => e.estado === 'activa').map((e) => `<option value="${e.id}">${e.nombre}</option>`).join('');
+      <div style="border:1px solid ${e.estado === 'activa' ? 'var(--linea)' : 'rgba(229,52,75,.5)'}; border-radius:14px; padding:14px; text-align:center; position:relative;">
+        <div style="font-size:2rem;">🏢</div>
+        <strong style="display:block; font-size:.88rem; margin:6px 0 2px;">${e.nombre}</strong>
+        <small style="color:var(--gris);">${e.clientes} cliente${e.clientes === 1 ? '' : 's'}</small>
+        <div style="margin-top:8px; display:flex; gap:6px; justify-content:center; align-items:center;">
+          <span style="width:9px; height:9px; border-radius:50%; background:${e.estado === 'activa' ? 'var(--verde)' : 'var(--rojo)'};"></span>
+          <small style="color:${e.estado === 'activa' ? 'var(--verde)' : '#ff4d5e'};">${e.estado}</small>
+          ${e.id === 'sos360-la-serena' ? '<small style="color:var(--gris);">· 👑 nuestra</small>' : `<button title="${e.estado === 'activa' ? 'Suspender' : 'Reactivar'}" onclick="saToggleEmpresa('${e.id}')" style="background:none; border:none; cursor:pointer; font-size:1rem; padding:0 4px;">${e.estado === 'activa' ? '⏸' : '▶️'}</button>`}
+        </div>
+      </div>`).join('') + `
+      <button onclick="saNuevaEmpresa()" style="border:1.5px dashed var(--linea); border-radius:14px; padding:14px; text-align:center; background:transparent; color:var(--gris); cursor:pointer; min-height:120px;">
+        <div style="font-size:2rem;">➕</div>
+        <strong style="display:block; font-size:.85rem; margin-top:6px;">Nueva empresa</strong>
+      </button>`;
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
-function saCrearEmpresa() {
-  const inp = document.getElementById('saNuevaEmpresa');
+function saNuevaEmpresa() {
+  const nombre = (prompt('Nombre de la nueva empresa de seguridad:') || '').trim();
+  if (!nombre) return;
   const info = document.getElementById('saEmpresaInfo');
-  const nombre = (inp.value || '').trim();
-  info.style.color = 'var(--rojo)'; info.textContent = '';
-  if (!nombre) { info.textContent = 'Escribe el nombre de la empresa.'; return; }
   saFetch({ accion: 'sa-crear-empresa', empresaNombre: nombre }).then((d) => {
-    if (d.ok) { info.style.color = '#00C776'; info.textContent = 'Empresa creada: ' + d.id; inp.value = ''; cargarPlataforma(); }
-    else info.textContent = d.error || 'No se pudo crear.';
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? 'Empresa creada: ' + d.id : (d.error || 'No se pudo crear.'); }
+    if (d.ok) cargarPlataforma();
   });
 }
 function saToggleEmpresa(id) {
@@ -3779,14 +3770,17 @@ function saToggleEmpresa(id) {
   saFetch({ accion: 'sa-toggle-empresa', empresaIdDestino: id }).then(() => cargarPlataforma());
 }
 function saAsignarOperador() {
-  const email = (document.getElementById('saOpEmail').value || '').trim();
-  const emp = document.getElementById('saOpEmpresa').value;
-  const info = document.getElementById('saOpInfo');
-  info.style.color = 'var(--rojo)'; info.textContent = '';
-  if (!email || !emp) { info.textContent = 'Completa el correo y la empresa.'; return; }
-  saFetch({ accion: 'sa-asignar-operador', operadorEmail: email, empresaIdDestino: emp }).then((d) => {
-    if (d.ok) { info.style.color = '#00C776'; info.textContent = 'Listo: al entrar, esa cuenta verá el panel de su empresa.'; document.getElementById('saOpEmail').value = ''; }
-    else info.textContent = d.error || 'No se pudo asignar.';
+  const email = (prompt('Correo del operador (debe tener su cuenta creada):') || '').trim();
+  if (!email) return;
+  const emps = (window._saEmpresas || []).filter((e) => e.estado === 'activa');
+  const lista = emps.map((e, i) => `${i + 1}. ${e.nombre}`).join('\n');
+  const n = parseInt(prompt('¿A qué empresa?\n' + lista + '\n\nEscribe el número:'), 10);
+  const emp = emps[n - 1];
+  const info = document.getElementById('saPermInfo');
+  if (!emp) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Número de empresa no válido.'; } return; }
+  saFetch({ accion: 'sa-asignar-operador', operadorEmail: email, empresaIdDestino: emp.id }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `Listo: ${email} ahora es operador de ${emp.nombre}.` : (d.error || 'No se pudo asignar.'); }
+    if (d.ok) saCargarOperadores();
   });
 }
 
@@ -3800,14 +3794,21 @@ function saCargarOperadores() {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     _saOps = d.operadores || [];
     cont.innerHTML = _saOps.map((o, i) => `
-      <div style="border-bottom:1px solid var(--linea); padding:10px 0;">
-        <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:7px;">
-          <strong style="font-size:.9rem;">${o.nombre || o.email || o.uid.slice(0, 8)}</strong>
-          <small style="color:var(--gris);">${o.email || ''} · ${o.empresa}${o.esSuperadmin ? ' · 👑 superadmin (sin restricciones)' : ''}</small>
+      <div style="border:1px solid var(--linea); border-radius:14px; padding:13px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:${o.esSuperadmin ? '0' : '10px'};">
+          <div style="width:38px; height:38px; border-radius:50%; background:var(--violeta-suave); color:#9d8fff; display:grid; place-items:center; font-weight:700; font-family:'Chakra Petch',sans-serif;">${(o.nombre || o.email || '?').slice(0, 1).toUpperCase()}</div>
+          <div style="flex:1; min-width:0;">
+            <strong style="display:block; font-size:.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${o.nombre || o.email || o.uid.slice(0, 8)} ${o.esSuperadmin ? '👑' : ''}</strong>
+            <small style="color:var(--gris); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${o.email || ''} · ${o.empresa}</small>
+          </div>
         </div>
-        ${o.esSuperadmin ? '' : `<div style="display:flex; gap:6px; flex-wrap:wrap;">` + PERMISOS_KEYS.map((k) => `
-          <button onclick="saTogglePermiso(${i},'${k}')" id="tg-${i}-${k}" style="padding:5px 12px; border-radius:99px; font-size:.72rem; font-weight:600; cursor:pointer; border:1px solid ${o.permisos[k] !== false ? 'var(--verde)' : 'var(--linea)'}; background:${o.permisos[k] !== false ? 'var(--verde-suave)' : 'transparent'}; color:${o.permisos[k] !== false ? 'var(--verde)' : 'var(--gris)'};">${PERMISOS_NOMBRES[k]}</button>`).join('') + '</div>'}
-      </div>`).join('') || '<div class="evento"><div><strong>Sin operadores aún.</strong></div></div>';
+        ${o.esSuperadmin ? '' : `<div style="display:flex; gap:7px; justify-content:space-between;">` + PERMISOS_KEYS.map((k) => `
+          <button onclick="saTogglePermiso(${i},'${k}')" id="tg-${i}-${k}" title="${PERMISOS_NOMBRES[k].slice(3)}" style="width:40px; height:40px; border-radius:12px; font-size:1.05rem; cursor:pointer; border:1.5px solid ${o.permisos[k] !== false ? 'var(--verde)' : 'var(--linea)'}; background:${o.permisos[k] !== false ? 'var(--verde-suave)' : 'transparent'}; ${o.permisos[k] !== false ? '' : 'filter:grayscale(1); opacity:.45;'}">${PERMISOS_NOMBRES[k].slice(0, 2).trim()}</button>`).join('') + '</div>'}
+      </div>`).join('') + `
+      <button onclick="saAsignarOperador()" style="border:1.5px dashed var(--linea); border-radius:14px; padding:13px; text-align:center; background:transparent; color:var(--gris); cursor:pointer; min-height:100px;">
+        <div style="font-size:1.7rem;">➕</div>
+        <strong style="display:block; font-size:.85rem; margin-top:4px;">Asignar operador</strong>
+      </button>`;
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
 function saTogglePermiso(i, k) {
@@ -3816,26 +3817,16 @@ function saTogglePermiso(i, k) {
   o.permisos[k] = o.permisos[k] === false; // invierte
   const b = document.getElementById(`tg-${i}-${k}`);
   const on = o.permisos[k] !== false;
-  if (b) { b.style.borderColor = on ? 'var(--verde)' : 'var(--linea)'; b.style.background = on ? 'var(--verde-suave)' : 'transparent'; b.style.color = on ? 'var(--verde)' : 'var(--gris)'; }
+  if (b) {
+    b.style.borderColor = on ? 'var(--verde)' : 'var(--linea)';
+    b.style.background = on ? 'var(--verde-suave)' : 'transparent';
+    b.style.filter = on ? '' : 'grayscale(1)';
+    b.style.opacity = on ? '' : '.45';
+  }
   const info = document.getElementById('saPermInfo');
   saFetch({ accion: 'sa-permisos', modo: 'set', operadorUid: o.uid, permisos: o.permisos }).then((d) => {
     if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `${PERMISOS_NOMBRES[k]} ${on ? 'activada' : 'cortada'} para ${o.nombre || o.email || 'el operador'}.` : (d.error || 'Error al guardar'); }
   });
-}
-
-// Aplica en el panel los permisos que la plataforma le dio a ESTE operador.
-let permisosOp = null;
-function aplicarPermisosOperador(p, esSA) {
-  permisosOp = p || null;
-  if (esSA || !p) return; // el superadmin nunca se corta a sí mismo
-  const nav = (v, on) => { const b = document.querySelector(`.op-nav[data-opview="${v}"]`); if (b) b.style.display = on ? '' : 'none'; };
-  nav('clientes', p.clientes !== false);
-  nav('historial', p.historial !== false);
-  nav('tecnico', p.tecnico !== false);
-  nav('equipo', p.tecnico !== false);
-  document.querySelectorAll('[onclick*="exportarAlarmasCSV"], [onclick*="exportarZonaCSV"]').forEach((b) => { b.style.display = p.exportar === false ? 'none' : ''; });
-  const zb = document.getElementById('zonaBtn'); if (zb) zb.style.display = p.zonas === false ? 'none' : '';
-  const cb = document.getElementById('calorBtn'); if (cb) cb.style.display = p.zonas === false ? 'none' : '';
 }
 
 function opGo(v){
