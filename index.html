@@ -161,6 +161,33 @@ body.op-dis-compacto #s-operador .card-title{font-size:.7rem;margin-bottom:8px}
 body.op-dis-compacto #s-operador .op-grid2{gap:10px}
 body.op-dis-compacto #s-operador .evento{padding:7px 0}
 body.op-dis-compacto #s-operador .map-container{height:380px !important}
+/* ── COMANDO: estilo sala de operaciones militar/terminal ── */
+body.op-dis-comando #s-operador{--blanco:#0a0f0a;--fondo:#050805;--linea:#1e3a1e;--tinta:#7dff7d;--gris:#3f8f3f;--violeta:#00e676;--violeta-suave:rgba(0,230,118,.12);--verde:#00e676;--verde-suave:rgba(0,230,118,.12);font-family:'Courier New',monospace}
+body.op-dis-comando #s-operador .card{border-radius:0;border:1px solid #1e3a1e;background:#080c08;box-shadow:inset 0 0 24px rgba(0,230,118,.04)}
+body.op-dis-comando #s-operador .card-title{font-family:'Courier New',monospace;color:#00e676;letter-spacing:.18em;text-transform:uppercase}
+body.op-dis-comando #s-operador .card-title::before{content:'> '}
+body.op-dis-comando #s-operador .op-side{background:#050805;border-right:1px solid #1e3a1e}
+body.op-dis-comando #s-operador .op-nav{border-radius:0;font-family:'Courier New',monospace}
+body.op-dis-comando #s-operador .op-nav.on{background:rgba(0,230,118,.14);color:#00e676;border-left:3px solid #00e676}
+body.op-dis-comando #s-operador .op-topbar{border-bottom:1px solid #1e3a1e;background:#050805}
+body.op-dis-comando #s-operador .op-title{font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.12em;color:#00e676}
+body.op-dis-comando #s-operador input,body.op-dis-comando #s-operador textarea,body.op-dis-comando #s-operador select{background:#050805;border:1px solid #1e3a1e;border-radius:0;color:#7dff7d;font-family:'Courier New',monospace}
+body.op-dis-comando #s-operador .btn-full{border-radius:0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.1em}
+body.op-dis-comando #s-operador .evento{border-bottom:1px dashed #1e3a1e}
+body.op-dis-comando #s-operador .map-container{border:1px solid #1e3a1e;border-radius:0}
+body.op-dis-comando #s-operador #mapaOperador{border-radius:0;filter:sepia(1) hue-rotate(60deg) saturate(1.6) brightness(.9)}
+/* ── CRISTAL: paneles translúcidos estilo vidrio, moderno y vistoso ── */
+body.op-dis-cristal #s-operador{--blanco:rgba(255,255,255,.07);--linea:rgba(255,255,255,.16);background:linear-gradient(135deg,#12142e 0%,#2a1a4a 45%,#0f2438 100%) fixed}
+body.op-dis-cristal #s-operador .card{background:rgba(255,255,255,.06);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.14);border-radius:22px;box-shadow:0 8px 32px rgba(0,0,0,.35)}
+body.op-dis-cristal #s-operador .op-side{background:rgba(255,255,255,.05);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-right:1px solid rgba(255,255,255,.12)}
+body.op-dis-cristal #s-operador .op-topbar{background:rgba(255,255,255,.04);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.1)}
+body.op-dis-cristal #s-operador .op-nav{border-radius:14px}
+body.op-dis-cristal #s-operador .op-nav.on{background:linear-gradient(90deg,rgba(124,108,255,.4),rgba(0,199,255,.25));color:#fff}
+body.op-dis-cristal #s-operador .card-title{color:#cfd4ff;letter-spacing:.14em}
+body.op-dis-cristal #s-operador input,body.op-dis-cristal #s-operador textarea,body.op-dis-cristal #s-operador select{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:14px}
+body.op-dis-cristal #s-operador .btn-full{border-radius:14px;background:linear-gradient(90deg,#7c6cff,#00c7ff);border:none}
+body.op-dis-cristal #s-operador .map-container,body.op-dis-cristal #s-operador #mapaOperador{border-radius:18px}
+body.op-dis-cristal #s-operador .evento{border-bottom:1px solid rgba(255,255,255,.08)}
 /* ── Alarma sonora/visual: parpadeo del panel + banner ── */
 @keyframes opAlarmaFlash{0%,100%{box-shadow:inset 0 0 0 0 rgba(229,52,75,0)}50%{box-shadow:inset 0 0 0 5px rgba(229,52,75,.6)}}
 body.op-alarma-flash #s-operador .op-main{animation:opAlarmaFlash 1s ease-in-out infinite}
@@ -749,6 +776,8 @@ textarea{min-height:96px;resize:vertical}
                 <button class="tema-op" onclick="setDisenoOperador('actual')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;">▦ Actual</button>
                 <button class="tema-op" onclick="setDisenoOperador('minimal')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;">◻ Minimalista</button>
                 <button class="tema-op" onclick="setDisenoOperador('compacto')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;">▤ Compacto</button>
+                <button class="tema-op" onclick="setDisenoOperador('comando')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;">🎖 Comando (militar)</button>
+                <button class="tema-op" onclick="setDisenoOperador('cristal')" style="display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px; border-radius:9px; background:transparent; color:var(--tinta); font-size:.82rem; cursor:pointer;">💎 Cristal (vidrio)</button>
               </div>
             </div>
             <div style="position:relative;">
@@ -1848,7 +1877,7 @@ function toggleMenuDiseno(e) {
   const t = document.getElementById('temaMenu'); if (t) t.style.display = 'none';
 }
 function setDisenoOperador(d) {
-  document.body.classList.remove('op-dis-actual', 'op-dis-minimal', 'op-dis-compacto');
+  document.body.classList.remove('op-dis-actual', 'op-dis-minimal', 'op-dis-compacto', 'op-dis-comando', 'op-dis-cristal');
   document.body.classList.add('op-dis-' + d);
   try { localStorage.setItem('sos360DisenoOperador', d); } catch (e) {}
   if (operadorMapa) setTimeout(function () { operadorMapa.invalidateSize(); }, 160);
