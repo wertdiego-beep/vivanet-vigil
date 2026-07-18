@@ -1051,8 +1051,10 @@ textarea{min-height:96px;resize:vertical}
               <div class="error-msg" id="saEmpresaInfo"></div>
             </div>
             <div class="card">
-              <div class="card-title">⚙️ Funciones de la app</div>
-              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Tu tablero de control del producto: activa o desactiva características para toda la plataforma, al instante y sin tocar código.</p>
+              <div class="card-title">⚙️ Funciones por empresa</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Arma el plan de cada empresa que te contrata: elige la empresa y activa solo las funciones que le vendiste.</p>
+              <label style="font-size:.72rem; color:var(--gris);">Empresa</label>
+              <select id="saFnEmpresa" onchange="saCargarFunciones()" style="margin-bottom:12px;"></select>
               <div id="saFunciones" style="display:flex; flex-direction:column; gap:8px;"></div>
               <div class="error-msg" id="saFnInfo"></div>
             </div>
@@ -4102,7 +4104,6 @@ function saFetch(cuerpo) {
   })).then((r) => r.json());
 }
 function cargarPlataforma() {
-  saCargarFunciones();
   saCargarCategorias();
   saCargarOperadores();
   const cont = document.getElementById('saEmpresas');
@@ -4110,6 +4111,9 @@ function cargarPlataforma() {
   saFetch({ accion: 'sa-empresas' }).then((d) => {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     window._saEmpresas = d.empresas;
+    const sel = document.getElementById('saFnEmpresa');
+    if (sel) { const prev = sel.value; sel.innerHTML = d.empresas.map((e) => `<option value="${e.id}">${e.nombre}</option>`).join(''); if (prev) sel.value = prev; }
+    saCargarFunciones();
     cont.innerHTML = d.empresas.map((e) => `
       <div style="border:1px solid ${e.estado === 'activa' ? 'var(--linea)' : 'rgba(229,52,75,.5)'}; border-radius:14px; padding:14px; text-align:center; position:relative;">
         <div style="font-size:2rem;">🏢</div>
@@ -4193,7 +4197,8 @@ function saGuardarCategorias() {
 function saCargarFunciones() {
   const cont = document.getElementById('saFunciones');
   if (!cont) return;
-  saFetch({ accion: 'sa-funciones', modo: 'get' }).then((d) => {
+  const empId = (document.getElementById('saFnEmpresa') || {}).value || 'sos360-la-serena';
+  saFetch({ accion: 'sa-funciones', modo: 'get', empresaIdFn: empId }).then((d) => {
     if (!d.ok) return;
     funcionesApp = d.funciones || {};
     let ultimoGrupo = '';
@@ -4223,8 +4228,10 @@ function saToggleFuncion(k, defOn) {
     if (dot) { dot.style.left = on ? 'auto' : '3px'; dot.style.right = on ? '3px' : 'auto'; }
   }
   const info = document.getElementById('saFnInfo');
-  saFetch({ accion: 'sa-funciones', modo: 'set', funciones: funcionesApp }).then((d) => {
-    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? 'Guardado. Se aplica a todos en segundos.' : (d.error || 'Error'); }
+  const empId = (document.getElementById('saFnEmpresa') || {}).value || 'sos360-la-serena';
+  const nomEmp = (window._saEmpresas || []).find((e) => e.id === empId);
+  saFetch({ accion: 'sa-funciones', modo: 'set', funciones: funcionesApp, empresaIdFn: empId }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `Guardado para ${nomEmp ? nomEmp.nombre : 'la empresa'}. Aplica en segundos.` : (d.error || 'Error'); }
   });
 }
 
