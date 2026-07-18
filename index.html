@@ -1521,7 +1521,9 @@ async function cargarPanelOperador() {
     _saSoyMaestra = data.esMaestra === true;
     _miRolEmpresa = data.rolEmpresa || '';
     const np = document.getElementById('navPersonal');
-    if (np) np.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
+    // Solo el jefe/gerente de cada empresa gestiona su personal. El superadmin
+    // (nosotros) administra empresas y planes, no la gente interna del cliente.
+    if (np) np.style.display = (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     aplicarFuncionesApp(data.funciones);
     ajustarPollingOperador((data.alertas || []).length > 0);
