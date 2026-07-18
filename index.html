@@ -1189,14 +1189,20 @@ function entrarASOS360() {
   };
   if (user.uid === CENTRAL_UID) { entrarComoOperador(); return; }
 
-  // Otros operadores (lista OPERADORES_UIDS en Vercel): decide el servidor.
-  // Reutilizamos /api/operador-datos (responde 403 si no es operador) en vez de
-  // un endpoint nuevo: Vercel Hobby permite máximo 12 funciones serverless.
-  // Va en paralelo para no demorar la entrada de los clientes normales.
-  user.getIdToken().then((idToken) => fetch('/api/operador-datos', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken })
-  })).then((r) => r.json()).then((d) => { if (d && d.ok) entrarComoOperador(); }).catch(() => {});
+  // Otros operadores: decide el servidor vía /api/operador-datos (403 si no lo es).
+  // Con REINTENTOS: si el servidor está frío o la señal es débil, la primera
+  // llamada puede fallar y el operador quedaba atrapado en la versión cliente.
+  window._entrarOperador = entrarComoOperador;
+  const verificarPanelOperador = (intento) => {
+    user.getIdToken().then((idToken) => fetch('/api/operador-datos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
+    })).then((r) => r.json()).then((d) => {
+      if (d && d.ok) entrarComoOperador();
+      else if (intento < 3 && (!d || !d.error || d.error.indexOf('No autorizado') === -1)) setTimeout(() => verificarPanelOperador(intento + 1), 4000);
+    }).catch(() => { if (intento < 3) setTimeout(() => verificarPanelOperador(intento + 1), 4000); });
+  };
+  verificarPanelOperador(0);
 
   // Si es técnico (rolEmpresa === 'tecnico'), ve su panel de visitas asignadas.
   db.collection('usuarios').doc(user.uid).get().then((doc) => {
@@ -3570,6 +3576,25 @@ function cargarDatosUsuario(uid) {
     if (doc.exists) {
       const data = doc.data();
       modoSeleccionado = data.modo || 'empresa'; // Usuarios existentes sin 'modo' quedan como empresa
+      // Si esta cuenta es operador de una central y quedó en versión cliente,
+      // se le muestra un botón directo para entrar a su panel.
+      if (data.operadorDe && !document.getElementById('bannerOperador')) {
+        const b = document.createElement('div');
+        b.id = 'bannerOperador';
+        b.style.cssText = 'position:fixed;bottom:84px;left:14px;right:14px;z-index:4000;background:var(--violeta);color:#fff;padding:13px 16px;border-radius:14px;display:flex;align-items:center;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.4);cursor:pointer;font-weight:700;font-size:.9rem;';
+        b.innerHTML = '🖥 Eres operador de la central — toca aquí para entrar al panel';
+        b.onclick = () => {
+          b.textContent = 'Conectando con la central…';
+          auth.currentUser.getIdToken().then((t) => fetch('/api/operador-datos', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: t })
+          })).then((r) => r.json()).then((d) => {
+            if (d && d.ok && window._entrarOperador) { b.remove(); window._entrarOperador(); }
+            else { alert('La central respondió: ' + ((d && d.error) || 'sin conexión') + '. Intenta de nuevo en unos segundos.'); b.innerHTML = '🖥 Eres operador de la central — toca aquí para entrar al panel'; }
+          }).catch(() => { alert('Sin conexión con la central. Revisa tu internet.'); b.innerHTML = '🖥 Eres operador de la central — toca aquí para entrar al panel'; });
+        };
+        document.body.appendChild(b);
+      }
       soyMiembroVinculado = !!data.grupoFamiliarId; // Se unió con código de otra persona → no es el dueño
       const cuentaBadge = document.getElementById('cuentaBadge');
       if (cuentaBadge) {
