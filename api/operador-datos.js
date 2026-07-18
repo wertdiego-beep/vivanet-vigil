@@ -342,21 +342,23 @@ export default async function handler(req, res) {
         return;
       }
       if (accion === 'sa-funciones') {
-        // Interruptores globales de funciones de la app (feature flags).
+        // Funciones POR EMPRESA (el plan que le asignas a cada cliente que te contrata).
+        const empId = (req.body.empresaIdFn || 'sos360-la-serena').trim();
+        const docPath = empId === 'sos360-la-serena' ? `${base}/plataforma/funciones` : `${base}/empresas/${empId}`;
         if (req.body.modo === 'set') {
           const p = req.body.funciones || {};
           const fields = {};
           Object.keys(p).forEach((k) => { fields[k] = { booleanValue: !!p[k] }; });
-          await fetch(`${base}/plataforma/funciones?updateMask.fieldPaths=flags`, {
+          await fetch(`${docPath}?updateMask.fieldPaths=${empId === 'sos360-la-serena' ? 'flags' : 'funciones'}`, {
             method: 'PATCH',
             headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields: { flags: { mapValue: { fields } } } })
+            body: JSON.stringify({ fields: { [empId === 'sos360-la-serena' ? 'flags' : 'funciones']: { mapValue: { fields } } } })
           });
           res.status(200).json({ ok: true });
           return;
         }
-        const doc = await fetch(`${base}/plataforma/funciones`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-        const fraw = doc.fields?.flags?.mapValue?.fields || {};
+        const doc = await fetch(docPath, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const fraw = doc.fields?.[empId === 'sos360-la-serena' ? 'flags' : 'funciones']?.mapValue?.fields || {};
         const funciones = {};
         Object.keys(fraw).forEach((k) => { funciones[k] = fraw[k].booleanValue !== false; });
         res.status(200).json({ ok: true, funciones });
@@ -513,9 +515,12 @@ export default async function handler(req, res) {
 
     const historial = alertasRecientes.slice(0, 120);
 
-    // Interruptores globales de la plataforma (funciones activadas por el superadmin).
-    const docFn = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/plataforma/funciones`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-    const fraw = docFn.fields?.flags?.mapValue?.fields || {};
+    // Funciones del operador: las de SU empresa (o las de plataforma si es la nuestra).
+    const rutaFn = empresaOperador === 'sos360-la-serena'
+      ? `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/plataforma/funciones`
+      : `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/empresas/${empresaOperador}`;
+    const docFn = await fetch(rutaFn, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const fraw = (docFn.fields?.flags || docFn.fields?.funciones)?.mapValue?.fields || {};
     const funciones = {};
     Object.keys(fraw).forEach((k) => { funciones[k] = fraw[k].booleanValue !== false; });
 

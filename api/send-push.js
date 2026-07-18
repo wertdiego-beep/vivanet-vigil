@@ -158,12 +158,15 @@ async function manejarCliente(req, res) {
   const base = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
   if (accion === 'config') {
-    // Interruptores y categorías que el cliente necesita conocer.
+    // Funciones de la empresa del cliente (o las de plataforma si es nuestra).
+    const docCli = await fetch(`${base}/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const empCli = docCli.fields?.empresaId?.stringValue || 'sos360-la-serena';
+    const rutaFn = empCli === 'sos360-la-serena' ? `${base}/plataforma/funciones` : `${base}/empresas/${empCli}`;
     const [fn, cat] = await Promise.all([
-      fetch(`${base}/plataforma/funciones`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
+      fetch(rutaFn, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
       fetch(`${base}/plataforma/categorias`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
     ]);
-    const fraw = fn.fields?.flags?.mapValue?.fields || {};
+    const fraw = (fn.fields?.flags || fn.fields?.funciones)?.mapValue?.fields || {};
     const funciones = {};
     Object.keys(fraw).forEach((k) => { funciones[k] = fraw[k].booleanValue !== false; });
     let categorias = [];
