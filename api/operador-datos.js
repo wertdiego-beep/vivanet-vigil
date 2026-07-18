@@ -39,7 +39,7 @@ async function obtenerAccessToken() {
   const header = { alg: 'RS256', typ: 'JWT' };
   const claim = {
     iss: clientEmail,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/datastore',
+    scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/identitytoolkit',
     aud: 'https://oauth2.googleapis.com/token',
     iat: nowSec,
     exp: nowSec + 3600
