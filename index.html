@@ -793,6 +793,10 @@ textarea{min-height:96px;resize:vertical}
                   <button id="probarSirenaBtn" onclick="probarSirena()" title="Prueba la sirena y deja el sonido habilitado en este navegador" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">🔊 Probar sirena</button>
                   <button id="calorBtn" onclick="toggleMapaCalor()" title="Pinta en el mapa las zonas con más alarmas históricas" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">🔥 Zonas calientes</button>
                   <button id="mapaFullBtn" onclick="toggleMapaFull()" title="Expande el mapa a toda la pantalla (Esc para salir)" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; margin-left:6px;">⛶ Pantalla completa</button>
+                  <div style="display:inline-block; position:relative; margin-left:6px;">
+                    <button id="mapaEstiloBtn" onclick="toggleMenuMapa(event)" title="Elige el estilo del mapa" style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.72rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif;">🗺 Mapa</button>
+                    <div id="mapaEstiloMenu" style="display:none; position:absolute; left:0; top:calc(100% + 6px); background:var(--blanco); border:1px solid var(--linea); border-radius:12px; padding:6px; min-width:170px; z-index:2500; box-shadow:0 14px 34px rgba(0,0,0,.4);"></div>
+                  </div>
                 </div>
                 <div class="map-container" style="max-width:none; height:520px; margin:0;">
                   <div id="mapaOperador" style="width:100%; height:100%; border-radius:12px;"></div>
@@ -1755,15 +1759,63 @@ function ajustarEncuadreInicial() {
 function temaActualOperador() {
   try { return localStorage.getItem('sos360TemaOperador') || 'oscuro'; } catch (e) { return 'oscuro'; }
 }
+/* ── VARIANTES DE MAPA: el operador elige el estilo con un botón ── */
+const MAPA_ESTILOS = {
+  auto:     { n: '🎨 Según el tema', url: null },
+  oscuro:   { n: '🌙 Oscuro',   url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', sub: 'abcd', max: 19 },
+  claro:    { n: '☀️ Claro',    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', sub: 'abcd', max: 19 },
+  calles:   { n: '🛣 Calles',   url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', sub: 'abcd', max: 19 },
+  satelite: { n: '🛰 Satélite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', sub: null, max: 18 },
+  osm:      { n: '🗺 Clásico',  url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', sub: null, max: 19 }
+};
+function estiloMapaGuardado() {
+  const k = localStorage.getItem('sos360MapaEstilo') || 'auto';
+  return MAPA_ESTILOS[k] ? k : 'auto';
+}
 function urlTilesOperador(tema) {
+  const k = estiloMapaGuardado();
+  if (k !== 'auto' && MAPA_ESTILOS[k].url) return MAPA_ESTILOS[k].url;
   return tema === 'claro'
     ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 }
+function opcionesTiles() {
+  const k = estiloMapaGuardado();
+  const e = (k !== 'auto') ? MAPA_ESTILOS[k] : null;
+  const op = { attribution: '&copy; OpenStreetMap &copy; CARTO &copy; Esri', maxZoom: (e && e.max) || 19 };
+  if (!e || e.sub) op.subdomains = (e && e.sub) || 'abcd';
+  return op;
+}
+function setEstiloMapa(k) {
+  localStorage.setItem('sos360MapaEstilo', k);
+  if (operadorMapa && operadorTileLayer) {
+    operadorMapa.removeLayer(operadorTileLayer);
+    operadorTileLayer = L.tileLayer(urlTilesOperador(temaActualOperador()), opcionesTiles()).addTo(operadorMapa);
+  }
+  renderMenuMapa();
+}
+function renderMenuMapa() {
+  const m = document.getElementById('mapaEstiloMenu');
+  if (!m) return;
+  const actual = estiloMapaGuardado();
+  m.innerHTML = Object.keys(MAPA_ESTILOS).map((k) => `
+    <button onclick="setEstiloMapa('${k}')" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:8px 10px; border-radius:9px; background:${k === actual ? 'var(--violeta-suave)' : 'transparent'}; color:${k === actual ? '#9d8fff' : 'var(--tinta)'}; font-size:.8rem; cursor:pointer; border:none;">${MAPA_ESTILOS[k].n}${k === actual ? ' ✓' : ''}</button>`).join('');
+}
+function toggleMenuMapa(ev) {
+  ev.stopPropagation();
+  const m = document.getElementById('mapaEstiloMenu');
+  if (!m) return;
+  renderMenuMapa();
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', (e) => {
+  const m = document.getElementById('mapaEstiloMenu');
+  if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
+});
 function aplicarTilesOperador(tema) {
   if (!operadorMapa) return;
   if (operadorTileLayer) operadorMapa.removeLayer(operadorTileLayer);
-  operadorTileLayer = L.tileLayer(urlTilesOperador(tema), { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(operadorMapa);
+  operadorTileLayer = L.tileLayer(urlTilesOperador(tema), opcionesTiles()).addTo(operadorMapa);
 }
 function toggleMenuTema(e) {
   if (e) e.stopPropagation();
@@ -1995,7 +2047,7 @@ function renderOperadorMapa(alertas, clientes) {
   if (!operadorMapa) {
     operadorMapa = L.map('mapaOperador').setView(MAPA_CENTRO_DEFECTO, 13);
     // Tiles oscuros (CARTO) para calzar con el tema del panel
-    operadorTileLayer = L.tileLayer(urlTilesOperador(temaActualOperador()), { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(operadorMapa);
+    operadorTileLayer = L.tileLayer(urlTilesOperador(temaActualOperador()), opcionesTiles()).addTo(operadorMapa);
     operadorMapa.on('click', clickMapaZona);
   }
   if (!operadorCapaPrecision) operadorCapaPrecision = L.layerGroup().addTo(operadorMapa);
