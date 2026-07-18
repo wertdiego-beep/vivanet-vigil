@@ -323,6 +323,38 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, uid: cuenta.localId });
         return;
       }
+      if (accion === 'sa-permisos') {
+        // Ver o cambiar qué funciones tiene permitidas un operador.
+        const email = (req.body.operadorEmail || '').trim().toLowerCase();
+        if (!email) { res.status(400).json({ error: 'Falta el correo del operador' }); return; }
+        const lookup = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: [email] })
+        }).then((r) => r.json());
+        const cuenta = lookup.users && lookup.users[0];
+        if (!cuenta) { res.status(404).json({ error: 'No existe una cuenta con ese correo.' }); return; }
+        const docU = await fetch(`${base}/usuarios/${cuenta.localId}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const esOpDestino = OPERADORES.includes(cuenta.localId) || !!docU.fields?.operadorDe?.stringValue;
+        if (!esOpDestino) { res.status(400).json({ error: 'Esa cuenta no es operador de ninguna central.' }); return; }
+        if (req.body.modo === 'set') {
+          const p = req.body.permisos || {};
+          const fields = {};
+          Object.keys(p).forEach((k) => { fields[k] = { booleanValue: !!p[k] }; });
+          await fetch(`${base}/usuarios/${cuenta.localId}?updateMask.fieldPaths=permisosOp`, {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: { permisosOp: { mapValue: { fields } } } })
+          });
+          res.status(200).json({ ok: true });
+          return;
+        }
+        const praw = docU.fields?.permisosOp?.mapValue?.fields || {};
+        const permisosDest = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true };
+        Object.keys(praw).forEach((k) => { permisosDest[k] = praw[k].booleanValue !== false; });
+        res.status(200).json({ ok: true, permisos: permisosDest, empresa: docU.fields?.operadorDe?.stringValue || docU.fields?.empresaId?.stringValue || 'sos360-la-serena' });
+        return;
+      }
       res.status(400).json({ error: 'Acción de plataforma desconocida' });
       return;
     }
@@ -364,7 +396,12 @@ export default async function handler(req, res) {
 
     const historial = alertasRecientes.slice(0, 120);
 
-    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, empresaId: empresaOperador });
+    // Permisos del operador (la plataforma puede cortarle funciones).
+    const praw = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
+    const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true };
+    Object.keys(praw).forEach((k) => { permisos[k] = praw[k].booleanValue !== false; });
+
+    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, empresaId: empresaOperador, permisos });
   } catch (err) {
     console.error('Error en panel operador:', err);
     res.status(500).json({ error: err.message || 'Error interno del servidor' });

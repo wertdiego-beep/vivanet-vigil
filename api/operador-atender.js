@@ -151,6 +151,11 @@ export default async function handler(req, res) {
       return;
     }
     const empOp = docOp.fields?.operadorDe?.stringValue || docOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
+    // La plataforma puede quitarle a un operador el permiso de atender/cerrar alertas.
+    if (docOp.fields?.permisosOp?.mapValue?.fields?.atender?.booleanValue === false) {
+      res.status(403).json({ error: 'La plataforma desactivó tu permiso para atender alertas' });
+      return;
+    }
     const empCli = docCli.fields?.empresaId?.stringValue || 'sos360-la-serena';
     if (empOp !== empCli) {
       res.status(403).json({ error: 'Este cliente pertenece a otra empresa de seguridad' });
