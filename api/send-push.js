@@ -107,9 +107,50 @@ async function enviarPush(accessToken, token, titulo, cuerpo) {
   return { ok: resp.ok, status: resp.status, data };
 }
 
+const FIREBASE_API_KEY = 'AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g'; // clave pública del cliente web
+const OPERADORES = (process.env.OPERADORES_UIDS || CENTRAL_UID).split(',').map((s) => s.trim()).filter(Boolean);
+
+// ── DIFUSIÓN MASIVA: un operador envía un aviso push a TODOS los clientes de
+// su empresa que tengan notificaciones activadas (espec. 27 y 40 del pliego).
+async function manejarDifusion(req, res) {
+  const { idToken, titulo, cuerpo } = req.body || {};
+  if (!idToken || !titulo || !cuerpo) { res.status(400).json({ error: 'Faltan idToken, título o cuerpo' }); return; }
+  const accessToken = await obtenerAccessToken();
+  // Verificar que quien envía es un operador.
+  const lookup = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken })
+  }).then((r) => r.json());
+  const uid = lookup.users && lookup.users[0] && lookup.users[0].localId;
+  if (!uid) { res.status(401).json({ error: 'Sesión no válida' }); return; }
+  const docOp = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+  const esOp = OPERADORES.includes(uid) || !!docOp.fields?.operadorDe?.stringValue;
+  if (!esOp) { res.status(403).json({ error: 'Solo operadores pueden enviar difusiones' }); return; }
+  const empOp = docOp.fields?.operadorDe?.stringValue || docOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
+  // Clientes de SU empresa con push activado.
+  const lista = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+  const destinos = (lista.documents || []).filter((d) => {
+    const f = d.fields || {};
+    const emp = f.empresaId?.stringValue || 'sos360-la-serena';
+    const id = d.name.split('/').pop();
+    return emp === empOp && f.fcmToken?.stringValue && id !== uid && !OPERADORES.includes(id) && !f.operadorDe?.stringValue;
+  }).slice(0, 200);
+  let enviados = 0;
+  for (const d of destinos) {
+    const r = await enviarPush(accessToken, d.fields.fcmToken.stringValue, `📣 ${titulo}`, cuerpo);
+    if (r.ok) enviados++;
+  }
+  res.status(200).json({ ok: true, enviados, totalConPush: destinos.length });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Método no permitido' });
+    return;
+  }
+
+  if (req.body && req.body.accion === 'difusion') {
+    try { await manejarDifusion(req, res); } catch (err) { res.status(500).json({ error: err.message }); }
     return;
   }
 

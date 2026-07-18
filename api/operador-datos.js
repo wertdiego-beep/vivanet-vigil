@@ -323,6 +323,27 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, uid: cuenta.localId });
         return;
       }
+      if (accion === 'sa-funciones') {
+        // Interruptores globales de funciones de la app (feature flags).
+        if (req.body.modo === 'set') {
+          const p = req.body.funciones || {};
+          const fields = {};
+          Object.keys(p).forEach((k) => { fields[k] = { booleanValue: !!p[k] }; });
+          await fetch(`${base}/plataforma/funciones?updateMask.fieldPaths=flags`, {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: { flags: { mapValue: { fields } } } })
+          });
+          res.status(200).json({ ok: true });
+          return;
+        }
+        const doc = await fetch(`${base}/plataforma/funciones`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const fraw = doc.fields?.flags?.mapValue?.fields || {};
+        const funciones = {};
+        Object.keys(fraw).forEach((k) => { funciones[k] = fraw[k].booleanValue !== false; });
+        res.status(200).json({ ok: true, funciones });
+        return;
+      }
       if (accion === 'sa-operadores') {
         // Lista de TODOS los operadores de la plataforma con sus permisos.
         const resp = await fetch(`${base}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
@@ -440,12 +461,18 @@ export default async function handler(req, res) {
 
     const historial = alertasRecientes.slice(0, 120);
 
+    // Interruptores globales de la plataforma (funciones activadas por el superadmin).
+    const docFn = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/plataforma/funciones`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const fraw = docFn.fields?.flags?.mapValue?.fields || {};
+    const funciones = {};
+    Object.keys(fraw).forEach((k) => { funciones[k] = fraw[k].booleanValue !== false; });
+
     // Permisos del operador (la plataforma puede cortarle funciones).
     const praw = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
     const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true };
     Object.keys(praw).forEach((k) => { permisos[k] = praw[k].booleanValue !== false; });
 
-    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, empresaId: empresaOperador, permisos });
+    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, empresaId: empresaOperador, permisos, funciones });
   } catch (err) {
     console.error('Error en panel operador:', err);
     res.status(500).json({ error: err.message || 'Error interno del servidor' });
