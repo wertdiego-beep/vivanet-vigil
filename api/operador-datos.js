@@ -323,8 +323,52 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, uid: cuenta.localId });
         return;
       }
+      if (accion === 'sa-operadores') {
+        // Lista de TODOS los operadores de la plataforma con sus permisos.
+        const resp = await fetch(`${base}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const docs = resp.documents || [];
+        const ops = docs.filter((d) => {
+          const id = d.name.split('/').pop();
+          return OPERADORES.includes(id) || !!d.fields?.operadorDe?.stringValue;
+        }).map((d) => {
+          const id = d.name.split('/').pop();
+          const praw = d.fields?.permisosOp?.mapValue?.fields || {};
+          const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true };
+          Object.keys(praw).forEach((k) => { permisos[k] = praw[k].booleanValue !== false; });
+          return {
+            uid: id,
+            nombre: d.fields?.nombre?.stringValue || '',
+            empresa: d.fields?.operadorDe?.stringValue || d.fields?.empresaId?.stringValue || 'sos360-la-serena',
+            esSuperadmin: SUPERADMINS.includes(id),
+            permisos
+          };
+        });
+        // Correos de esas cuentas (para mostrarlos)
+        try {
+          const lk = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ localId: ops.map((o) => o.uid) })
+          }).then((r) => r.json());
+          (lk.users || []).forEach((u) => { const o = ops.find((x) => x.uid === u.localId); if (o) o.email = u.email || ''; });
+        } catch (e) {}
+        res.status(200).json({ ok: true, operadores: ops });
+        return;
+      }
       if (accion === 'sa-permisos') {
-        // Ver o cambiar qué funciones tiene permitidas un operador.
+        // Cambiar los permisos de un operador (directo por uid).
+        if (req.body.operadorUid && req.body.modo === 'set') {
+          const p = req.body.permisos || {};
+          const fields = {};
+          Object.keys(p).forEach((k) => { fields[k] = { booleanValue: !!p[k] }; });
+          await fetch(`${base}/usuarios/${req.body.operadorUid}?updateMask.fieldPaths=permisosOp`, {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: { permisosOp: { mapValue: { fields } } } })
+          });
+          res.status(200).json({ ok: true });
+          return;
+        }
         const email = (req.body.operadorEmail || '').trim().toLowerCase();
         if (!email) { res.status(400).json({ error: 'Falta el correo del operador' }); return; }
         const lookup = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`, {
