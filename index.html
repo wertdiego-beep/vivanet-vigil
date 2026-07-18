@@ -788,6 +788,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="historial"><span>🕘</span><em>Historial</em></button>
         <button class="op-nav" data-opview="equipo"><span>🔑</span><em>Equipo técnico</em></button>
         <button class="op-nav" data-opview="reportes" id="navReportes" style="display:none"><span>📷</span><em>Reportes</em></button>
+        <button class="op-nav" data-opview="personal" id="navPersonal" style="display:none"><span>👔</span><em>Personal y roles</em></button>
         <button class="op-nav" data-opview="plataforma" id="navPlataforma" style="display:none"><span>🏢</span><em>Plataforma</em></button>
         <div class="op-side-foot">
           <button class="op-nav" id="opPushBtn" onclick="opActivarPush()" title="Recibe una notificación en este dispositivo cuando llegue un SOS, aunque el panel esté cerrado"><span>🔔</span><em>Avisos SOS</em></button>
@@ -1031,6 +1032,17 @@ textarea{min-height:96px;resize:vertical}
             </div>
           </section>
 
+          <!-- ── Vista: Personal y roles (jefe/gerente de la empresa) ── -->
+          <section class="op-view" id="op-view-personal">
+            <div class="card">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>👔 Personal de tu empresa</span><button onclick="cargarPersonal()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻ Actualizar</button></div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Asigna el cargo de cada integrante de tu equipo. El rol define qué puede hacer dentro de la empresa.</p>
+              <div id="personalLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+              <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--linea); font-size:.75rem; color:var(--gris); line-height:1.6;">
+                <b>Roles disponibles:</b> 👑 Jefe/a (manda todo) · 🎩 Gerente (gestiona personal) · 🛡 Supervisor (coordina turnos) · 👮 Guardia · 👤 Empleado/a · 🔧 Técnico.
+              </div>
+            </div>
+          </section>
           <!-- ── Vista: Reportes de incidentes ── -->
           <section class="op-view" id="op-view-reportes">
             <div class="card">
@@ -1497,6 +1509,10 @@ async function cargarPanelOperador() {
     renderOperadorHistorial(data.historial, data.clientes);
     // Nivel plataforma: solo los superadmins ven la pestaña de empresas.
     if (data.esSuperadmin) { const n = document.getElementById('navPlataforma'); if (n) n.style.display = ''; }
+    _saSoyMaestra = data.esMaestra === true;
+    _miRolEmpresa = data.rolEmpresa || '';
+    const np = document.getElementById('navPersonal');
+    if (np) np.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     aplicarFuncionesApp(data.funciones);
     ajustarPollingOperador((data.alertas || []).length > 0);
@@ -4095,7 +4111,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Plataforma SOS360', reportes:'Reportes de incidentes' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Plataforma SOS360', reportes:'Reportes de incidentes', personal:'Personal y roles' };
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
   return auth.currentUser.getIdToken().then((t) => fetch('/api/operador-datos', {
@@ -4267,6 +4283,19 @@ function enviarDifusion() {
 const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas'];
 const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas' };
 let _saOps = [];
+let _saSoyMaestra = false;
+function saToggleSuperadmin(destino, esSA) {
+  const msg = esSA
+    ? '¿Quitar el mando máximo a esta persona? Dejará de ser superadmin.'
+    : '⚠️ MANDO MÁXIMO: esta persona podrá administrar TODAS las empresas, cambiar planes y nombrar otros superadmins — como tú. Solo dáselo a alguien de total confianza. ¿Continuar?';
+  if (!confirm(msg)) return;
+  if (!esSA && !confirm('Confirma de nuevo: entregar mando máximo es la acción más sensible del sistema. ¿Seguro?')) return;
+  saFetch({ accion: 'sa-superadmin', operadorUid: destino, quitar: esSA }).then((d) => {
+    const info = document.getElementById('saPermInfo');
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? (esSA ? 'Mando máximo retirado.' : 'Ahora es superadmin. Debe reabrir la app.') : (d.error || 'Error'); }
+    if (d.ok) saCargarOperadores();
+  });
+}
 function saCargarOperadores() {
   const cont = document.getElementById('saOperadores');
   if (!cont) return;
@@ -4282,8 +4311,9 @@ function saCargarOperadores() {
             <small style="color:var(--gris); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${o.email || ''} · ${o.empresa}</small>
           </div>
         </div>
-        ${o.esSuperadmin ? '' : `<div style="display:flex; gap:7px; justify-content:space-between;">` + PERMISOS_KEYS.map((k) => `
+        ${o.esSuperadmin ? '' : `<div style="display:flex; gap:7px; justify-content:space-between; margin-bottom:8px;">` + PERMISOS_KEYS.map((k) => `
           <button onclick="saTogglePermiso(${i},'${k}')" id="tg-${i}-${k}" title="${PERMISOS_NOMBRES[k].slice(3)}" style="width:40px; height:40px; border-radius:12px; font-size:1.05rem; cursor:pointer; border:1.5px solid ${o.permisos[k] !== false ? 'var(--verde)' : 'var(--linea)'}; background:${o.permisos[k] !== false ? 'var(--verde-suave)' : 'transparent'}; ${o.permisos[k] !== false ? '' : 'filter:grayscale(1); opacity:.45;'}">${PERMISOS_NOMBRES[k].slice(0, 2).trim()}</button>`).join('') + '</div>'}
+        ${(_saSoyMaestra && !o.esMaestra) ? `<button onclick="saToggleSuperadmin('${o.uid}', ${o.esSuperadmin === true})" style="width:100%; padding:7px; border-radius:10px; font-size:.72rem; font-weight:700; cursor:pointer; border:1px solid ${o.esSuperadmin ? 'rgba(229,52,75,.5)' : 'var(--violeta)'}; background:${o.esSuperadmin ? 'rgba(229,52,75,.1)' : 'var(--violeta-suave)'}; color:${o.esSuperadmin ? '#ff4d5e' : '#9d8fff'};">${o.esSuperadmin ? '👑 Quitar mando máximo' : '👑 Hacer superadmin'}</button>` : ''}
       </div>`).join('') + `
       <button onclick="saAsignarOperador()" style="border:1.5px dashed var(--linea); border-radius:14px; padding:13px; text-align:center; background:transparent; color:var(--gris); cursor:pointer; min-height:100px;">
         <div style="font-size:1.7rem;">➕</div>
@@ -4322,6 +4352,34 @@ function aplicarPermisosOperador(p, esSA) {
   document.querySelectorAll('[onclick*="exportarAlarmasCSV"], [onclick*="exportarZonaCSV"]').forEach((b) => { b.style.display = p.exportar === false ? 'none' : ''; });
   const zb = document.getElementById('zonaBtn'); if (zb) zb.style.display = p.zonas === false ? 'none' : '';
   const cb = document.getElementById('calorBtn'); if (cb) cb.style.display = p.zonas === false ? 'none' : '';
+}
+
+/* ── 👔 PERSONAL Y ROLES de la empresa ── */
+let _miRolEmpresa = '';
+const ROLES_EMP = [
+  { k: 'jefe', n: '👑 Jefe/a' }, { k: 'gerente', n: '🎩 Gerente' }, { k: 'supervisor', n: '🛡 Supervisor' },
+  { k: 'guardia', n: '👮 Guardia' }, { k: 'empleado', n: '👤 Empleado/a' }, { k: 'tecnico', n: '🔧 Técnico' }
+];
+function cargarPersonal() {
+  const cont = document.getElementById('personalLista');
+  if (!cont) return;
+  saFetch({ accion: 'emp-personal' }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    if (!d.personal.length) { cont.innerHTML = '<div class="evento"><div><strong>Aún no tienes personal con cargo.</strong><small>Cuando alguien se una con tu código de empresa, aparecerá aquí para asignarle un rol.</small></div></div>'; return; }
+    cont.innerHTML = d.personal.map((p, i) => `
+      <div style="display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--linea); padding:10px 0;">
+        <div style="width:34px; height:34px; border-radius:50%; background:var(--violeta-suave); color:#9d8fff; display:grid; place-items:center; font-weight:700;">${(p.nombre || '?').slice(0,1).toUpperCase()}</div>
+        <strong style="flex:1; font-size:.88rem;">${p.nombre}</strong>
+        <select onchange="cambiarRol('${p.uid}', this.value)" style="width:auto; margin:0; padding:7px 10px; font-size:.8rem;">
+          ${ROLES_EMP.map((r) => `<option value="${r.k}" ${p.rol === r.k ? 'selected' : ''}>${r.n}</option>`).join('')}
+        </select>
+      </div>`).join('');
+  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
+}
+function cambiarRol(personalUid, rol) {
+  saFetch({ accion: 'emp-rol', personalUid, rol }).then((d) => {
+    if (!d.ok) { alert(d.error || 'No se pudo cambiar el rol'); cargarPersonal(); }
+  });
 }
 
 /* ── 📷 REPORTES en el panel del operador ── */
@@ -4412,6 +4470,7 @@ function opGo(v){
   if (v==='monitoreo' && operadorMapa) setTimeout(()=>operadorMapa.invalidateSize(), 120);
   if (v==='plataforma') cargarPlataforma();
   if (v==='reportes') cargarReportesPanel();
+  if (v==='personal') cargarPersonal();
 }
 document.querySelectorAll('.op-nav[data-opview]').forEach(b=>b.addEventListener('click',()=>opGo(b.dataset.opview)));
 // ══ BOTÓN SOS Y MAPA ══
