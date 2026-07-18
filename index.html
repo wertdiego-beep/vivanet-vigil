@@ -952,21 +952,9 @@ textarea{min-height:96px;resize:vertical}
               <div class="error-msg" id="saOpInfo"></div>
             </div>
             <div class="card">
-              <div class="card-title">Permisos de un operador</div>
-              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">Puedes cortarle funciones a cualquier operador. Lo que desmarques desaparece de su panel y el servidor también lo bloquea.</p>
-              <div style="display:flex; gap:8px;">
-                <input type="email" id="saPermEmail" placeholder="correo del operador" style="margin:0;">
-                <button class="btn-full" style="width:auto; margin:0; padding:10px 16px;" onclick="saCargarPermisos()">Cargar</button>
-              </div>
-              <div id="saPermLista" style="display:none; margin-top:12px;">
-                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-atender" style="width:auto;margin:0;"> 🚨 Atender y cerrar alertas</label>
-                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-clientes" style="width:auto;margin:0;"> 👥 Ver la lista de clientes</label>
-                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-historial" style="width:auto;margin:0;"> 🕘 Historial y reporte del día</label>
-                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-tecnico" style="width:auto;margin:0;"> 🔧 Servicio y equipo técnico</label>
-                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-exportar" style="width:auto;margin:0;"> 📄 Exportar a Excel</label>
-                <label style="display:flex;gap:9px;align-items:center;margin:6px 0;"><input type="checkbox" id="perm-zonas" style="width:auto;margin:0;"> 📐 Marcar zonas y zonas calientes</label>
-                <button class="btn-full" onclick="saGuardarPermisos()">Guardar permisos</button>
-              </div>
+              <div class="card-title">Operadores: prende y apaga sus funciones</div>
+              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">Toca un interruptor y se aplica al instante en el panel de ese operador. Verde = activa · gris = cortada.</p>
+              <div id="saOperadores"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
               <div class="error-msg" id="saPermInfo"></div>
             </div>
           </section>
@@ -3703,6 +3691,7 @@ function saFetch(cuerpo) {
   })).then((r) => r.json());
 }
 function cargarPlataforma() {
+  saCargarOperadores();
   const cont = document.getElementById('saEmpresas');
   if (!cont) return;
   saFetch({ accion: 'sa-empresas' }).then((d) => {
@@ -3745,27 +3734,35 @@ function saAsignarOperador() {
 }
 
 const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas'];
-function saCargarPermisos() {
-  const email = (document.getElementById('saPermEmail').value || '').trim();
-  const info = document.getElementById('saPermInfo');
-  info.style.color = 'var(--rojo)'; info.textContent = '';
-  if (!email) { info.textContent = 'Escribe el correo del operador.'; return; }
-  saFetch({ accion: 'sa-permisos', modo: 'get', operadorEmail: email }).then((d) => {
-    if (!d.ok) { info.textContent = d.error || 'Error'; return; }
-    PERMISOS_KEYS.forEach((k) => { const c = document.getElementById('perm-' + k); if (c) c.checked = d.permisos[k] !== false; });
-    document.getElementById('saPermLista').style.display = 'block';
-    info.style.color = '#00C776';
-    info.textContent = 'Operador de: ' + (d.empresa || '—');
-  });
+const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas' };
+let _saOps = [];
+function saCargarOperadores() {
+  const cont = document.getElementById('saOperadores');
+  if (!cont) return;
+  saFetch({ accion: 'sa-operadores' }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    _saOps = d.operadores || [];
+    cont.innerHTML = _saOps.map((o, i) => `
+      <div style="border-bottom:1px solid var(--linea); padding:10px 0;">
+        <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:7px;">
+          <strong style="font-size:.9rem;">${o.nombre || o.email || o.uid.slice(0, 8)}</strong>
+          <small style="color:var(--gris);">${o.email || ''} · ${o.empresa}${o.esSuperadmin ? ' · 👑 superadmin (sin restricciones)' : ''}</small>
+        </div>
+        ${o.esSuperadmin ? '' : `<div style="display:flex; gap:6px; flex-wrap:wrap;">` + PERMISOS_KEYS.map((k) => `
+          <button onclick="saTogglePermiso(${i},'${k}')" id="tg-${i}-${k}" style="padding:5px 12px; border-radius:99px; font-size:.72rem; font-weight:600; cursor:pointer; border:1px solid ${o.permisos[k] !== false ? 'var(--verde)' : 'var(--linea)'}; background:${o.permisos[k] !== false ? 'var(--verde-suave)' : 'transparent'}; color:${o.permisos[k] !== false ? 'var(--verde)' : 'var(--gris)'};">${PERMISOS_NOMBRES[k]}</button>`).join('') + '</div>'}
+      </div>`).join('') || '<div class="evento"><div><strong>Sin operadores aún.</strong></div></div>';
+  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
-function saGuardarPermisos() {
-  const email = (document.getElementById('saPermEmail').value || '').trim();
+function saTogglePermiso(i, k) {
+  const o = _saOps[i];
+  if (!o) return;
+  o.permisos[k] = o.permisos[k] === false; // invierte
+  const b = document.getElementById(`tg-${i}-${k}`);
+  const on = o.permisos[k] !== false;
+  if (b) { b.style.borderColor = on ? 'var(--verde)' : 'var(--linea)'; b.style.background = on ? 'var(--verde-suave)' : 'transparent'; b.style.color = on ? 'var(--verde)' : 'var(--gris)'; }
   const info = document.getElementById('saPermInfo');
-  const permisos = {};
-  PERMISOS_KEYS.forEach((k) => { const c = document.getElementById('perm-' + k); permisos[k] = !!(c && c.checked); });
-  saFetch({ accion: 'sa-permisos', modo: 'set', operadorEmail: email, permisos }).then((d) => {
-    info.style.color = d.ok ? '#00C776' : 'var(--rojo)';
-    info.textContent = d.ok ? 'Permisos guardados. Se aplican en su próxima actualización (segundos).' : (d.error || 'Error');
+  saFetch({ accion: 'sa-permisos', modo: 'set', operadorUid: o.uid, permisos: o.permisos }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `${PERMISOS_NOMBRES[k]} ${on ? 'activada' : 'cortada'} para ${o.nombre || o.email || 'el operador'}.` : (d.error || 'Error al guardar'); }
   });
 }
 
