@@ -15,6 +15,8 @@ const CENTRAL_UID = 'ziDCZASJ7GaMoBhUDw7uPbKmFgE2'; // cuenta de Diego (central)
 // cuenta central original, así nada cambia hasta que agregues operadores.
 const OPERADORES = (process.env.OPERADORES_UIDS || CENTRAL_UID).split(',').map((s) => s.trim()).filter(Boolean);
 const esOperador = (uid) => !!uid && OPERADORES.includes(uid);
+// Nivel 1 de la plataforma: los superadmins (nosotros). Por defecto, la cuenta central.
+const SUPERADMINS = (process.env.SUPERADMIN_UIDS || CENTRAL_UID).split(',').map((s) => s.trim()).filter(Boolean);
 const FIREBASE_API_KEY = 'AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g'; // clave pública del cliente web (no es secreta)
 
 function base64url(input) {
@@ -246,16 +248,99 @@ export default async function handler(req, res) {
 
   try {
     const uid = await verificarOperador(idToken);
-    if (!esOperador(uid)) {
-      res.status(403).json({ error: 'No autorizado' });
+    const accessToken = await obtenerAccessToken();
+
+    // Multitenant: perfil del solicitante para saber su empresa y su rol.
+    const perfilOp = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const esSA = SUPERADMINS.includes(uid);
+    const esOp = esOperador(uid) || !!perfilOp.fields?.operadorDe?.stringValue;
+
+    // ── Acciones de plataforma (solo superadmin: nosotros, el nivel superior) ──
+    if (accion && accion.startsWith('sa-')) {
+      if (!esSA) { res.status(403).json({ error: 'Solo la plataforma puede hacer esto' }); return; }
+      const base = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+      if (accion === 'sa-empresas') {
+        const [respEmp, clientes] = await Promise.all([
+          fetch(`${base}/empresas?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
+          listarClientes(accessToken)
+        ]);
+        const conteo = {};
+        clientes.forEach((c) => { conteo[c.empresaId] = (conteo[c.empresaId] || 0) + 1; });
+        const empresas = (respEmp.documents || []).map((d) => ({
+          id: d.name.split('/').pop(),
+          nombre: d.fields?.nombre?.stringValue || d.name.split('/').pop(),
+          estado: d.fields?.estado?.stringValue || 'activa',
+          clientes: 0
+        }));
+        if (!empresas.find((e) => e.id === 'sos360-la-serena')) {
+          empresas.unshift({ id: 'sos360-la-serena', nombre: 'SOS360 La Serena (nuestra)', estado: 'activa', clientes: 0 });
+        }
+        empresas.forEach((e) => { e.clientes = conteo[e.id] || 0; });
+        res.status(200).json({ ok: true, empresas });
+        return;
+      }
+      if (accion === 'sa-crear-empresa') {
+        const nombre = (req.body.empresaNombre || '').trim();
+        if (!nombre) { res.status(400).json({ error: 'Falta el nombre de la empresa' }); return; }
+        const slug = nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+        await fetch(`${base}/empresas/${slug}?updateMask.fieldPaths=nombre&updateMask.fieldPaths=estado&updateMask.fieldPaths=creadaEn`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { nombre: { stringValue: nombre }, estado: { stringValue: 'activa' }, creadaEn: { timestampValue: new Date().toISOString() } } })
+        });
+        res.status(200).json({ ok: true, id: slug });
+        return;
+      }
+      if (accion === 'sa-toggle-empresa') {
+        const empId = (req.body.empresaIdDestino || '').trim();
+        if (!empId || empId === 'sos360-la-serena') { res.status(400).json({ error: 'Esa empresa no se puede suspender' }); return; }
+        const doc = await fetch(`${base}/empresas/${empId}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const nuevo = (doc.fields?.estado?.stringValue === 'suspendida') ? 'activa' : 'suspendida';
+        await fetch(`${base}/empresas/${empId}?updateMask.fieldPaths=estado`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { estado: { stringValue: nuevo } } })
+        });
+        res.status(200).json({ ok: true, estado: nuevo });
+        return;
+      }
+      if (accion === 'sa-asignar-operador') {
+        const email = (req.body.operadorEmail || '').trim().toLowerCase();
+        const empId = (req.body.empresaIdDestino || '').trim();
+        if (!email || !empId) { res.status(400).json({ error: 'Faltan email o empresa' }); return; }
+        const lookup = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: [email] })
+        }).then((r) => r.json());
+        const cuenta = lookup.users && lookup.users[0];
+        if (!cuenta) { res.status(404).json({ error: 'No existe una cuenta con ese correo. La persona debe crear su cuenta primero.' }); return; }
+        await fetch(`${base}/usuarios/${cuenta.localId}?updateMask.fieldPaths=operadorDe&updateMask.fieldPaths=empresaId`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { operadorDe: { stringValue: empId }, empresaId: { stringValue: empId } } })
+        });
+        res.status(200).json({ ok: true, uid: cuenta.localId });
+        return;
+      }
+      res.status(400).json({ error: 'Acción de plataforma desconocida' });
       return;
     }
 
-    const accessToken = await obtenerAccessToken();
+    if (!esOp) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+    const empresaOperador = perfilOp.fields?.operadorDe?.stringValue || perfilOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
 
-    // Multitenant: cada operador solo ve los datos de SU empresa de seguridad.
-    const perfilOp = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-    const empresaOperador = perfilOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
+    // Empresa suspendida por la plataforma: su central deja de operar.
+    if (empresaOperador !== 'sos360-la-serena') {
+      const docEmp = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (docEmp.fields?.estado?.stringValue === 'suspendida') {
+        res.status(403).json({ error: 'Tu empresa está suspendida por la plataforma' });
+        return;
+      }
+    }
 
     if (accion === 'codigo') {
       const resultado = await obtenerOGenerarCodigoOperador(accessToken, uid);
@@ -279,7 +364,7 @@ export default async function handler(req, res) {
 
     const historial = alertasRecientes.slice(0, 120);
 
-    res.status(200).json({ ok: true, clientes, alertas, historial, stats });
+    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, empresaId: empresaOperador });
   } catch (err) {
     console.error('Error en panel operador:', err);
     res.status(500).json({ error: err.message || 'Error interno del servidor' });
