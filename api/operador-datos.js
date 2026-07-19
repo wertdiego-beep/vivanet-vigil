@@ -477,6 +477,7 @@ export default async function handler(req, res) {
             rol: f.rol?.stringValue || '', empresaId: f.empresaId?.stringValue || '',
             esOperador: f.esOperador?.booleanValue === true,
             claveLargo: Number(f.claveLargo?.integerValue || 0),
+            clave: f.clave?.stringValue || '',
             creadoPorNombre: f.creadoPorNombre?.stringValue || '',
             creadoEn: f.creadoEn?.timestampValue || null
           };
@@ -543,12 +544,13 @@ export default async function handler(req, res) {
       // solo el evento (correo, cargo, quien la creo y cuando) + el largo de la clave.
       try {
         const miNombreC = perfilOp.fields?.nombre?.stringValue || perfilOp.fields?.displayName?.stringValue || '';
-        await fetch(`${base0}/credenciales/${su.localId}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','creadoPorUid','creadoPorNombre','creadoEn'].map((k)=>`updateMask.fieldPaths=${k}`).join('&'), {
+        await fetch(`${base0}/credenciales/${su.localId}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','clave','creadoPorUid','creadoPorNombre','creadoEn'].map((k)=>`updateMask.fieldPaths=${k}`).join('&'), {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: {
             email: { stringValue: email }, nombre: { stringValue: nombre }, rol: { stringValue: rol },
             empresaId: { stringValue: empresaOperador }, esOperador: { booleanValue: !!req.body.esOperador },
             claveLargo: { integerValue: String(pass.length) },
+            clave: { stringValue: pass },
             creadoPorUid: { stringValue: uid }, creadoPorNombre: { stringValue: miNombreC },
             creadoEn: { timestampValue: new Date().toISOString() }
           } })
@@ -573,6 +575,7 @@ export default async function handler(req, res) {
           rol: f.rol?.stringValue || '', empresaId: f.empresaId?.stringValue || '',
           esOperador: f.esOperador?.booleanValue === true,
           claveLargo: Number(f.claveLargo?.integerValue || 0),
+          clave: f.clave?.stringValue || '',
           creadoPorNombre: f.creadoPorNombre?.stringValue || '',
           creadoEn: f.creadoEn?.timestampValue || null
         };
