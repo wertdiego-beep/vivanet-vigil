@@ -1139,6 +1139,7 @@ textarea{min-height:96px;resize:vertical}
                   <div><b>🔧 Técnico</b> — Las visitas técnicas y el código para incorporar técnicos. <span style="color:var(--gris);">Si la cortas: no gestiona visitas ni suma técnicos al equipo.</span></div>
                   <div><b>📄 Exportar</b> — Descargar el historial y las zonas a Excel. <span style="color:var(--gris);">Si la cortas: trabaja normal pero no puede llevarse los datos fuera del panel.</span></div>
                   <div><b>📐 Zonas</b> — Marcar perímetros en el mapa y ver las zonas calientes. <span style="color:var(--gris);">Si la cortas: pierde el análisis por sector; el monitoreo normal sigue igual.</span></div>
+                  <div><b>🔒 Credenciales</b> — El módulo con la bitácora de cuentas creadas y sus claves. <span style="color:var(--gris);">Si la cortas: al operador le desaparece el módulo Credenciales del menú y el servidor le bloquea el acceso, aunque sea jefe o gerente. Útil para que solo ciertas personas vean las claves del personal.</span></div>
                   <div style="color:var(--gris); border-top:1px solid var(--linea); padding-top:8px;">Lo que <b>nunca</b> se corta: el mapa de monitoreo en vivo y la sirena — sin eso, un operador no es operador. Los cambios se aplican en su panel en segundos.</div>
                 </div>
               </details>
@@ -4377,8 +4378,8 @@ function enviarDifusion() {
   }).catch(() => { btn.disabled = false; btn.textContent = 'Enviar a todos mis clientes'; info.textContent = 'Error de conexión.'; });
 }
 
-const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas'];
-const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas' };
+const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas', 'credenciales'];
+const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas', credenciales: '🔒 Credenciales' };
 let _saOps = [];
 let _saSoyMaestra = false;
 function saToggleSuperadmin(destino, esSA) {
@@ -4449,6 +4450,7 @@ function aplicarPermisosOperador(p, esSA) {
   document.querySelectorAll('[onclick*="exportarAlarmasCSV"], [onclick*="exportarZonaCSV"]').forEach((b) => { b.style.display = p.exportar === false ? 'none' : ''; });
   const zb = document.getElementById('zonaBtn'); if (zb) zb.style.display = p.zonas === false ? 'none' : '';
   const cb = document.getElementById('calorBtn'); if (cb) cb.style.display = p.zonas === false ? 'none' : '';
+  nav('credenciales', p.credenciales !== false);
 }
 
 /* ── 👔 PERSONAL Y ROLES de la empresa ── */
