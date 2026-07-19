@@ -791,6 +791,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="personal" id="navPersonal" style="display:none"><span>👔</span><em>Personal y roles</em></button>
         <button class="op-nav" data-opview="plataforma" id="navPlataforma" style="display:none"><span>🏢</span><em>Plataforma</em></button>
         <button class="op-nav" data-opview="credenciales" id="navCredenciales" style="display:none"><span>🔒</span><em>Credenciales</em></button>
+        <button class="op-nav" data-opview="roles" id="navRoles" style="display:none"><span>🔺</span><em>Roles</em></button>
         <div class="op-side-foot">
           <button class="op-nav" id="opPushBtn" onclick="opActivarPush()" title="Recibe una notificación en este dispositivo cuando llegue un SOS, aunque el panel esté cerrado"><span>🔔</span><em>Avisos SOS</em></button>
           <button class="op-nav" onclick="go('s-mas')"><span>👤</span><em>Mi cuenta</em></button>
@@ -1077,9 +1078,12 @@ textarea{min-height:96px;resize:vertical}
                 <button class="btn-full" style="width:auto; margin:0; padding:9px 16px; background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="empRegenerarCodigo()">Generar nuevo</button>
               </div>
             </div>
-            <div class="card" id="cardRolesPermisos" style="display:none;">
-              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>🔺 Permisos por rol (pirámide)</span><button onclick="cargarRolesPermisos()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
-              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Define qué ve y hace cada cargo de tu empresa. Tú (jefe) siempre ves todo; de ahí hacia abajo lo ajustas: gerente, supervisor, guardia, empleado, técnico. Verde = puede · gris = cortado. Se aplica a todos los de ese cargo en segundos.</p>
+          </section>
+          <!-- ── Vista/Módulo independiente: Designación de roles (pirámide) ── -->
+          <section class="op-view" id="op-view-roles">
+            <div class="card" id="cardRolesPermisos">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>🔺 Designación de roles</span><button onclick="cargarRolesPermisos()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻ Actualizar</button></div>
+              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;">Define en pirámide qué ve y hace cada cargo de tu empresa. Tú (jefe) siempre ves todo; de ahí hacia abajo lo ajustas: gerente, supervisor, guardia, empleado, técnico. Verde = puede · gris = cortado. Se aplica a todos los de ese cargo en segundos.</p>
               <div id="rolesPermisosMatriz"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
             </div>
           </section>
@@ -1589,6 +1593,8 @@ async function cargarPanelOperador() {
     if (np) np.style.display = (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
     const ncr = document.getElementById('navCredenciales');
     if (ncr) ncr.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
+    const nro = document.getElementById('navRoles');
+    if (nro) nro.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe') ? '' : 'none';
     window._esSApanel = data.esSuperadmin === true;
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     aplicarFuncionesApp(data.funciones);
@@ -4207,7 +4213,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -4217,7 +4223,8 @@ const opDescripciones = {
   reportes: 'Incidentes que reportan tus clientes con foto y categoría. Márcalos revisados al gestionarlos.',
   personal: 'Tu equipo: crea cuentas, asigna cargos, promueve operadores y edita sus datos.',
   plataforma: 'Nivel superior: administra las empresas de seguridad, sus planes y funciones. Solo tú lo ves.',
-  credenciales: 'Bitácora de todas las cuentas de personal creadas (correo, cargo, autor y fecha). Las claves no se guardan por seguridad.'
+  credenciales: 'Bitácora de todas las cuentas de personal creadas (correo, cargo, autor y fecha). Las claves no se guardan por seguridad.',
+  roles: 'Define en pirámide qué ve y hace cada cargo de tu empresa. Solo el jefe.'
 };
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
@@ -4542,7 +4549,6 @@ function empHacerOperador(uid, esOp) {
 }
 function cargarPersonal() {
   empCargarCodigo(false);
-  cargarRolesPermisos();
   const cont = document.getElementById('personalLista');
   if (!cont) return;
   saFetch({ accion: 'emp-personal' }).then((d) => {
@@ -4578,9 +4584,8 @@ const ROLES_PIRAMIDE = [
 ];
 let _rolesPermisos = {};
 function cargarRolesPermisos() {
-  const card = document.getElementById('cardRolesPermisos');
-  if (card) card.style.display = (_miRolEmpresa === 'jefe') ? 'block' : 'none';
-  if (_miRolEmpresa !== 'jefe') return;
+  const esJefe = (_miRolEmpresa === 'jefe') || (window._esSApanel === true);
+  if (!esJefe) return;
   const cont = document.getElementById('rolesPermisosMatriz'); if (!cont) return;
   cont.innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
   saFetch({ accion: 'emp-roles-permisos' }).then((d) => {
@@ -4782,6 +4787,7 @@ function opGo(v){
   if (v==='reportes') cargarReportesPanel();
   if (v==='personal') cargarPersonal();
   if (v==='credenciales') cargarCredencialesModulo();
+  if (v==='roles') cargarRolesPermisos();
 }
 document.querySelectorAll('.op-nav[data-opview]').forEach(b=>b.addEventListener('click',()=>opGo(b.dataset.opview)));
 // ══ BOTÓN SOS Y MAPA ══
