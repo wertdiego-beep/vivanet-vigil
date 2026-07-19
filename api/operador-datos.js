@@ -463,6 +463,34 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, permisos: permisosDest, empresa: docU.fields?.operadorDe?.stringValue || docU.fields?.empresaId?.stringValue || 'sos360-la-serena' });
         return;
       }
+      if (accion === 'sa-credenciales') {
+        // Registro global de credenciales creadas (solo nivel superior). Sin claves en texto.
+        const q = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'credenciales' }], limit: 300 } })
+        }).then((r) => r.json());
+        let creds = (q || []).filter((x) => x.document).map((x) => {
+          const f = x.document.fields || {};
+          return {
+            uid: x.document.name.split('/').pop(),
+            email: f.email?.stringValue || '', nombre: f.nombre?.stringValue || '',
+            rol: f.rol?.stringValue || '', empresaId: f.empresaId?.stringValue || '',
+            esOperador: f.esOperador?.booleanValue === true,
+            claveLargo: Number(f.claveLargo?.integerValue || 0),
+            creadoPorNombre: f.creadoPorNombre?.stringValue || '',
+            creadoEn: f.creadoEn?.timestampValue || null
+          };
+        });
+        let empresasNom = {};
+        try {
+          const es = await fetch(`${base}/empresas?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json());
+          (es.documents || []).forEach((d) => { empresasNom[d.name.split('/').pop()] = d.fields?.nombre?.stringValue || ''; });
+        } catch (e) {}
+        creds.forEach((c) => { c.empresaNombre = empresasNom[c.empresaId] || c.empresaId; });
+        creds.sort((a, b) => new Date(b.creadoEn || 0) - new Date(a.creadoEn || 0));
+        res.status(200).json({ ok: true, credenciales: creds });
+        return;
+      }
       res.status(400).json({ error: 'Acción de plataforma desconocida' });
       return;
     }
@@ -529,12 +557,10 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true, uid: su.localId });
       return;
     }
-    if (accion === 'emp-credenciales' || accion === 'sa-credenciales') {
+    if (accion === 'emp-credenciales') {
       // Registro de cuentas creadas. sa-* = todas (solo nivel superior); emp-* = solo la propia empresa (jefe/gerente).
-      const esCredSA = accion === 'sa-credenciales';
       const miRolC = perfilOp.fields?.rolEmpresa?.stringValue || '';
-      if (esCredSA && !esSA) { res.status(403).json({ error: 'Solo el nivel superior ve el registro global.' }); return; }
-      if (!esCredSA && !esSA && miRolC !== 'jefe' && miRolC !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente ve este registro.' }); return; }
+      if (!esSA && miRolC !== 'jefe' && miRolC !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente ve este registro.' }); return; }
       const q = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`, {
         method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'credenciales' }], limit: 300 } })
@@ -551,15 +577,7 @@ export default async function handler(req, res) {
           creadoEn: f.creadoEn?.timestampValue || null
         };
       });
-      if (!esCredSA) creds = creds.filter((c) => c.empresaId === empresaOperador);
-      let empresasNom = {};
-      if (esCredSA) {
-        try {
-          const es = await fetch(`${base0}/empresas`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json());
-          (es.documents || []).forEach((d) => { empresasNom[d.name.split('/').pop()] = d.fields?.nombre?.stringValue || ''; });
-        } catch (e) {}
-      }
-      creds.forEach((c) => { c.empresaNombre = empresasNom[c.empresaId] || c.empresaId; });
+      creds = creds.filter((c) => c.empresaId === empresaOperador);
       creds.sort((a, b) => new Date(b.creadoEn || 0) - new Date(a.creadoEn || 0));
       res.status(200).json({ ok: true, credenciales: creds });
       return;
