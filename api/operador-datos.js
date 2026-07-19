@@ -396,7 +396,7 @@ export default async function handler(req, res) {
         }).map((d) => {
           const id = d.name.split('/').pop();
           const praw = d.fields?.permisosOp?.mapValue?.fields || {};
-          const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true };
+          const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true };
           Object.keys(praw).forEach((k) => { permisos[k] = praw[k].booleanValue !== false; });
           return {
             uid: id,
@@ -458,7 +458,7 @@ export default async function handler(req, res) {
           return;
         }
         const praw = docU.fields?.permisosOp?.mapValue?.fields || {};
-        const permisosDest = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true };
+        const permisosDest = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true };
         Object.keys(praw).forEach((k) => { permisosDest[k] = praw[k].booleanValue !== false; });
         res.status(200).json({ ok: true, permisos: permisosDest, empresa: docU.fields?.operadorDe?.stringValue || docU.fields?.empresaId?.stringValue || 'sos360-la-serena' });
         return;
@@ -563,6 +563,8 @@ export default async function handler(req, res) {
       // Registro de cuentas creadas. sa-* = todas (solo nivel superior); emp-* = solo la propia empresa (jefe/gerente).
       const miRolC = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolC !== 'jefe' && miRolC !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente ve este registro.' }); return; }
+      const prawC = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
+      if (!esSA && prawC.credenciales?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso al registro de credenciales.' }); return; }
       const q = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`, {
         method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'credenciales' }], limit: 300 } })
