@@ -622,6 +622,38 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true });
       return;
     }
+    if (accion === 'emp-reset-clave') {
+      // El jefe/gerente (o SA) le pone una clave nueva a alguien y queda reflejada en el registro.
+      const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRol !== 'jefe' && miRol !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente puede restablecer claves.' }); return; }
+      const prawR = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
+      if (!esSA && prawR.credenciales?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso al registro de credenciales.' }); return; }
+      const destino = (req.body.personalUid || '').trim();
+      const pass = (req.body.pass || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(destino)) { res.status(400).json({ error: 'Persona no válida' }); return; }
+      if (pass.length < 6) { res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres.' }); return; }
+      const docD = await fetch(`${base0}/usuarios/${destino}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!esSA && (docD.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Esa persona es de otra empresa.' }); return; }
+      // Cambiar la clave en Firebase Auth (endpoint de administración).
+      const up = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:update`, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ localId: destino, password: pass })
+      }).then((r) => r.json());
+      if (up.error) { res.status(400).json({ error: 'No se pudo cambiar la clave.' }); return; }
+      // Reflejar la nueva clave en el registro de credenciales.
+      try {
+        const miNombreR = perfilOp.fields?.nombre?.stringValue || perfilOp.fields?.displayName?.stringValue || '';
+        await fetch(`${base0}/credenciales/${destino}?` + ['clave','claveLargo','reseteadoPor','reseteadoEn'].map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: {
+            clave: { stringValue: pass }, claveLargo: { integerValue: String(pass.length) },
+            reseteadoPor: { stringValue: miNombreR }, reseteadoEn: { timestampValue: new Date().toISOString() }
+          } })
+        });
+      } catch (e) {}
+      res.status(200).json({ ok: true });
+      return;
+    }
     if (accion === 'emp-codigo') {
       // Código de equipo de la empresa del operador (para sumar personal).
       const rutaEmp = `${base0}/empresas/${empresaOperador}`;
