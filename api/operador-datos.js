@@ -787,10 +787,19 @@ export default async function handler(req, res) {
     const funciones = {};
     Object.keys(fraw).forEach((k) => { funciones[k] = fraw[k].booleanValue !== false; });
 
-    // Permisos del operador (la plataforma puede cortarle funciones).
+    // Permisos del operador: (1) plantilla por rol que define el jefe (pirámide) y
+    // (2) cortes individuales de la plataforma. Se aplica el más restrictivo.
     const praw = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
-    const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true };
-    Object.keys(praw).forEach((k) => { permisos[k] = praw[k].booleanValue !== false; });
+    const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true };
+    const miRolE = perfilOp.fields?.rolEmpresa?.stringValue || '';
+    if (!esSA && miRolE && miRolE !== 'jefe') {
+      try {
+        const empDocP = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const rp = empDocP.fields?.rolesPermisos?.mapValue?.fields?.[miRolE]?.mapValue?.fields;
+        if (rp) { Object.keys(permisos).forEach((k) => { if (rp[k]?.booleanValue === false) permisos[k] = false; }); }
+      } catch (e) {}
+    }
+    Object.keys(praw).forEach((k) => { if (praw[k].booleanValue === false) permisos[k] = false; });
 
     res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, esMaestra: uid === CUENTA_MAESTRA, miUid: uid, rolEmpresa: perfilOp.fields?.rolEmpresa?.stringValue || '', empresaId: empresaOperador, permisos, funciones });
   } catch (err) {
