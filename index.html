@@ -4575,7 +4575,17 @@ function renderCredencial(list, showEmpresa) {
       </div>
       <div style="color:var(--gris); margin-top:4px;">${(c.email || '').replace(/</g,'&lt;')} · 🔑 ${c.clave ? `<span id="clv_${c.uid}" data-c="${encodeURIComponent(c.clave)}" style="font-family:monospace; letter-spacing:.05em;">••••••</span> <button onclick="toggleClave('clv_${c.uid}', this)" style="border:none; background:var(--violeta-suave); color:#9d8fff; border-radius:8px; padding:2px 8px; font-size:.68rem; cursor:pointer;">👁 ver</button>` : `<span style="color:var(--gris);">clave propia del usuario (no visible)</span>`}</div>
       <div style="color:var(--gris); font-size:.72rem; margin-top:2px;">${showEmpresa ? '🏢 ' + (c.empresaNombre || c.empresaId) + ' · ' : ''}Creada por ${c.creadoPorNombre || '—'}${c.creadoEn ? ' · ' + new Date(c.creadoEn).toLocaleString('es-CL') : ''}</div>
+      <button onclick="resetClave('${c.uid}', '${(c.nombre || 'esta persona').replace(/'/g,'')}')" style="margin-top:7px; padding:5px 12px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid var(--violeta); background:var(--violeta-suave); color:#9d8fff;">🔁 Restablecer clave</button>
     </div>`).join('');
+}
+function resetClave(uid, nombre) {
+  const pass = (prompt('Nueva clave para ' + nombre + ' (mínimo 6 caracteres). Se la entregarás tú:') || '').trim();
+  if (!pass) return;
+  if (pass.length < 6) { alert('La clave debe tener al menos 6 caracteres.'); return; }
+  saFetch({ accion: 'emp-reset-clave', personalUid: uid, pass }).then((d) => {
+    if (d.ok) { alert('Clave actualizada. Ahora aparece en el registro con el botón 👁.'); cargarCredencialesModulo(); }
+    else alert(d.error || 'No se pudo restablecer la clave.');
+  }).catch(() => alert('Error de conexión.'));
 }
 function toggleClave(id, btn) {
   const el = document.getElementById(id); if (!el) return;
