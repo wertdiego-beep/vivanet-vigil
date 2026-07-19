@@ -1122,7 +1122,12 @@ textarea{min-height:96px;resize:vertical}
               <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Como gerente de seguridad, arma la ruta del día en el mapa: elige el móvil, toca los puntos en el orden que debe recorrer y guárdalo. El móvil lo ve al instante en su app.</p>
               <label style="font-size:.72rem; color:var(--gris);">1) Elige el móvil</label>
               <select id="recMovilSel" style="margin:4px 0 10px;"><option value="">— Elige un móvil —</option></select>
-              <label style="font-size:.72rem; color:var(--gris);">2) Toca los puntos en el mapa, en orden</label>
+              <label style="font-size:.72rem; color:var(--gris);">2) Recorrido automático por sector (opcional)</label>
+              <div style="display:flex; gap:7px; margin:4px 0 12px; flex-wrap:wrap;">
+                <input type="text" id="recSector" placeholder="Escribe el sector (ej: La Pampa, La Florida, Las Compañías…)" style="margin:0; flex:1; min-width:180px;" onkeydown="if(event.key==='Enter')recAutoRuta()">
+                <button class="btn-full" style="width:auto; margin:0; padding:9px 16px;" onclick="recAutoRuta()">✨ Armar ruta</button>
+              </div>
+              <label style="font-size:.72rem; color:var(--gris);">3) O tócalos a mano en el mapa, en orden</label>
               <div style="position:relative; margin:6px 0 10px;">
                 <div id="recMapa" style="height:360px; border-radius:12px; overflow:hidden; border:1px solid var(--linea);"></div>
                 <div id="recMapaMsg" style="position:absolute; top:8px; left:8px; background:rgba(0,0,0,.65); color:#fff; font-size:.72rem; padding:5px 10px; border-radius:8px; z-index:500;">Cargando puntos…</div>
@@ -3362,6 +3367,34 @@ function recGuardar() {
   saFetch({ accion: 'recorrido-set', movilUid: mUid, paradas: recRuta }).then((d) => {
     if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `✅ Recorrido guardado con ${d.total} paradas en orden. El móvil ya lo ve.` : (d.error || 'No se pudo guardar.'); }
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
+}
+function recDist(a, b) { const dx = a.lat - b.lat, dy = a.lng - b.lng; return dx * dx + dy * dy; }
+function recAutoRuta() {
+  const q = (document.getElementById('recSector')?.value || '').trim().toLowerCase();
+  const info = document.getElementById('recInfo');
+  if (!q) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Escribe un sector primero.'; } return; }
+  // Candidatos: puntos ya ubicados en el mapa cuyo nombre o dirección menciona el sector.
+  const cand = Object.keys(recMarkers).filter((uid) => {
+    const c = recMarkers[uid].cliente;
+    return ((c.direccion || '') + ' ' + (c.local || '') + ' ' + (c.nombre || '')).toLowerCase().includes(q);
+  });
+  if (!cand.length) {
+    if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'No hay puntos ubicados en ese sector todavía (puede que aún se estén cargando en el mapa). Espera unos segundos y reintenta.'; }
+    return;
+  }
+  // Orden inteligente por cercanía (vecino más próximo), partiendo del punto más al oeste.
+  let restan = cand.slice().sort((a, b) => recMarkers[a].coords.lng - recMarkers[b].coords.lng);
+  const orden = [restan.shift()];
+  while (restan.length) {
+    const ultimo = recMarkers[orden[orden.length - 1]].coords;
+    let mejor = 0, mejorD = Infinity;
+    restan.forEach((u, i) => { const d = recDist(ultimo, recMarkers[u].coords); if (d < mejorD) { mejorD = d; mejor = i; } });
+    orden.push(restan.splice(mejor, 1)[0]);
+  }
+  recRuta = orden;
+  recRefrescar();
+  try { const g = L.featureGroup(recRuta.map((u) => recMarkers[u].marker)); recMapa.fitBounds(g.getBounds().pad(0.3), { maxZoom: 16 }); } catch (e) {}
+  if (info) { info.style.color = '#00C776'; info.textContent = `✨ Ruta automática con ${orden.length} punto${orden.length === 1 ? '' : 's'} del sector "${q}", ordenados por cercanía. Puedes ajustarla tocando el mapa.`; }
 }
 function guardarNotaCentral(clienteUid) {
   if (!clienteUid && protocoloActual) clienteUid = protocoloActual.clienteUid;
