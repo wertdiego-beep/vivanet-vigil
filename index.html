@@ -1156,6 +1156,10 @@ textarea{min-height:96px;resize:vertical}
                   <div style="color:var(--gris); border-top:1px solid var(--linea); padding-top:8px;">Lo que <b>nunca</b> se corta: el mapa de monitoreo en vivo y la sirena — sin eso, un operador no es operador. Los cambios se aplican en su panel en segundos.</div>
                 </div>
               </details>
+              <div style="margin-bottom:12px;">
+                <label style="font-size:.72rem; color:var(--gris);">1) Elige la empresa</label>
+                <select id="saOpEmpresaSel" onchange="renderOperadores()" style="margin:4px 0 0;"></select>
+              </div>
               <div id="saOperadores" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px;"></div>
               <div class="error-msg" id="saPermInfo"></div>
             </div>
@@ -4417,7 +4421,25 @@ function saCargarOperadores() {
   saFetch({ accion: 'sa-operadores' }).then((d) => {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     _saOps = d.operadores || [];
-    cont.innerHTML = _saOps.map((o, i) => `
+    const sel = document.getElementById('saOpEmpresaSel');
+    if (sel) {
+      const prev = sel.value;
+      const empresas = {};
+      _saOps.forEach((o) => { empresas[o.empresa] = ((window._saEmpresas || []).find((e) => e.id === o.empresa) || {}).nombre || o.empresa; });
+      const ids = Object.keys(empresas).sort((a, b) => (empresas[a] || '').localeCompare(empresas[b] || ''));
+      sel.innerHTML = '<option value="">— Elige una empresa —</option>' + ids.map((id) => `<option value="${id}">🏢 ${empresas[id]} (${_saOps.filter((o) => o.empresa === id).length})</option>`).join('');
+      if (prev && empresas[prev]) sel.value = prev;
+    }
+    renderOperadores();
+  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
+}
+function renderOperadores() {
+  const cont = document.getElementById('saOperadores'); if (!cont) return;
+  const emp = document.getElementById('saOpEmpresaSel')?.value || '';
+  if (!emp) { cont.innerHTML = '<div class="evento" style="grid-column:1/-1;"><div><strong>Elige una empresa arriba ⤴</strong><small>Selecciona de qué empresa quieres ver y gestionar los operadores. Así no se mezclan los de distintas empresas.</small></div></div>'; return; }
+  const items = _saOps.map((o, i) => ({ o, i })).filter((x) => x.o.empresa === emp);
+  if (!items.length) { cont.innerHTML = '<div class="evento" style="grid-column:1/-1;"><div><strong>Esta empresa aún no tiene operadores.</strong></div></div>'; }
+  cont.innerHTML = items.map(({ o, i }) => `
       <div style="border:1px solid var(--linea); border-radius:14px; padding:13px;">
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:${o.esSuperadmin ? '0' : '10px'};">
           <div style="width:38px; height:38px; border-radius:50%; background:var(--violeta-suave); color:#9d8fff; display:grid; place-items:center; font-weight:700; font-family:'Chakra Petch',sans-serif;">${(o.nombre || o.email || '?').slice(0, 1).toUpperCase()}</div>
@@ -4434,7 +4456,6 @@ function saCargarOperadores() {
         <div style="font-size:1.7rem;">➕</div>
         <strong style="display:block; font-size:.85rem; margin-top:4px;">Asignar operador</strong>
       </button>`;
-  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
 function saTogglePermiso(i, k) {
   const o = _saOps[i];
