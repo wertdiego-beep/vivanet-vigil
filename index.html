@@ -1035,8 +1035,21 @@ textarea{min-height:96px;resize:vertical}
           <!-- ── Vista: Personal y roles (jefe/gerente de la empresa) ── -->
           <section class="op-view" id="op-view-personal">
             <div class="card">
-              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>👔 Personal de tu empresa</span><button onclick="cargarPersonal()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻ Actualizar</button></div>
-              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Asigna el cargo de cada integrante de tu equipo. El rol define qué puede hacer dentro de la empresa.</p>
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>👔 Personal de tu empresa</span><span><button onclick="abrirAltaEmpleado()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta); color:#fff; cursor:pointer; border:none; margin-right:6px;">➕ Agregar empleado</button><button onclick="cargarPersonal()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></span></div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Crea las cuentas de tu equipo (correo y clave) o súmalos con el código. Cada uno con su cargo.</p>
+              <div id="altaEmpleado" style="display:none; border:1px solid var(--violeta); border-radius:14px; padding:14px; margin-bottom:14px;">
+                <strong style="font-size:.9rem; display:block; margin-bottom:8px;">Nueva cuenta de empleado</strong>
+                <label>Nombre</label><input type="text" id="aeNombre" placeholder="Ej: Pedro Soto">
+                <label>Correo (será su usuario)</label><input type="email" id="aeEmail" placeholder="pedro@empresa.cl">
+                <label>Clave (mínimo 6)</label><input type="text" id="aePass" placeholder="Clave que le entregarás">
+                <label>Teléfono</label><input type="text" id="aeTel" placeholder="+56 9 …">
+                <label>Cargo</label>
+                <select id="aeRol"></select>
+                <label style="display:flex; gap:9px; align-items:center; margin:8px 0;"><input type="checkbox" id="aeOperador" style="width:auto; margin:0;"> 🖥 Que además pueda operar la central</label>
+                <button class="btn-full" id="aeGuardarBtn" onclick="guardarEmpleado()">Crear cuenta</button>
+                <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="document.getElementById('altaEmpleado').style.display='none'">Cancelar</button>
+                <div class="error-msg" id="aeInfo"></div>
+              </div>
               <div id="personalLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
               <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--linea); font-size:.75rem; color:var(--gris); line-height:1.6;">
                 <b>Roles disponibles:</b> 👑 Jefe/a (manda todo) · 🎩 Gerente (gestiona personal) · 🛡 Supervisor (coordina turnos) · 👮 Guardia · 👤 Empleado/a · 🔧 Técnico.
@@ -4390,6 +4403,47 @@ const ROLES_EMP = [
   { k: 'jefe', n: '👑 Jefe/a' }, { k: 'gerente', n: '🎩 Gerente' }, { k: 'supervisor', n: '🛡 Supervisor' },
   { k: 'guardia', n: '👮 Guardia' }, { k: 'empleado', n: '👤 Empleado/a' }, { k: 'tecnico', n: '🔧 Técnico' }
 ];
+function abrirAltaEmpleado() {
+  const c = document.getElementById('altaEmpleado');
+  if (!c) return;
+  const sel = document.getElementById('aeRol');
+  if (sel) sel.innerHTML = ROLES_EMP.map((r) => `<option value="${r.k}">${r.n}</option>`).join('');
+  ['aeNombre','aeEmail','aePass','aeTel'].forEach((id) => { const e = document.getElementById(id); if (e) e.value = ''; });
+  document.getElementById('aeOperador').checked = false;
+  document.getElementById('aeInfo').textContent = '';
+  c.style.display = 'block';
+}
+function guardarEmpleado() {
+  const b = document.getElementById('aeGuardarBtn');
+  const info = document.getElementById('aeInfo');
+  info.style.color = 'var(--rojo)'; info.textContent = '';
+  const datos = {
+    accion: 'emp-crear',
+    nombre: document.getElementById('aeNombre').value.trim(),
+    email: document.getElementById('aeEmail').value.trim(),
+    pass: document.getElementById('aePass').value.trim(),
+    telefono: document.getElementById('aeTel').value.trim(),
+    rol: document.getElementById('aeRol').value,
+    esOperador: document.getElementById('aeOperador').checked
+  };
+  if (!datos.nombre || !datos.email || datos.pass.length < 6) { info.textContent = 'Completa nombre, correo y una clave de 6+ caracteres.'; return; }
+  b.disabled = true; b.textContent = 'Creando…';
+  saFetch(datos).then((d) => {
+    b.disabled = false; b.textContent = 'Crear cuenta';
+    if (d.ok) { info.style.color = '#00C776'; info.textContent = 'Cuenta creada. Entrégale su correo y clave.'; document.getElementById('altaEmpleado').style.display = 'none'; cargarPersonal(); }
+    else info.textContent = d.error || 'No se pudo crear.';
+  }).catch(() => { b.disabled = false; b.textContent = 'Crear cuenta'; info.textContent = 'Error de conexión.'; });
+}
+function abrirEditarEmpleado(p) {
+  const nombre = prompt('Nombre:', p.nombre || '');
+  if (nombre === null) return;
+  const telefono = prompt('Teléfono:', p.telefono || '');
+  if (telefono === null) return;
+  saFetch({ accion: 'emp-editar', personalUid: p.uid, nombre: nombre.trim(), telefono: telefono.trim() }).then((d) => {
+    if (!d.ok) alert(d.error || 'No se pudo guardar');
+    cargarPersonal();
+  });
+}
 function empCargarCodigo(regen) {
   saFetch({ accion: 'emp-codigo', regenerar: !!regen }).then((d) => {
     const el = document.getElementById('empCodigo');
@@ -4422,13 +4476,19 @@ function cargarPersonal() {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     if (!d.personal.length) { cont.innerHTML = '<div class="evento"><div><strong>Aún no tienes personal con cargo.</strong><small>Cuando alguien se una con tu código de empresa, aparecerá aquí para asignarle un rol.</small></div></div>'; return; }
     cont.innerHTML = d.personal.map((p, i) => `
-      <div style="display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--linea); padding:10px 0; flex-wrap:wrap;">
-        <div style="width:34px; height:34px; border-radius:50%; background:var(--violeta-suave); color:#9d8fff; display:grid; place-items:center; font-weight:700;">${(p.nombre || '?').slice(0,1).toUpperCase()}</div>
-        <strong style="flex:1; font-size:.88rem; min-width:120px;">${p.nombre} ${p.esOperador ? '<span style="font-size:.62rem; color:var(--verde); background:var(--verde-suave); padding:2px 8px; border-radius:99px;">OPERADOR</span>' : ''}</strong>
-        <select onchange="cambiarRol('${p.uid}', this.value)" style="width:auto; margin:0; padding:7px 10px; font-size:.8rem;">
-          ${ROLES_EMP.map((r) => `<option value="${r.k}" ${p.rol === r.k ? 'selected' : ''}>${r.n}</option>`).join('')}
-        </select>
-        <button onclick="empHacerOperador('${p.uid}', ${p.esOperador === true})" style="padding:6px 12px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid ${p.esOperador ? 'rgba(229,52,75,.5)' : 'var(--violeta)'}; background:${p.esOperador ? 'rgba(229,52,75,.1)' : 'var(--violeta-suave)'}; color:${p.esOperador ? '#ff4d5e' : '#9d8fff'};">${p.esOperador ? 'Quitar operador' : 'Hacer operador'}</button>
+      <div style="border-bottom:1px solid var(--linea); padding:12px 0;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <div style="width:38px; height:38px; border-radius:50%; background:var(--violeta-suave); color:#9d8fff; display:grid; place-items:center; font-weight:700;">${(p.nombre || '?').slice(0,1).toUpperCase()}</div>
+          <div style="flex:1; min-width:140px;">
+            <strong style="font-size:.9rem;">${p.nombre} ${p.esOperador ? '<span style="font-size:.6rem; color:var(--verde); background:var(--verde-suave); padding:2px 8px; border-radius:99px;">OPERADOR</span>' : ''}</strong>
+            <div style="font-size:.72rem; color:var(--gris);">${p.email || 'sin correo'}${p.telefono ? ' · ' + p.telefono : ''}</div>
+          </div>
+          <select onchange="cambiarRol('${p.uid}', this.value)" style="width:auto; margin:0; padding:7px 10px; font-size:.8rem;">
+            ${ROLES_EMP.map((r) => `<option value="${r.k}" ${p.rol === r.k ? 'selected' : ''}>${r.n}</option>`).join('')}
+          </select>
+          <button onclick='abrirEditarEmpleado(${JSON.stringify(p).replace(/'/g,"&#39;")})' title="Editar datos" style="padding:6px 10px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid var(--linea); background:transparent; color:var(--gris);">✏️</button>
+          <button onclick="empHacerOperador('${p.uid}', ${p.esOperador === true})" style="padding:6px 12px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid ${p.esOperador ? 'rgba(229,52,75,.5)' : 'var(--violeta)'}; background:${p.esOperador ? 'rgba(229,52,75,.1)' : 'var(--violeta-suave)'}; color:${p.esOperador ? '#ff4d5e' : '#9d8fff'};">${p.esOperador ? 'Quitar op.' : 'Hacer op.'}</button>
+        </div>
       </div>`).join('');
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
