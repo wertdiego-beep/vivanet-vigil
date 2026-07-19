@@ -1594,7 +1594,8 @@ async function cargarPanelOperador() {
     const ncr = document.getElementById('navCredenciales');
     if (ncr) ncr.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
     const nro = document.getElementById('navRoles');
-    if (nro) nro.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe') ? '' : 'none';
+    // Roles lo gestiona el jefe de cada empresa, NO el nivel superior.
+    if (nro) nro.style.display = (!data.esSuperadmin && data.rolEmpresa === 'jefe') ? '' : 'none';
     window._esSApanel = data.esSuperadmin === true;
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     aplicarFuncionesApp(data.funciones);
