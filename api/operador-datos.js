@@ -482,6 +482,57 @@ export default async function handler(req, res) {
       }
     }
 
+    if (accion === 'emp-crear') {
+      // El jefe/gerente crea una cuenta de empleado a mano (correo + clave).
+      const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRol !== 'jefe' && miRol !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente puede crear empleados.' }); return; }
+      const email = (req.body.email || '').trim().toLowerCase();
+      const pass = (req.body.pass || '').trim();
+      const nombre = (req.body.nombre || '').trim();
+      const rol = ['jefe','gerente','empleado','tecnico','supervisor','guardia'].includes(req.body.rol) ? req.body.rol : 'empleado';
+      const tel = (req.body.telefono || '').trim();
+      if (!email || !/.+@.+\..+/.test(email)) { res.status(400).json({ error: 'Correo no válido' }); return; }
+      if (pass.length < 6) { res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres' }); return; }
+      if (!nombre) { res.status(400).json({ error: 'Falta el nombre' }); return; }
+      // Crear la cuenta en Firebase Auth.
+      const su = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass, returnSecureToken: false })
+      }).then((r) => r.json());
+      if (!su.localId) { res.status(400).json({ error: su.error?.message === 'EMAIL_EXISTS' ? 'Ya existe una cuenta con ese correo.' : 'No se pudo crear la cuenta.' }); return; }
+      // Guardar su ficha en la empresa del jefe.
+      const fields = {
+        nombre: { stringValue: nombre }, telefono: { stringValue: tel },
+        empresaId: { stringValue: empresaOperador }, rolEmpresa: { stringValue: rol },
+        modo: { stringValue: 'empresa' }, creadoManual: { booleanValue: true }
+      };
+      if (req.body.esOperador) fields.operadorDe = { stringValue: empresaOperador };
+      await fetch(`${base0}/usuarios/${su.localId}?` + Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+      res.status(200).json({ ok: true, uid: su.localId });
+      return;
+    }
+    if (accion === 'emp-editar') {
+      const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRol !== 'jefe' && miRol !== 'gerente') { res.status(403).json({ error: 'No autorizado' }); return; }
+      const destino = (req.body.personalUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(destino)) { res.status(400).json({ error: 'Persona no válida' }); return; }
+      const docD = await fetch(`${base0}/usuarios/${destino}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!esSA && (docD.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Esa persona es de otra empresa.' }); return; }
+      const fields = {};
+      if (req.body.nombre != null) fields.nombre = { stringValue: String(req.body.nombre).trim() };
+      if (req.body.telefono != null) fields.telefono = { stringValue: String(req.body.telefono).trim() };
+      if (req.body.rol && ['jefe','gerente','empleado','tecnico','supervisor','guardia'].includes(req.body.rol)) fields.rolEmpresa = { stringValue: req.body.rol };
+      if (!Object.keys(fields).length) { res.status(400).json({ error: 'Nada que cambiar' }); return; }
+      await fetch(`${base0}/usuarios/${destino}?` + Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
     if (accion === 'emp-codigo') {
       // Código de equipo de la empresa del operador (para sumar personal).
       const rutaEmp = `${base0}/empresas/${empresaOperador}`;
@@ -519,7 +570,15 @@ export default async function handler(req, res) {
       // Personal de la empresa del operador: integrantes con rolEmpresa.
       const clientesTodos = await listarClientes(accessToken);
       const personal = clientesTodos.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa)
-        .map((c) => ({ uid: c.uid, nombre: c.local || c.nombre || 'Sin nombre', rol: c.rolEmpresa, esOperador: !!c.operadorDe }));
+        .map((c) => ({ uid: c.uid, nombre: c.nombre || c.local || 'Sin nombre', telefono: c.telefono || '', rol: c.rolEmpresa, esOperador: !!c.operadorDe }));
+      // Correos de esas cuentas.
+      try {
+        const lk = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ localId: personal.map((p) => p.uid) })
+        }).then((r) => r.json());
+        (lk.users || []).forEach((u) => { const p = personal.find((x) => x.uid === u.localId); if (p) p.email = u.email || ''; });
+      } catch (e) {}
       res.status(200).json({ ok: true, personal, empresa: empresaOperador });
       return;
     }
