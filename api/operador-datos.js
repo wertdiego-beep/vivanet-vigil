@@ -104,6 +104,7 @@ async function listarClientes(accessToken) {
         local: f.local?.stringValue || '',
         direccion: f.direccion?.stringValue || '',
         telefono: f.telefono?.stringValue || '',
+        notaCentral: f.notaCentral?.stringValue || '',
         modo: f.modo?.stringValue || 'empresa',
         rolEmpresa: f.rolEmpresa?.stringValue || '',
         grupoFamiliarId: f.grupoFamiliarId?.stringValue || '',
@@ -178,6 +179,11 @@ async function listarAlertasRecientes(accessToken) {
         notaAtencion: f.notaAtencion?.stringValue || '',
         atendidaPor: f.atendidaPor?.stringValue || '',
         asignadaA: f.asignadaA?.stringValue || '',
+        movilAsignado: f.movilAsignado?.stringValue || '',
+        movilNombre: f.movilNombre?.stringValue || '',
+        movilEstado: f.movilEstado?.stringValue || '',
+        movilReporteNota: f.movilReporteNota?.stringValue || '',
+        movilReporteFoto: f.movilReporteFoto?.stringValue || '',
         ubicacion: ubic
           ? {
               lat: parseFloat(ubic.lat?.doubleValue ?? ubic.lat?.integerValue ?? 0),
@@ -496,6 +502,85 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ── Acciones del MÓVIL DE REACCIÓN (rol 'movil'; no es operador de central) ──
+    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte'];
+    if (_accMovil.includes(accion)) {
+      const miRolM = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRolM !== 'movil') { res.status(403).json({ error: 'Solo un móvil de reacción puede usar esto.' }); return; }
+      const empMovil = perfilOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
+      const rutaRec = `${base0}/empresas/${empMovil}/recorridos/${uid}`;
+      const hoyStr = new Date().toISOString().slice(0, 10);
+
+      if (accion === 'movil-recorrido') {
+        const doc = await fetch(rutaRec, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const fecha = doc.fields?.fecha?.stringValue || '';
+        const paradasRaw = (fecha === hoyStr) ? (doc.fields?.paradas?.arrayValue?.values || []) : [];
+        const paradas = paradasRaw.map((p) => {
+          const pf = p.mapValue?.fields || {};
+          return { clienteUid: pf.clienteUid?.stringValue || '', nombre: pf.nombre?.stringValue || '', direccion: pf.direccion?.stringValue || '', nota: pf.nota?.stringValue || '', foto: pf.foto?.stringValue || '', estado: pf.estado?.stringValue || 'pendiente', visitadaEn: pf.visitadaEn?.stringValue || '' };
+        });
+        res.status(200).json({ ok: true, fecha: hoyStr, paradas });
+        return;
+      }
+      if (accion === 'movil-parada') {
+        // Marca una parada del recorrido como visitada, con nota/foto opcional.
+        const idx = parseInt(req.body.idx, 10);
+        const doc = await fetch(rutaRec, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const arr = (doc.fields?.paradas?.arrayValue?.values || []).slice();
+        if (isNaN(idx) || idx < 0 || idx >= arr.length) { res.status(400).json({ error: 'Parada no válida' }); return; }
+        const pf = arr[idx].mapValue.fields;
+        pf.estado = { stringValue: req.body.estado === 'pendiente' ? 'pendiente' : 'visitada' };
+        if (req.body.nota != null) pf.nota = { stringValue: String(req.body.nota).slice(0, 500) };
+        if (req.body.foto) pf.foto = { stringValue: String(req.body.foto).slice(0, 900000) };
+        pf.visitadaEn = { stringValue: new Date().toISOString() };
+        await fetch(`${rutaRec}?updateMask.fieldPaths=paradas`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { paradas: { arrayValue: { values: arr } } } })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'movil-despachos') {
+        // SOS asignados a este móvil (de cualquier cliente de su empresa).
+        const [lista, clientes] = await Promise.all([listarAlertasRecientes(accessToken), listarClientes(accessToken)]);
+        const infoCli = {};
+        clientes.forEach((c) => { infoCli[c.uid] = c; });
+        const mios = lista.filter((a) => a.movilAsignado === uid && a.movilEstado && !['resuelto', 'falsa'].includes(a.movilEstado));
+        const despachos = mios.map((a) => {
+          const c = infoCli[a.clienteUid] || {};
+          return { clienteUid: a.clienteUid, alertaId: a.alertaId, cliente: c.local || c.nombre || 'Cliente', direccion: c.direccion || '', telefono: c.telefono || '', notaCentral: c.notaCentral || '', movilEstado: a.movilEstado, creadaEn: a.creadaEn, ubicacion: a.ubicacion };
+        });
+        res.status(200).json({ ok: true, despachos });
+        return;
+      }
+      if (accion === 'movil-estado') {
+        const cUid = (req.body.clienteUid || '').trim();
+        const aId = (req.body.alertaId || '').trim();
+        const est = ['despachado', 'en_camino', 'en_sitio', 'resuelto', 'falsa'].includes(req.body.movilEstado) ? req.body.movilEstado : '';
+        if (!/^[A-Za-z0-9]+$/.test(cUid) || !/^[A-Za-z0-9]+$/.test(aId) || !est) { res.status(400).json({ error: 'Datos no válidos' }); return; }
+        await fetch(`${base0}/usuarios/${cUid}/alertas/${aId}?updateMask.fieldPaths=movilEstado&updateMask.fieldPaths=movilEstadoEn`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { movilEstado: { stringValue: est }, movilEstadoEn: { timestampValue: new Date().toISOString() } } })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'movil-reporte') {
+        const cUid = (req.body.clienteUid || '').trim();
+        const aId = (req.body.alertaId || '').trim();
+        if (!/^[A-Za-z0-9]+$/.test(cUid) || !/^[A-Za-z0-9]+$/.test(aId)) { res.status(400).json({ error: 'Datos no válidos' }); return; }
+        const fields = { movilReporteEn: { timestampValue: new Date().toISOString() } };
+        if (req.body.nota != null) fields.movilReporteNota = { stringValue: String(req.body.nota).slice(0, 800) };
+        if (req.body.foto) fields.movilReporteFoto = { stringValue: String(req.body.foto).slice(0, 900000) };
+        await fetch(`${base0}/usuarios/${cUid}/alertas/${aId}?` + Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+    }
+
     if (!esOp) {
       res.status(403).json({ error: 'No autorizado' });
       return;
@@ -518,7 +603,7 @@ export default async function handler(req, res) {
       const email = (req.body.email || '').trim().toLowerCase();
       const pass = (req.body.pass || '').trim();
       const nombre = (req.body.nombre || '').trim();
-      const rol = ['jefe','gerente','empleado','tecnico','supervisor','guardia'].includes(req.body.rol) ? req.body.rol : 'empleado';
+      const rol = ['jefe','gerente','empleado','tecnico','supervisor','guardia','movil'].includes(req.body.rol) ? req.body.rol : 'empleado';
       const tel = (req.body.telefono || '').trim();
       if (!email || !/.+@.+\..+/.test(email)) { res.status(400).json({ error: 'Correo no válido' }); return; }
       if (pass.length < 6) { res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres' }); return; }
@@ -613,7 +698,7 @@ export default async function handler(req, res) {
       const fields = {};
       if (req.body.nombre != null) fields.nombre = { stringValue: String(req.body.nombre).trim() };
       if (req.body.telefono != null) fields.telefono = { stringValue: String(req.body.telefono).trim() };
-      if (req.body.rol && ['jefe','gerente','empleado','tecnico','supervisor','guardia'].includes(req.body.rol)) fields.rolEmpresa = { stringValue: req.body.rol };
+      if (req.body.rol && ['jefe','gerente','empleado','tecnico','supervisor','guardia','movil'].includes(req.body.rol)) fields.rolEmpresa = { stringValue: req.body.rol };
       if (!Object.keys(fields).length) { res.status(400).json({ error: 'Nada que cambiar' }); return; }
       await fetch(`${base0}/usuarios/${destino}?` + Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
         method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -691,6 +776,65 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true });
       return;
     }
+    if (accion === 'moviles-empresa') {
+      // Lista los móviles de reacción de la empresa del operador (para despachar / armar recorrido).
+      const clientes = await listarClientes(accessToken);
+      const moviles = clientes.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa === 'movil')
+        .map((c) => ({ uid: c.uid, nombre: c.nombre || c.local || 'Móvil', telefono: c.telefono || '' }));
+      res.status(200).json({ ok: true, moviles });
+      return;
+    }
+    if (accion === 'despachar-movil') {
+      // El operador que atiende otorga el SOS a un móvil.
+      const cUid = (req.body.clienteUid || '').trim();
+      const aId = (req.body.alertaId || '').trim();
+      const mUid = (req.body.movilUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(cUid) || !/^[A-Za-z0-9]+$/.test(aId) || !/^[A-Za-z0-9]+$/.test(mUid)) { res.status(400).json({ error: 'Datos no válidos' }); return; }
+      const [docCli, docMov] = await Promise.all([
+        fetch(`${base0}/usuarios/${cUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
+        fetch(`${base0}/usuarios/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
+      ]);
+      const empC = docCli.fields?.empresaId?.stringValue || 'sos360-la-serena';
+      const empM = docMov.fields?.empresaId?.stringValue || 'sos360-la-serena';
+      if (!esSA && (empC !== empresaOperador || empM !== empresaOperador)) { res.status(403).json({ error: 'Cliente o móvil de otra empresa.' }); return; }
+      if (docMov.fields?.rolEmpresa?.stringValue !== 'movil') { res.status(400).json({ error: 'Esa persona no es un móvil de reacción.' }); return; }
+      await fetch(`${base0}/usuarios/${cUid}/alertas/${aId}?updateMask.fieldPaths=movilAsignado&updateMask.fieldPaths=movilNombre&updateMask.fieldPaths=movilEstado&updateMask.fieldPaths=movilDespachadoEn`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: {
+          movilAsignado: { stringValue: mUid },
+          movilNombre: { stringValue: docMov.fields?.nombre?.stringValue || 'Móvil' },
+          movilEstado: { stringValue: 'despachado' },
+          movilDespachadoEn: { timestampValue: new Date().toISOString() }
+        } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
+    if (accion === 'recorrido-set') {
+      // El operador arma el recorrido del día de un móvil (lista de paradas = clientes).
+      const mUid = (req.body.movilUid || '').trim();
+      const uids = Array.isArray(req.body.paradas) ? req.body.paradas.filter((x) => /^[A-Za-z0-9]+$/.test(x)) : [];
+      if (!/^[A-Za-z0-9]+$/.test(mUid)) { res.status(400).json({ error: 'Móvil no válido' }); return; }
+      const clientes = await listarClientes(accessToken);
+      const porUid = {};
+      clientes.forEach((c) => { porUid[c.uid] = c; });
+      const values = uids.map((u) => {
+        const c = porUid[u] || {};
+        return { mapValue: { fields: {
+          clienteUid: { stringValue: u },
+          nombre: { stringValue: c.local || c.nombre || 'Punto' },
+          direccion: { stringValue: c.direccion || '' },
+          estado: { stringValue: 'pendiente' },
+          nota: { stringValue: '' }, foto: { stringValue: '' }, visitadaEn: { stringValue: '' }
+        } } };
+      });
+      await fetch(`${base0}/empresas/${empresaOperador}/recorridos/${mUid}?updateMask.fieldPaths=fecha&updateMask.fieldPaths=paradas`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { fecha: { stringValue: new Date().toISOString().slice(0, 10) }, paradas: { arrayValue: { values } } } })
+      });
+      res.status(200).json({ ok: true, total: values.length });
+      return;
+    }
     if (accion === 'emp-codigo') {
       // Código de equipo de la empresa del operador (para sumar personal).
       const rutaEmp = `${base0}/empresas/${empresaOperador}`;
@@ -746,7 +890,7 @@ export default async function handler(req, res) {
       if (!esSA && miRol !== 'jefe' && miRol !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente puede cambiar roles.' }); return; }
       const destino = (req.body.personalUid || '').trim();
       const rol = (req.body.rol || '').trim();
-      if (!/^[A-Za-z0-9]+$/.test(destino) || !['jefe', 'gerente', 'empleado', 'tecnico', 'supervisor', 'guardia'].includes(rol)) { res.status(400).json({ error: 'Datos no válidos' }); return; }
+      if (!/^[A-Za-z0-9]+$/.test(destino) || !['jefe', 'gerente', 'empleado', 'tecnico', 'supervisor', 'guardia', 'movil'].includes(rol)) { res.status(400).json({ error: 'Datos no válidos' }); return; }
       // Verificar que el destino sea de la misma empresa.
       const docD = await fetch(`${base0}/usuarios/${destino}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       const empD = docD.fields?.empresaId?.stringValue || 'sos360-la-serena';
