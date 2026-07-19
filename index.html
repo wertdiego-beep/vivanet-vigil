@@ -792,6 +792,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="plataforma" id="navPlataforma" style="display:none"><span>🏢</span><em>Plataforma</em></button>
         <button class="op-nav" data-opview="credenciales" id="navCredenciales" style="display:none"><span>🔒</span><em>Credenciales</em></button>
         <button class="op-nav" data-opview="roles" id="navRoles" style="display:none"><span>🔺</span><em>Roles</em></button>
+        <button class="op-nav" data-opview="recorridos" id="navRecorridos" style="display:none"><span>🗺️</span><em>Recorridos</em></button>
         <div class="op-side-foot">
           <button class="op-nav" id="opPushBtn" onclick="opActivarPush()" title="Recibe una notificación en este dispositivo cuando llegue un SOS, aunque el panel esté cerrado"><span>🔔</span><em>Avisos SOS</em></button>
           <button class="op-nav" onclick="go('s-mas')"><span>👤</span><em>Mi cuenta</em></button>
@@ -943,14 +944,6 @@ textarea{min-height:96px;resize:vertical}
               <textarea id="difCuerpo" placeholder="Mensaje (ej: Esta noche habrá rondas preventivas adicionales en La Pampa. Ante cualquier emergencia usa tu botón SOS.)" maxlength="240" style="min-height:70px;"></textarea>
               <button class="btn-full" id="difEnviarBtn" onclick="enviarDifusion()">Enviar a todos mis clientes</button>
               <div class="error-msg" id="difInfo"></div>
-            </div>
-            <div class="card" id="recorridoCard">
-              <div class="card-title">🚐 Armar recorrido de un móvil</div>
-              <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Elige un móvil y marca los puntos que debe recorrer hoy. Se guarda como su ruta del día y la ve en su app.</p>
-              <select id="recMovilSel"><option value="">— Elige un móvil —</option></select>
-              <div id="recClientesLista" style="max-height:230px; overflow:auto; margin:8px 0; border:1px solid var(--linea); border-radius:12px; padding:8px;"><small style="color:var(--gris);">Los clientes aparecerán aquí para marcarlos.</small></div>
-              <button class="btn-full" style="margin:0;" onclick="recGuardar()">Guardar recorrido del día</button>
-              <div class="error-msg" id="recInfo"></div>
             </div>
             <div class="card">
               <div class="card-title">Buscar cliente</div>
@@ -1120,6 +1113,19 @@ textarea{min-height:96px;resize:vertical}
                 <summary style="cursor:pointer; font-size:.8rem; font-weight:700; color:var(--violeta);">🔓 Ver registro (información sensible)</summary>
                 <div id="credModLista" style="margin-top:12px;"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
               </details>
+            </div>
+          </section>
+          <!-- ── Vista/Módulo: Recorridos de móviles (gerente/jefe) ── -->
+          <section class="op-view" id="op-view-recorridos">
+            <div class="card">
+              <div class="card-title">🗺 Mandar recorrido a un móvil</div>
+              <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Como gerente de seguridad, arma la ruta del día de cada móvil: elige el móvil, marca los puntos que debe recorrer y guárdalo. El móvil lo ve al instante en su app.</p>
+              <label style="font-size:.72rem; color:var(--gris);">1) Elige el móvil</label>
+              <select id="recMovilSel" style="margin:4px 0 10px;"><option value="">— Elige un móvil —</option></select>
+              <label style="font-size:.72rem; color:var(--gris);">2) Marca los puntos del recorrido</label>
+              <div id="recClientesLista" style="max-height:300px; overflow:auto; margin:6px 0 10px; border:1px solid var(--linea); border-radius:12px; padding:8px;"><small style="color:var(--gris);">Cargando puntos…</small></div>
+              <button class="btn-full" style="margin:0;" onclick="recGuardar()">Guardar recorrido del día</button>
+              <div class="error-msg" id="recInfo"></div>
             </div>
           </section>
           <!-- ── Vista: Plataforma (solo superadmin: nosotros) ── -->
@@ -1631,6 +1637,9 @@ async function cargarPanelOperador() {
     const nro = document.getElementById('navRoles');
     // Roles lo gestiona el jefe de cada empresa, NO el nivel superior.
     if (nro) nro.style.display = (!data.esSuperadmin && data.rolEmpresa === 'jefe') ? '' : 'none';
+    const nre = document.getElementById('navRecorridos');
+    // Recorridos: lo manda el gerente de seguridad (o el jefe).
+    if (nre) nre.style.display = (!data.esSuperadmin && (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente')) ? '' : 'none';
     window._esSApanel = data.esSuperadmin === true;
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     aplicarFuncionesApp(data.funciones);
@@ -3244,17 +3253,20 @@ function protocoloDespacharMovil() {
     if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? '✅ Despachado. El móvil lo verá en su app.' : (d.error || 'No se pudo despachar.'); }
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
+function renderRecClientes(cli) {
+  const cont = document.getElementById('recClientesLista'); if (!cont) return;
+  const lista = (cli || []).filter((c) => !c.rolEmpresa && !c.operadorDe);
+  cont.innerHTML = lista.length ? lista.map((c) => `<label style="display:flex; gap:8px; align-items:center; padding:6px 4px; font-size:.82rem; border-bottom:1px solid var(--linea);"><input type="checkbox" class="recChk" value="${c.uid}" style="width:auto; margin:0;"><span><b>${(c.local || c.nombre || 'Cliente').replace(/</g,'&lt;')}</b> <span style="color:var(--gris);">${(c.direccion || '').replace(/</g,'&lt;')}</span></span></label>`).join('') : '<small style="color:var(--gris);">Sin clientes para armar recorrido.</small>';
+}
 function recInit() {
   const sel = document.getElementById('recMovilSel');
   if (sel) saFetch({ accion: 'moviles-empresa' }).then((d) => {
     if (d.ok && d.moviles.length) sel.innerHTML = '<option value="">— Elige un móvil —</option>' + d.moviles.map((m) => `<option value="${m.uid}">🚐 ${m.nombre}</option>`).join('');
     else sel.innerHTML = '<option value="">— No hay móviles registrados —</option>';
   }).catch(() => {});
-  const cont = document.getElementById('recClientesLista');
-  if (cont) {
-    const cli = (typeof operadorClientesData !== 'undefined' ? operadorClientesData : []).filter((c) => !c.rolEmpresa && !c.operadorDe);
-    cont.innerHTML = cli.length ? cli.map((c) => `<label style="display:flex; gap:8px; align-items:center; padding:6px 4px; font-size:.82rem; border-bottom:1px solid var(--linea);"><input type="checkbox" class="recChk" value="${c.uid}" style="width:auto; margin:0;"><span><b>${(c.local || c.nombre || 'Cliente').replace(/</g,'&lt;')}</b> <span style="color:var(--gris);">${(c.direccion || '').replace(/</g,'&lt;')}</span></span></label>`).join('') : '<small style="color:var(--gris);">Sin clientes para armar recorrido.</small>';
-  }
+  const local = (typeof operadorClientesData !== 'undefined' ? operadorClientesData : []);
+  if (local.length) renderRecClientes(local);
+  else saFetch({}).then((d) => { if (d.ok) renderRecClientes(d.clientes || []); }).catch(() => {});
 }
 function recGuardar() {
   const sel = document.getElementById('recMovilSel'); const info = document.getElementById('recInfo');
@@ -4295,7 +4307,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -4306,7 +4318,8 @@ const opDescripciones = {
   personal: 'Tu equipo: crea cuentas, asigna cargos, promueve operadores y edita sus datos.',
   plataforma: 'Nivel superior: administra las empresas de seguridad, sus planes y funciones. Solo tú lo ves.',
   credenciales: 'Bitácora de todas las cuentas de personal creadas (correo, cargo, autor y fecha). Las claves no se guardan por seguridad.',
-  roles: 'Define en pirámide qué ve y hace cada cargo de tu empresa. Solo el jefe.'
+  roles: 'Define en pirámide qué ve y hace cada cargo de tu empresa. Solo el jefe.',
+  recorridos: 'Manda a cada móvil su ruta del día. Solo el gerente o el jefe.'
 };
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
@@ -4963,7 +4976,7 @@ function opGo(v){
   if (v==='plataforma') cargarPlataforma();
   if (v==='reportes') cargarReportesPanel();
   if (v==='personal') cargarPersonal();
-  if (v==='clientes') recInit();
+  if (v==='recorridos') recInit();
   if (v==='credenciales') cargarCredencialesModulo();
   if (v==='roles') cargarRolesPermisos();
 }
