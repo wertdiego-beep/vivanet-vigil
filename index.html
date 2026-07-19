@@ -944,6 +944,14 @@ textarea{min-height:96px;resize:vertical}
               <button class="btn-full" id="difEnviarBtn" onclick="enviarDifusion()">Enviar a todos mis clientes</button>
               <div class="error-msg" id="difInfo"></div>
             </div>
+            <div class="card" id="recorridoCard">
+              <div class="card-title">🚐 Armar recorrido de un móvil</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Elige un móvil y marca los puntos que debe recorrer hoy. Se guarda como su ruta del día y la ve en su app.</p>
+              <select id="recMovilSel"><option value="">— Elige un móvil —</option></select>
+              <div id="recClientesLista" style="max-height:230px; overflow:auto; margin:8px 0; border:1px solid var(--linea); border-radius:12px; padding:8px;"><small style="color:var(--gris);">Los clientes aparecerán aquí para marcarlos.</small></div>
+              <button class="btn-full" style="margin:0;" onclick="recGuardar()">Guardar recorrido del día</button>
+              <div class="error-msg" id="recInfo"></div>
+            </div>
             <div class="card">
               <div class="card-title">Buscar cliente</div>
               <input type="text" id="operadorBuscarCliente" placeholder="Nombre, local o dirección…">
@@ -1066,7 +1074,7 @@ textarea{min-height:96px;resize:vertical}
               </div>
               <div id="personalLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
               <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--linea); font-size:.75rem; color:var(--gris); line-height:1.6;">
-                <b>Roles disponibles:</b> 👑 Jefe/a (manda todo) · 🎩 Gerente (gestiona personal) · 🛡 Supervisor (coordina turnos) · 👮 Guardia · 👤 Empleado/a · 🔧 Técnico.
+                <b>Roles disponibles:</b> 👑 Jefe/a (manda todo) · 🎩 Gerente (gestiona personal) · 🛡 Supervisor (coordina turnos) · 👮 Guardia · 👤 Empleado/a · 🔧 Técnico · 🚐 Móvil de reacción.
               </div>
             </div>
             <div class="card">
@@ -1183,6 +1191,23 @@ textarea{min-height:96px;resize:vertical}
           <div class="evento"><div><strong>Cargando visitas…</strong></div></div>
         </div>
       </div>
+      <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
+    </div>
+    <!-- ══ PANEL MÓVIL DE REACCIÓN (rolEmpresa === 'movil') ══ -->
+    <div class="screen-scroll" id="s-movil">
+      <div class="card">
+        <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>🚐 Móvil de reacción</span><button onclick="cargarPanelMovil()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
+        <p style="color:var(--gris); font-size:.78rem;">Tu recorrido del día y los incidentes que te despacha la central.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🚨 Mis despachos</div>
+        <div id="movilDespachos"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🗺 Mi recorrido de hoy</div>
+        <div id="movilRecorrido"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+      </div>
+      <input type="file" id="movilFotoInput" accept="image/*" capture="environment" style="display:none;">
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
     <!-- ══ DETALLE DE CLIENTE (panel operador) ══ -->
@@ -1389,6 +1414,12 @@ function entrarASOS360() {
       cargarPanelTecnico();
       if (tecnicoInterval) clearInterval(tecnicoInterval);
       tecnicoInterval = setInterval(cargarPanelTecnico, INTERVALO_POLLING_MS);
+    } else if (data.rolEmpresa === 'movil') {
+      document.getElementById('bottomNav').style.display = 'none';
+      go('s-movil');
+      cargarPanelMovil();
+      if (movilInterval) clearInterval(movilInterval);
+      movilInterval = setInterval(cargarPanelMovil, INTERVALO_POLLING_MS);
     } else {
       verificarPerfilYEntrar(user.uid);
     }
@@ -3184,10 +3215,56 @@ function renderProtocolo(c, contactos) {
       <textarea id="protocoloNota" placeholder="Qué se hizo, con quién se habló, resultado…"></textarea>
     </div>
     ${funcionesApp.chat === true ? `<button class="btn-full" style="margin:0 0 10px;background:transparent;color:var(--tinta);border:1px solid var(--linea);" onclick="abrirChatOperador('${c.uid || ''}', '${(c.local || c.nombre || 'Cliente').replace(/'/g, '')}')">💬 Chat con el cliente</button>` : ''}
+    <div class="card" style="margin-bottom:12px;">
+      <div class="card-title">🚐 Despachar móvil de reacción</div>
+      <p style="color:var(--gris); font-size:.75rem; margin:0 0 8px;">Otorga este incidente a un móvil. Lo verá en su app con la dirección y la nota fija, y podrás seguir su estado en vivo.</p>
+      <select id="protoMovilSel" style="margin-bottom:8px;"><option value="">Cargando móviles…</option></select>
+      <button class="btn-full" style="margin:0;" onclick="protocoloDespacharMovil()">Otorgar este SOS al móvil</button>
+      <div class="error-msg" id="protoMovilInfo"></div>
+    </div>
     <div style="display:flex;gap:10px;">
       <button class="btn-full" style="margin:0;background:var(--rojo);" onclick="protocoloResolver('real')">Confirmar emergencia (real)</button>
       <button class="btn-full" style="margin:0;background:transparent;color:var(--tinta);border:1px solid var(--linea);" onclick="protocoloResolver('falsa')">Falsa alarma</button>
     </div>`;
+  cargarMovilesProto();
+}
+function cargarMovilesProto() {
+  const sel = document.getElementById('protoMovilSel'); if (!sel) return;
+  saFetch({ accion: 'moviles-empresa' }).then((d) => {
+    if (!d.ok || !d.moviles.length) { sel.innerHTML = '<option value="">— No hay móviles registrados —</option>'; return; }
+    sel.innerHTML = '<option value="">— Elige un móvil —</option>' + d.moviles.map((m) => `<option value="${m.uid}">🚐 ${m.nombre}</option>`).join('');
+  }).catch(() => { sel.innerHTML = '<option value="">— Sin conexión —</option>'; });
+}
+function protocoloDespacharMovil() {
+  if (!protocoloActual) return;
+  const sel = document.getElementById('protoMovilSel'); const info = document.getElementById('protoMovilInfo');
+  const mUid = sel ? sel.value : '';
+  if (!mUid) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Elige un móvil primero.'; } return; }
+  saFetch({ accion: 'despachar-movil', clienteUid: protocoloActual.clienteUid, alertaId: protocoloActual.alertaId, movilUid: mUid }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? '✅ Despachado. El móvil lo verá en su app.' : (d.error || 'No se pudo despachar.'); }
+  }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
+}
+function recInit() {
+  const sel = document.getElementById('recMovilSel');
+  if (sel) saFetch({ accion: 'moviles-empresa' }).then((d) => {
+    if (d.ok && d.moviles.length) sel.innerHTML = '<option value="">— Elige un móvil —</option>' + d.moviles.map((m) => `<option value="${m.uid}">🚐 ${m.nombre}</option>`).join('');
+    else sel.innerHTML = '<option value="">— No hay móviles registrados —</option>';
+  }).catch(() => {});
+  const cont = document.getElementById('recClientesLista');
+  if (cont) {
+    const cli = (typeof operadorClientesData !== 'undefined' ? operadorClientesData : []).filter((c) => !c.rolEmpresa && !c.operadorDe);
+    cont.innerHTML = cli.length ? cli.map((c) => `<label style="display:flex; gap:8px; align-items:center; padding:6px 4px; font-size:.82rem; border-bottom:1px solid var(--linea);"><input type="checkbox" class="recChk" value="${c.uid}" style="width:auto; margin:0;"><span><b>${(c.local || c.nombre || 'Cliente').replace(/</g,'&lt;')}</b> <span style="color:var(--gris);">${(c.direccion || '').replace(/</g,'&lt;')}</span></span></label>`).join('') : '<small style="color:var(--gris);">Sin clientes para armar recorrido.</small>';
+  }
+}
+function recGuardar() {
+  const sel = document.getElementById('recMovilSel'); const info = document.getElementById('recInfo');
+  const mUid = sel ? sel.value : '';
+  if (!mUid) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Elige un móvil.'; } return; }
+  const paradas = [...document.querySelectorAll('.recChk:checked')].map((c) => c.value);
+  if (!paradas.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Marca al menos un punto.'; } return; }
+  saFetch({ accion: 'recorrido-set', movilUid: mUid, paradas }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `✅ Recorrido guardado con ${d.total} paradas. El móvil ya lo ve.` : (d.error || 'No se pudo guardar.'); }
+  }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
 function guardarNotaCentral(clienteUid) {
   if (!clienteUid && protocoloActual) clienteUid = protocoloActual.clienteUid;
@@ -4238,6 +4315,84 @@ function saFetch(cuerpo) {
     body: JSON.stringify(Object.assign({ idToken: t }, cuerpo))
   })).then((r) => r.json());
 }
+/* ══ PANEL MÓVIL DE REACCIÓN (rolEmpresa === 'movil') ══ */
+let movilInterval = null;
+let _movilFotoCtx = null;
+const MOVIL_ESTADOS = { despachado:'Despachado', en_camino:'Voy en camino', en_sitio:'En el sitio', resuelto:'Resuelto', falsa:'Falsa alarma' };
+function cargarPanelMovil() {
+  saFetch({ accion: 'movil-despachos' }).then(renderMovilDespachos).catch(() => {});
+  saFetch({ accion: 'movil-recorrido' }).then(renderMovilRecorrido).catch(() => {});
+}
+function movilNav(ubic, direccion) {
+  let url;
+  if (ubic && ubic.lat && ubic.lng) url = `https://www.google.com/maps/dir/?api=1&destination=${ubic.lat},${ubic.lng}`;
+  else if (direccion) url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(direccion)}`;
+  else { alert('Sin ubicación disponible para esta parada.'); return; }
+  window.open(url, '_blank');
+}
+function renderMovilDespachos(d) {
+  const cont = document.getElementById('movilDespachos'); if (!cont) return;
+  if (!d || !d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + ((d && d.error) || 'Error') + '</strong></div></div>'; return; }
+  if (!d.despachos.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin despachos activos.</strong><small>Cuando la central te asigne un incidente, aparecerá aquí.</small></div></div>'; return; }
+  cont.innerHTML = d.despachos.map((x) => `
+    <div style="border:1px solid rgba(229,52,75,.4); border-radius:14px; padding:13px; margin-bottom:12px;">
+      <strong style="font-size:.95rem;">🚨 ${(x.cliente || '').replace(/</g,'&lt;')}</strong>
+      <div style="font-size:.8rem; color:var(--gris); margin:4px 0;">${(x.direccion || 'Sin dirección').replace(/</g,'&lt;')}${x.telefono ? ' · ' + x.telefono : ''}</div>
+      ${x.notaCentral ? `<div style="font-size:.8rem; background:var(--violeta-suave); color:#9d8fff; padding:6px 10px; border-radius:10px; margin:6px 0;">📌 ${x.notaCentral.replace(/</g,'&lt;')}</div>` : ''}
+      <div style="font-size:.74rem; color:var(--verde); margin:4px 0;">Estado: <b>${MOVIL_ESTADOS[x.movilEstado] || x.movilEstado}</b></div>
+      <div style="display:flex; gap:7px; flex-wrap:wrap; margin-top:8px;">
+        <button onclick='movilNav(${JSON.stringify(x.ubicacion)}, ${JSON.stringify(x.direccion || "")})' style="flex:1; min-width:120px; padding:9px; border-radius:10px; border:none; background:var(--violeta); color:#fff; font-weight:700; cursor:pointer;">🧭 Ir al sitio</button>
+        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','en_camino')" style="padding:9px 12px; border-radius:10px; border:1px solid var(--linea); background:transparent; color:var(--tinta); cursor:pointer;">🚗 Voy</button>
+        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','en_sitio')" style="padding:9px 12px; border-radius:10px; border:1px solid var(--linea); background:transparent; color:var(--tinta); cursor:pointer;">📍 En sitio</button>
+        <button onclick="movilDocumentar('${x.clienteUid}','${x.alertaId}')" style="padding:9px 12px; border-radius:10px; border:1px solid var(--violeta); background:var(--violeta-suave); color:#9d8fff; cursor:pointer;">📷 Documentar</button>
+        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','resuelto')" style="padding:9px 12px; border-radius:10px; border:none; background:var(--verde); color:#fff; font-weight:700; cursor:pointer;">✅ Resuelto</button>
+        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','falsa')" style="padding:9px 12px; border-radius:10px; border:1px solid var(--linea); background:transparent; color:var(--gris); cursor:pointer;">Falsa</button>
+      </div>
+    </div>`).join('');
+}
+function movilSetEstado(clienteUid, alertaId, estado) {
+  saFetch({ accion: 'movil-estado', clienteUid, alertaId, movilEstado: estado }).then((d) => { if (d.ok) cargarPanelMovil(); else alert(d.error || 'Error'); });
+}
+function movilDocumentar(clienteUid, alertaId) {
+  const nota = prompt('Nota de lo que encontraste (opcional):') || '';
+  _movilFotoCtx = { tipo: 'despacho', clienteUid, alertaId, nota };
+  const inp = document.getElementById('movilFotoInput'); inp.value = ''; inp.click();
+}
+function renderMovilRecorrido(d) {
+  const cont = document.getElementById('movilRecorrido'); if (!cont) return;
+  if (!d || !d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + ((d && d.error) || 'Error') + '</strong></div></div>'; return; }
+  if (!d.paradas.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin recorrido para hoy.</strong><small>La central arma tu ruta del día.</small></div></div>'; return; }
+  cont.innerHTML = d.paradas.map((p, i) => `
+    <div style="border-bottom:1px solid var(--linea); padding:11px 0;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="width:26px; height:26px; border-radius:50%; background:${p.estado === 'visitada' ? 'var(--verde-suave)' : 'var(--violeta-suave)'}; color:${p.estado === 'visitada' ? 'var(--verde)' : '#9d8fff'}; display:grid; place-items:center; font-weight:700; font-size:.8rem;">${i + 1}</span>
+        <strong style="flex:1; font-size:.88rem;">${(p.nombre || '').replace(/</g,'&lt;')} ${p.estado === 'visitada' ? '<span style="font-size:.62rem; color:var(--verde);">✓ visitada</span>' : ''}</strong>
+      </div>
+      <div style="font-size:.78rem; color:var(--gris); margin:3px 0 6px 34px;">${(p.direccion || 'Sin dirección').replace(/</g,'&lt;')}</div>
+      <div style="display:flex; gap:7px; flex-wrap:wrap; margin-left:34px;">
+        <button onclick='movilNav(null, ${JSON.stringify(p.direccion || "")})' style="padding:7px 12px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--violeta); cursor:pointer; font-size:.74rem;">🧭 Ir</button>
+        ${p.estado !== 'visitada' ? `<button onclick="movilVisitarParada(${i})" style="padding:7px 12px; border-radius:99px; border:none; background:var(--verde); color:#fff; font-weight:700; cursor:pointer; font-size:.74rem;">✓ Marcar visitada</button>` : ''}
+      </div>
+    </div>`).join('');
+}
+function movilVisitarParada(idx) {
+  const nota = prompt('Nota de la parada (opcional):') || '';
+  const foto = confirm('¿Adjuntar una foto? Aceptar = sí, Cancelar = solo la nota');
+  if (foto) { _movilFotoCtx = { tipo: 'parada', idx, nota }; const inp = document.getElementById('movilFotoInput'); inp.value = ''; inp.click(); }
+  else { saFetch({ accion: 'movil-parada', idx, estado: 'visitada', nota }).then((d) => { if (d.ok) cargarPanelMovil(); else alert(d.error || 'Error'); }); }
+}
+(function () {
+  const inp = document.getElementById('movilFotoInput');
+  if (!inp) return;
+  inp.addEventListener('change', function () {
+    const file = this.files[0]; if (!file || !_movilFotoCtx) return;
+    const ctx = _movilFotoCtx; _movilFotoCtx = null;
+    comprimirImagen(file, (b64) => {
+      if (ctx.tipo === 'despacho') saFetch({ accion: 'movil-reporte', clienteUid: ctx.clienteUid, alertaId: ctx.alertaId, nota: ctx.nota, foto: b64 }).then((d) => { if (d.ok) { alert('Documentado y enviado a la central.'); cargarPanelMovil(); } else alert(d.error || 'Error'); });
+      else saFetch({ accion: 'movil-parada', idx: ctx.idx, estado: 'visitada', nota: ctx.nota, foto: b64 }).then((d) => { if (d.ok) cargarPanelMovil(); else alert(d.error || 'Error'); });
+    });
+  });
+})();
 function cargarPlataforma() {
   saCargarCategorias();
   saCargarOperadores();
@@ -4495,7 +4650,7 @@ function aplicarPermisosOperador(p, esSA) {
 let _miRolEmpresa = '';
 const ROLES_EMP = [
   { k: 'jefe', n: '👑 Jefe/a' }, { k: 'gerente', n: '🎩 Gerente' }, { k: 'supervisor', n: '🛡 Supervisor' },
-  { k: 'guardia', n: '👮 Guardia' }, { k: 'empleado', n: '👤 Empleado/a' }, { k: 'tecnico', n: '🔧 Técnico' }
+  { k: 'guardia', n: '👮 Guardia' }, { k: 'empleado', n: '👤 Empleado/a' }, { k: 'tecnico', n: '🔧 Técnico' }, { k: 'movil', n: '🚐 Móvil de reacción' }
 ];
 function abrirAltaEmpleado() {
   const c = document.getElementById('altaEmpleado');
@@ -4808,6 +4963,7 @@ function opGo(v){
   if (v==='plataforma') cargarPlataforma();
   if (v==='reportes') cargarReportesPanel();
   if (v==='personal') cargarPersonal();
+  if (v==='clientes') recInit();
   if (v==='credenciales') cargarCredencialesModulo();
   if (v==='roles') cargarRolesPermisos();
 }
