@@ -517,7 +517,7 @@ export default async function handler(req, res) {
         const paradasRaw = (fecha === hoyStr) ? (doc.fields?.paradas?.arrayValue?.values || []) : [];
         const paradas = paradasRaw.map((p) => {
           const pf = p.mapValue?.fields || {};
-          return { clienteUid: pf.clienteUid?.stringValue || '', nombre: pf.nombre?.stringValue || '', direccion: pf.direccion?.stringValue || '', nota: pf.nota?.stringValue || '', foto: pf.foto?.stringValue || '', estado: pf.estado?.stringValue || 'pendiente', visitadaEn: pf.visitadaEn?.stringValue || '' };
+          return { clienteUid: pf.clienteUid?.stringValue || '', nombre: pf.nombre?.stringValue || '', direccion: pf.direccion?.stringValue || '', lat: pf.lat ? parseFloat(pf.lat.doubleValue ?? pf.lat.integerValue ?? 0) : null, lng: pf.lng ? parseFloat(pf.lng.doubleValue ?? pf.lng.integerValue ?? 0) : null, nota: pf.nota?.stringValue || '', foto: pf.foto?.stringValue || '', estado: pf.estado?.stringValue || 'pendiente', visitadaEn: pf.visitadaEn?.stringValue || '' };
         });
         res.status(200).json({ ok: true, fecha: hoyStr, paradas });
         return;
@@ -815,20 +815,30 @@ export default async function handler(req, res) {
       const miRolRec = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolRec !== 'jefe' && miRolRec !== 'gerente') { res.status(403).json({ error: 'Solo el gerente o el jefe puede mandar recorridos a los móviles.' }); return; }
       const mUid = (req.body.movilUid || '').trim();
-      const uids = Array.isArray(req.body.paradas) ? req.body.paradas.filter((x) => /^[A-Za-z0-9]+$/.test(x)) : [];
       if (!/^[A-Za-z0-9]+$/.test(mUid)) { res.status(400).json({ error: 'Móvil no válido' }); return; }
+      const entradas = Array.isArray(req.body.paradas) ? req.body.paradas : [];
       const clientes = await listarClientes(accessToken);
       const porUid = {};
       clientes.forEach((c) => { porUid[c.uid] = c; });
-      const values = uids.map((u) => {
-        const c = porUid[u] || {};
-        return { mapValue: { fields: {
-          clienteUid: { stringValue: u },
-          nombre: { stringValue: c.local || c.nombre || 'Punto' },
-          direccion: { stringValue: c.direccion || '' },
+      const values = entradas.map((p) => {
+        // Acepta un uid de cliente (string) o un objeto {clienteUid, nombre, direccion, lat, lng}.
+        const obj = (typeof p === 'string') ? { clienteUid: p } : (p || {});
+        const cUid = /^[A-Za-z0-9]+$/.test(obj.clienteUid || '') ? obj.clienteUid : '';
+        const c = cUid ? (porUid[cUid] || {}) : {};
+        const nombre = obj.nombre || c.local || c.nombre || 'Punto de ronda';
+        const direccion = obj.direccion || c.direccion || '';
+        const lat = (obj.lat != null) ? Number(obj.lat) : null;
+        const lng = (obj.lng != null) ? Number(obj.lng) : null;
+        const f = {
+          clienteUid: { stringValue: cUid },
+          nombre: { stringValue: String(nombre).slice(0, 120) },
+          direccion: { stringValue: String(direccion).slice(0, 200) },
           estado: { stringValue: 'pendiente' },
           nota: { stringValue: '' }, foto: { stringValue: '' }, visitadaEn: { stringValue: '' }
-        } } };
+        };
+        if (lat != null && !isNaN(lat)) f.lat = { doubleValue: lat };
+        if (lng != null && !isNaN(lng)) f.lng = { doubleValue: lng };
+        return { mapValue: { fields: f } };
       });
       await fetch(`${base0}/empresas/${empresaOperador}/recorridos/${mUid}?updateMask.fieldPaths=fecha&updateMask.fieldPaths=paradas`, {
         method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
