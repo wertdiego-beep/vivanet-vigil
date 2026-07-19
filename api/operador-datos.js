@@ -811,7 +811,9 @@ export default async function handler(req, res) {
       return;
     }
     if (accion === 'recorrido-set') {
-      // El operador arma el recorrido del día de un móvil (lista de paradas = clientes).
+      // Solo el gerente de seguridad (o el jefe) puede mandar recorridos a los móviles.
+      const miRolRec = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRolRec !== 'jefe' && miRolRec !== 'gerente') { res.status(403).json({ error: 'Solo el gerente o el jefe puede mandar recorridos a los móviles.' }); return; }
       const mUid = (req.body.movilUid || '').trim();
       const uids = Array.isArray(req.body.paradas) ? req.body.paradas.filter((x) => /^[A-Za-z0-9]+$/.test(x)) : [];
       if (!/^[A-Za-z0-9]+$/.test(mUid)) { res.status(400).json({ error: 'Móvil no válido' }); return; }
