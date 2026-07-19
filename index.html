@@ -1077,6 +1077,11 @@ textarea{min-height:96px;resize:vertical}
                 <button class="btn-full" style="width:auto; margin:0; padding:9px 16px; background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="empRegenerarCodigo()">Generar nuevo</button>
               </div>
             </div>
+            <div class="card" id="cardRolesPermisos" style="display:none;">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>🔺 Permisos por rol (pirámide)</span><button onclick="cargarRolesPermisos()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Define qué ve y hace cada cargo de tu empresa. Tú (jefe) siempre ves todo; de ahí hacia abajo lo ajustas: gerente, supervisor, guardia, empleado, técnico. Verde = puede · gris = cortado. Se aplica a todos los de ese cargo en segundos.</p>
+              <div id="rolesPermisosMatriz"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+            </div>
           </section>
           <!-- ── Vista: Reportes de incidentes ── -->
           <section class="op-view" id="op-view-reportes">
@@ -4537,6 +4542,7 @@ function empHacerOperador(uid, esOp) {
 }
 function cargarPersonal() {
   empCargarCodigo(false);
+  cargarRolesPermisos();
   const cont = document.getElementById('personalLista');
   if (!cont) return;
   saFetch({ accion: 'emp-personal' }).then((d) => {
@@ -4564,6 +4570,48 @@ function cambiarRol(personalUid, rol) {
   saFetch({ accion: 'emp-rol', personalUid, rol }).then((d) => {
     if (!d.ok) { alert(d.error || 'No se pudo cambiar el rol'); cargarPersonal(); }
   });
+}
+/* ── 🔺 Permisos por rol (pirámide) que define el jefe ── */
+const ROLES_PIRAMIDE = [
+  { k: 'gerente', n: '🎩 Gerente' }, { k: 'supervisor', n: '🛡 Supervisor' },
+  { k: 'guardia', n: '👮 Guardia' }, { k: 'empleado', n: '👤 Empleado/a' }, { k: 'tecnico', n: '🔧 Técnico' }
+];
+let _rolesPermisos = {};
+function cargarRolesPermisos() {
+  const card = document.getElementById('cardRolesPermisos');
+  if (card) card.style.display = (_miRolEmpresa === 'jefe') ? 'block' : 'none';
+  if (_miRolEmpresa !== 'jefe') return;
+  const cont = document.getElementById('rolesPermisosMatriz'); if (!cont) return;
+  cont.innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
+  saFetch({ accion: 'emp-roles-permisos' }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    _rolesPermisos = d.roles || {};
+    renderRolesPermisos();
+  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
+}
+function renderRolesPermisos() {
+  const cont = document.getElementById('rolesPermisosMatriz'); if (!cont) return;
+  cont.innerHTML = ROLES_PIRAMIDE.map((rol) => {
+    const p = _rolesPermisos[rol.k] || {};
+    const btns = PERMISOS_KEYS.map((k) => {
+      const on = p[k] !== false;
+      return `<button onclick="toggleRolPermiso('${rol.k}','${k}')" id="rp-${rol.k}-${k}" title="${PERMISOS_NOMBRES[k].slice(3)}" style="width:38px; height:38px; border-radius:11px; font-size:1rem; cursor:pointer; border:1.5px solid ${on ? 'var(--verde)' : 'var(--linea)'}; background:${on ? 'var(--verde-suave)' : 'transparent'}; ${on ? '' : 'filter:grayscale(1); opacity:.45;'}">${PERMISOS_NOMBRES[k].slice(0,2).trim()}</button>`;
+    }).join('');
+    return `<div style="border-bottom:1px solid var(--linea); padding:12px 0;">
+      <strong style="font-size:.86rem; display:block; margin-bottom:8px;">${rol.n}</strong>
+      <div style="display:flex; gap:7px; flex-wrap:wrap;">${btns}</div>
+    </div>`;
+  }).join('') + '<div style="margin-top:10px; font-size:.72rem; color:var(--gris); line-height:1.6;">🚨 Atender · 👥 Clientes · 🕘 Historial · 🔧 Técnico · 📄 Exportar · 📐 Zonas · 🔒 Credenciales. El monitoreo en vivo del mapa nunca se corta.</div>';
+}
+function toggleRolPermiso(rol, key) {
+  if (!_rolesPermisos[rol]) _rolesPermisos[rol] = {};
+  const on = _rolesPermisos[rol][key] === false; // invierte
+  _rolesPermisos[rol][key] = on;
+  const b = document.getElementById('rp-' + rol + '-' + key);
+  if (b) { b.style.borderColor = on ? 'var(--verde)' : 'var(--linea)'; b.style.background = on ? 'var(--verde-suave)' : 'transparent'; b.style.filter = on ? 'none' : 'grayscale(1)'; b.style.opacity = on ? '1' : '.45'; }
+  saFetch({ accion: 'emp-roles-permisos-set', rol, key, on }).then((d) => {
+    if (!d.ok) { alert(d.error || 'No se pudo guardar'); cargarRolesPermisos(); }
+  }).catch(() => cargarRolesPermisos());
 }
 /* ── 🔒 MÓDULO: Registro de credenciales (auditoría, sin claves en texto) ── */
 let _credModulo = [];
