@@ -4434,6 +4434,13 @@ function guardarEmpleado() {
     else info.textContent = d.error || 'No se pudo crear.';
   }).catch(() => { b.disabled = false; b.textContent = 'Crear cuenta'; info.textContent = 'Error de conexión.'; });
 }
+function quitarEmpleado(uid, nombre) {
+  if (!confirm(`¿Quitar a ${nombre} de tu equipo? Dejará de ser parte de la empresa y perderá el acceso de operador. Su cuenta no se elimina; puedes volver a sumarla con el código.`)) return;
+  saFetch({ accion: 'emp-quitar', personalUid: uid }).then((d) => {
+    if (!d.ok) alert(d.error || 'No se pudo quitar');
+    cargarPersonal();
+  });
+}
 function abrirEditarEmpleado(p) {
   const nombre = prompt('Nombre:', p.nombre || '');
   if (nombre === null) return;
@@ -4488,6 +4495,7 @@ function cargarPersonal() {
           </select>
           <button onclick='abrirEditarEmpleado(${JSON.stringify(p).replace(/'/g,"&#39;")})' title="Editar datos" style="padding:6px 10px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid var(--linea); background:transparent; color:var(--gris);">✏️</button>
           <button onclick="empHacerOperador('${p.uid}', ${p.esOperador === true})" style="padding:6px 12px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid ${p.esOperador ? 'rgba(229,52,75,.5)' : 'var(--violeta)'}; background:${p.esOperador ? 'rgba(229,52,75,.1)' : 'var(--violeta-suave)'}; color:${p.esOperador ? '#ff4d5e' : '#9d8fff'};">${p.esOperador ? 'Quitar op.' : 'Hacer op.'}</button>
+          <button onclick="quitarEmpleado('${p.uid}', '${(p.nombre || 'esta persona').replace(/'/g, '')}')" title="Quitar del equipo" style="padding:6px 10px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid rgba(229,52,75,.5); background:rgba(229,52,75,.1); color:#ff4d5e;">🗑</button>
         </div>
       </div>`).join('');
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
