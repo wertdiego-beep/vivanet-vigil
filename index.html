@@ -1127,7 +1127,7 @@ textarea{min-height:96px;resize:vertical}
                 <input type="text" id="recSector" placeholder="Escribe el sector (ej: La Pampa, La Florida, Las Compañías…)" style="margin:0; flex:1; min-width:180px;" onkeydown="if(event.key==='Enter')recAutoRuta()">
                 <button class="btn-full" style="width:auto; margin:0; padding:9px 16px;" onclick="recAutoRuta()">✨ Armar ruta</button>
               </div>
-              <label style="font-size:.72rem; color:var(--gris);">3) O tócalos a mano en el mapa, en orden</label>
+              <label style="font-size:.72rem; color:var(--gris);">3) O toca el mapa para marcar puntos: clientes o puntos de ronda municipal, en orden</label>
               <div style="position:relative; margin:6px 0 10px;">
                 <div id="recMapa" style="height:360px; border-radius:12px; overflow:hidden; border:1px solid var(--linea);"></div>
                 <div id="recMapaMsg" style="position:absolute; top:8px; left:8px; background:rgba(0,0,0,.65); color:#fff; font-size:.72rem; padding:5px 10px; border-radius:8px; z-index:500;">Cargando puntos…</div>
@@ -3263,7 +3263,7 @@ function protocoloDespacharMovil() {
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
 /* ── 🗺 Recorridos: mapa interactivo para armar la ruta del móvil ── */
-let recMapa = null, recMarkers = {}, recRuta = [], recPolyline = null, recGeoQueue = [], recGeoActive = false;
+let recMapa = null, recMarkers = {}, recRuta = [], recPolyline = null, recGeoQueue = [], recGeoActive = false, recWpN = 0;
 function recInit() {
   const sel = document.getElementById('recMovilSel');
   if (sel) saFetch({ accion: 'moviles-empresa' }).then((d) => {
@@ -3277,10 +3277,11 @@ function recInitMapa() {
   if (!recMapa) {
     recMapa = L.map('recMapa').setView(MAPA_CENTRO_DEFECTO, 13);
     L.tileLayer(urlTilesOperador('claro'), opcionesTiles()).addTo(recMapa);
+    recMapa.on('click', (e) => recAddWaypoint(e.latlng));
   }
   setTimeout(() => { try { recMapa.invalidateSize(); } catch (e) {} }, 250);
   // reset ruta y marcadores
-  recRuta = []; recMarkers = {};
+  recRuta = []; recMarkers = {}; recWpN = 0;
   if (recPolyline) { recMapa.removeLayer(recPolyline); recPolyline = null; }
   recMapa.eachLayer((l) => { if (l instanceof L.Marker) recMapa.removeLayer(l); });
   renderRecRuta();
@@ -3323,6 +3324,13 @@ function recIcono(c, orden) {
   const html = `<div style="width:28px;height:28px;border-radius:50%;background:${en ? 'var(--violeta)' : '#fff'};border:2px solid var(--violeta);color:${en ? '#fff' : 'var(--violeta)'};display:grid;place-items:center;font-weight:700;font-size:.78rem;box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:pointer;">${en ? orden : '•'}</div>`;
   return L.divIcon({ className: '', html, iconSize: [28, 28], iconAnchor: [14, 14] });
 }
+function recAddWaypoint(latlng) {
+  const id = 'wp_' + (++recWpN);
+  const cli = { uid: id, local: 'Punto de ronda ' + recWpN, nombre: 'Punto de ronda ' + recWpN, direccion: '' };
+  recPonerMarcador(cli, { lat: latlng.lat, lng: latlng.lng });
+  recRuta.push(id);
+  recRefrescar();
+}
 function recPonerMarcador(c, coords) {
   if (recMarkers[c.uid] || !recMapa) return;
   const m = L.marker([coords.lat, coords.lng], { icon: recIcono(c, null) }).addTo(recMapa);
@@ -3364,7 +3372,8 @@ function recGuardar() {
   const mUid = sel ? sel.value : '';
   if (!mUid) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Elige un móvil.'; } return; }
   if (!recRuta.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Toca al menos un punto en el mapa.'; } return; }
-  saFetch({ accion: 'recorrido-set', movilUid: mUid, paradas: recRuta }).then((d) => {
+  const paradas = recRuta.map((id) => { const m = recMarkers[id]; return { clienteUid: id.indexOf('wp_') === 0 ? '' : id, nombre: (m.cliente.local || m.cliente.nombre || 'Punto de ronda'), direccion: m.cliente.direccion || '', lat: m.coords.lat, lng: m.coords.lng }; });
+  saFetch({ accion: 'recorrido-set', movilUid: mUid, paradas }).then((d) => {
     if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `✅ Recorrido guardado con ${d.total} paradas en orden. El móvil ya lo ve.` : (d.error || 'No se pudo guardar.'); }
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
@@ -3379,7 +3388,15 @@ async function recAutoRuta() {
   clientes = clientes.filter((c) => !c.rolEmpresa && !c.operadorDe);
   // 2) Los que pertenecen al sector (por dirección o nombre).
   const match = clientes.filter((c) => ((c.direccion || '') + ' ' + (c.local || '') + ' ' + (c.nombre || '')).toLowerCase().includes(q));
-  if (!match.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = `No hay clientes en el sector "${q}".`; } return; }
+  if (!match.length) {
+    // Modo municipalidad: sin clientes, centramos el mapa en el sector para que el gerente marque la ronda tocando el mapa.
+    if (info) { info.style.color = 'var(--gris)'; info.textContent = `Buscando el sector "${q}" en el mapa…`; }
+    let cs = null;
+    try { cs = await consultarNominatim(q + ', ' + MAPA_CIUDAD_CONTEXTO); if (!cs) cs = await consultarNominatim(q + ', Chile'); } catch (e) {}
+    if (cs && recMapa) { recMapa.setView([cs.lat, cs.lng], 15); if (info) { info.style.color = '#00C776'; info.textContent = `📍 Sector "${q}" en el mapa. No hay clientes ahí: toca el mapa para marcar los puntos de ronda de la municipalidad, en orden.`; } }
+    else if (info) { info.style.color = 'var(--rojo)'; info.textContent = `No se encontró el sector "${q}". Toca el mapa igual para marcar la ronda.`; }
+    return;
+  }
   // 3) Geocodificar activamente los que falten (para que la ruta salga aunque no estén aún en el mapa).
   const cache = leerGeoCache();
   const faltan = match.filter((c) => !recMarkers[c.uid] && (c.direccion || '').trim());
@@ -4522,7 +4539,7 @@ function renderMovilRecorrido(d) {
       </div>
       <div style="font-size:.78rem; color:var(--gris); margin:3px 0 6px 34px;">${(p.direccion || 'Sin dirección').replace(/</g,'&lt;')}</div>
       <div style="display:flex; gap:7px; flex-wrap:wrap; margin-left:34px;">
-        <button onclick='movilNav(null, ${JSON.stringify(p.direccion || "")})' style="padding:7px 12px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--violeta); cursor:pointer; font-size:.74rem;">🧭 Ir</button>
+        <button onclick='movilNav(${JSON.stringify(p.lat && p.lng ? { lat: p.lat, lng: p.lng } : null)}, ${JSON.stringify(p.direccion || "")})' style="padding:7px 12px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--violeta); cursor:pointer; font-size:.74rem;">🧭 Ir</button>
         ${p.estado !== 'visitada' ? `<button onclick="movilVisitarParada(${i})" style="padding:7px 12px; border-radius:99px; border:none; background:var(--verde); color:#fff; font-weight:700; cursor:pointer; font-size:.74rem;">✓ Marcar visitada</button>` : ''}
       </div>
     </div>`).join('');
