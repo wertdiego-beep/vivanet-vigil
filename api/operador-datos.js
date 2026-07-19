@@ -654,6 +654,43 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true });
       return;
     }
+    if (accion === 'emp-roles-permisos') {
+      const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRol !== 'jefe') { res.status(403).json({ error: 'Solo el jefe define los permisos por rol.' }); return; }
+      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales'];
+      const ROLES = ['gerente','supervisor','guardia','empleado','tecnico'];
+      const empDoc = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const rpRaw = empDoc.fields?.rolesPermisos?.mapValue?.fields || {};
+      const roles = {};
+      ROLES.forEach((r) => { const fr = rpRaw[r]?.mapValue?.fields || {}; const p = {}; KEYS.forEach((k) => { p[k] = fr[k]?.booleanValue !== false; }); roles[r] = p; });
+      res.status(200).json({ ok: true, roles });
+      return;
+    }
+    if (accion === 'emp-roles-permisos-set') {
+      const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRol !== 'jefe') { res.status(403).json({ error: 'Solo el jefe define los permisos por rol.' }); return; }
+      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales'];
+      const ROLES = ['gerente','supervisor','guardia','empleado','tecnico'];
+      const rolD = (req.body.rol || '').trim();
+      const key = (req.body.key || '').trim();
+      if (!ROLES.includes(rolD) || !KEYS.includes(key)) { res.status(400).json({ error: 'Datos no válidos' }); return; }
+      const on = req.body.on !== false;
+      const empDoc = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const rpRaw = empDoc.fields?.rolesPermisos?.mapValue?.fields || {};
+      const rolesOut = {};
+      ROLES.forEach((r) => {
+        const fr = rpRaw[r]?.mapValue?.fields || {};
+        const pf = {};
+        KEYS.forEach((k) => { let v = fr[k]?.booleanValue !== false; if (r === rolD && k === key) v = on; pf[k] = { booleanValue: v }; });
+        rolesOut[r] = { mapValue: { fields: pf } };
+      });
+      await fetch(`${base0}/empresas/${empresaOperador}?updateMask.fieldPaths=rolesPermisos`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { rolesPermisos: { mapValue: { fields: rolesOut } } } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
     if (accion === 'emp-codigo') {
       // Código de equipo de la empresa del operador (para sumar personal).
       const rutaEmp = `${base0}/empresas/${empresaOperador}`;
