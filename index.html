@@ -790,6 +790,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="reportes" id="navReportes" style="display:none"><span>📷</span><em>Reportes</em></button>
         <button class="op-nav" data-opview="personal" id="navPersonal" style="display:none"><span>👔</span><em>Personal y roles</em></button>
         <button class="op-nav" data-opview="plataforma" id="navPlataforma" style="display:none"><span>🏢</span><em>Plataforma</em></button>
+        <button class="op-nav" data-opview="credenciales" id="navCredenciales" style="display:none"><span>🔒</span><em>Credenciales</em></button>
         <div class="op-side-foot">
           <button class="op-nav" id="opPushBtn" onclick="opActivarPush()" title="Recibe una notificación en este dispositivo cuando llegue un SOS, aunque el panel esté cerrado"><span>🔔</span><em>Avisos SOS</em></button>
           <button class="op-nav" onclick="go('s-mas')"><span>👤</span><em>Mi cuenta</em></button>
@@ -1076,14 +1077,6 @@ textarea{min-height:96px;resize:vertical}
                 <button class="btn-full" style="width:auto; margin:0; padding:9px 16px; background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="empRegenerarCodigo()">Generar nuevo</button>
               </div>
             </div>
-            <div class="card">
-              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>🔒 Registro de credenciales</span><button onclick="cargarCredencialesEmp()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
-              <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Historial de las cuentas que has creado para tu equipo (correo, cargo, fecha). Solo el jefe o gerente lo ve. Las claves no se guardan por seguridad; si alguien la olvida, editas su cuenta y le pones una nueva.</p>
-              <details ontoggle="if(this.open)cargarCredencialesEmp()" style="border:1px solid var(--linea); border-radius:12px; padding:10px 14px;">
-                <summary style="cursor:pointer; font-size:.8rem; font-weight:700; color:var(--violeta);">🔓 Ver registro de tu empresa (sensible)</summary>
-                <div id="empCredLista" style="margin-top:10px;"><div class="evento"><div><strong>Toca para cargar…</strong></div></div></div>
-              </details>
-            </div>
           </section>
           <!-- ── Vista: Reportes de incidentes ── -->
           <section class="op-view" id="op-view-reportes">
@@ -1091,6 +1084,21 @@ textarea{min-height:96px;resize:vertical}
               <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>📷 Reportes de incidentes</span><button onclick="cargarReportesPanel()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻ Actualizar</button></div>
               <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Lo que reportan tus clientes con categoría y foto. Márcalo revisado cuando lo gestiones.</p>
               <div id="reportesPanelLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+            </div>
+          </section>
+          <!-- ── Vista/Módulo independiente: Registro de credenciales ── -->
+          <section class="op-view" id="op-view-credenciales">
+            <div class="card">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>🔒 Registro de credenciales</span><button onclick="cargarCredencialesModulo()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻ Actualizar</button></div>
+              <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;" id="credModDesc">Cada cuenta que se crea para el personal queda registrada aquí: correo, cargo, quién la creó y cuándo. <b>Por seguridad, las claves nunca se guardan</b> (solo su largo); si alguien la olvida, se le asigna una nueva.</p>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+                <input id="credBuscar" type="text" placeholder="Buscar por nombre o correo…" oninput="renderCredModulo()" style="margin:0; flex:1; min-width:180px;">
+                <span id="credContador" style="font-size:.74rem; color:var(--gris);"></span>
+              </div>
+              <details style="border:1px solid var(--linea); border-radius:12px; padding:10px 14px;" open>
+                <summary style="cursor:pointer; font-size:.8rem; font-weight:700; color:var(--violeta);">🔓 Ver registro (información sensible)</summary>
+                <div id="credModLista" style="margin-top:12px;"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+              </details>
             </div>
           </section>
           <!-- ── Vista: Plataforma (solo superadmin: nosotros) ── -->
@@ -1136,14 +1144,6 @@ textarea{min-height:96px;resize:vertical}
               </details>
               <div id="saOperadores" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px;"></div>
               <div class="error-msg" id="saPermInfo"></div>
-            </div>
-            <div class="card">
-              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>🔒 Registro de credenciales</span><button onclick="cargarCredencialesSA()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
-              <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Cada cuenta que una empresa crea para su personal queda registrada aqui: correo, cargo, quien la creo y cuando. Por seguridad, las claves NO se guardan (solo su largo). Informacion sensible &mdash; solo el nivel superior la ve.</p>
-              <details ontoggle="if(this.open)cargarCredencialesSA()" style="border:1px solid var(--linea); border-radius:12px; padding:10px 14px;">
-                <summary style="cursor:pointer; font-size:.8rem; font-weight:700; color:var(--violeta);">🔓 Mostrar registro global (sensible)</summary>
-                <div id="saCredLista" style="margin-top:10px;"><div class="evento"><div><strong>Toca para cargar…</strong></div></div></div>
-              </details>
             </div>
           </section>
 
@@ -1577,6 +1577,9 @@ async function cargarPanelOperador() {
     // Solo el jefe/gerente de cada empresa gestiona su personal. El superadmin
     // (nosotros) administra empresas y planes, no la gente interna del cliente.
     if (np) np.style.display = (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
+    const ncr = document.getElementById('navCredenciales');
+    if (ncr) ncr.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
+    window._esSApanel = data.esSuperadmin === true;
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     aplicarFuncionesApp(data.funciones);
     ajustarPollingOperador((data.alertas || []).length > 0);
@@ -4194,7 +4197,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -4203,7 +4206,8 @@ const opDescripciones = {
   equipo: 'Código para incorporar técnicos a tu central.',
   reportes: 'Incidentes que reportan tus clientes con foto y categoría. Márcalos revisados al gestionarlos.',
   personal: 'Tu equipo: crea cuentas, asigna cargos, promueve operadores y edita sus datos.',
-  plataforma: 'Nivel superior: administra las empresas de seguridad, sus planes y funciones. Solo tú lo ves.'
+  plataforma: 'Nivel superior: administra las empresas de seguridad, sus planes y funciones. Solo tú lo ves.',
+  credenciales: 'Bitácora de todas las cuentas de personal creadas (correo, cargo, autor y fecha). Las claves no se guardan por seguridad.'
 };
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
@@ -4480,7 +4484,7 @@ function guardarEmpleado() {
   b.disabled = true; b.textContent = 'Creando…';
   saFetch(datos).then((d) => {
     b.disabled = false; b.textContent = 'Crear cuenta';
-    if (d.ok) { info.style.color = '#00C776'; info.textContent = 'Cuenta creada. Entrégale su correo y clave.'; document.getElementById('altaEmpleado').style.display = 'none'; cargarPersonal(); cargarCredencialesEmp(); }
+    if (d.ok) { info.style.color = '#00C776'; info.textContent = 'Cuenta creada. Entrégale su correo y clave.'; document.getElementById('altaEmpleado').style.display = 'none'; cargarPersonal(); if (document.getElementById('op-view-credenciales')?.classList.contains('active')) cargarCredencialesModulo(); }
     else info.textContent = d.error || 'No se pudo crear.';
   }).catch(() => { b.disabled = false; b.textContent = 'Crear cuenta'; info.textContent = 'Error de conexión.'; });
 }
@@ -4555,7 +4559,9 @@ function cambiarRol(personalUid, rol) {
     if (!d.ok) { alert(d.error || 'No se pudo cambiar el rol'); cargarPersonal(); }
   });
 }
-/* ── 🔒 Registro de credenciales (auditoría, sin claves en texto) ── */
+/* ── 🔒 MÓDULO: Registro de credenciales (auditoría, sin claves en texto) ── */
+let _credModulo = [];
+let _credEsSA = false;
 function renderCredencial(list, showEmpresa) {
   if (!list || !list.length) return '<div class="evento"><div><strong>Sin credenciales registradas aún.</strong><small>Cuando se cree una cuenta de personal con correo y clave, quedará registrada aquí.</small></div></div>';
   return list.map((c) => `
@@ -4569,18 +4575,27 @@ function renderCredencial(list, showEmpresa) {
       <div style="color:var(--gris); font-size:.72rem; margin-top:2px;">${showEmpresa ? '🏢 ' + (c.empresaNombre || c.empresaId) + ' · ' : ''}Creada por ${c.creadoPorNombre || '—'}${c.creadoEn ? ' · ' + new Date(c.creadoEn).toLocaleString('es-CL') : ''}</div>
     </div>`).join('');
 }
-function cargarCredencialesSA() {
-  const cont = document.getElementById('saCredLista'); if (!cont) return;
-  cont.innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
-  saFetch({ accion: 'sa-credenciales' }).then((d) => {
-    cont.innerHTML = d.ok ? renderCredencial(d.credenciales, true) : '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>';
-  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
+function renderCredModulo() {
+  const cont = document.getElementById('credModLista'); if (!cont) return;
+  const q = (document.getElementById('credBuscar')?.value || '').trim().toLowerCase();
+  let list = _credModulo;
+  if (q) list = list.filter((c) => ((c.nombre||'') + ' ' + (c.email||'') + ' ' + (c.empresaNombre||'')).toLowerCase().includes(q));
+  cont.innerHTML = renderCredencial(list, _credEsSA);
+  const cc = document.getElementById('credContador');
+  if (cc) cc.textContent = _credModulo.length ? (list.length + ' de ' + _credModulo.length + ' cuenta' + (_credModulo.length === 1 ? '' : 's')) : '';
 }
-function cargarCredencialesEmp() {
-  const cont = document.getElementById('empCredLista'); if (!cont) return;
+function cargarCredencialesModulo() {
+  const cont = document.getElementById('credModLista'); if (!cont) return;
+  _credEsSA = window._esSApanel === true;
+  const desc = document.getElementById('credModDesc');
+  if (desc) desc.innerHTML = _credEsSA
+    ? 'Bitácora de <b>todas las empresas</b>: cada cuenta de personal creada, con correo, cargo, empresa, autor y fecha. <b>Por seguridad las claves nunca se guardan</b> (solo su largo). Solo el nivel superior ve este módulo.'
+    : 'Bitácora de las cuentas que se han creado en <b>tu empresa</b> (correo, cargo, autor y fecha). Solo el jefe o gerente lo ve. <b>Por seguridad las claves no se guardan</b>; si alguien la olvida, se le asigna una nueva.';
   cont.innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
-  saFetch({ accion: 'emp-credenciales' }).then((d) => {
-    cont.innerHTML = d.ok ? renderCredencial(d.credenciales, false) : '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>';
+  saFetch({ accion: _credEsSA ? 'sa-credenciales' : 'emp-credenciales' }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    _credModulo = d.credenciales || [];
+    renderCredModulo();
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
 
@@ -4675,6 +4690,7 @@ function opGo(v){
   if (v==='plataforma') cargarPlataforma();
   if (v==='reportes') cargarReportesPanel();
   if (v==='personal') cargarPersonal();
+  if (v==='credenciales') cargarCredencialesModulo();
 }
 document.querySelectorAll('.op-nav[data-opview]').forEach(b=>b.addEventListener('click',()=>opGo(b.dataset.opview)));
 // ══ BOTÓN SOS Y MAPA ══
