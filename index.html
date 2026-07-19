@@ -1119,11 +1119,15 @@ textarea{min-height:96px;resize:vertical}
           <section class="op-view" id="op-view-recorridos">
             <div class="card">
               <div class="card-title">🗺 Mandar recorrido a un móvil</div>
-              <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Como gerente de seguridad, arma la ruta del día de cada móvil: elige el móvil, marca los puntos que debe recorrer y guárdalo. El móvil lo ve al instante en su app.</p>
+              <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Como gerente de seguridad, arma la ruta del día en el mapa: elige el móvil, toca los puntos en el orden que debe recorrer y guárdalo. El móvil lo ve al instante en su app.</p>
               <label style="font-size:.72rem; color:var(--gris);">1) Elige el móvil</label>
               <select id="recMovilSel" style="margin:4px 0 10px;"><option value="">— Elige un móvil —</option></select>
-              <label style="font-size:.72rem; color:var(--gris);">2) Marca los puntos del recorrido</label>
-              <div id="recClientesLista" style="max-height:300px; overflow:auto; margin:6px 0 10px; border:1px solid var(--linea); border-radius:12px; padding:8px;"><small style="color:var(--gris);">Cargando puntos…</small></div>
+              <label style="font-size:.72rem; color:var(--gris);">2) Toca los puntos en el mapa, en orden</label>
+              <div style="position:relative; margin:6px 0 10px;">
+                <div id="recMapa" style="height:360px; border-radius:12px; overflow:hidden; border:1px solid var(--linea);"></div>
+                <div id="recMapaMsg" style="position:absolute; top:8px; left:8px; background:rgba(0,0,0,.65); color:#fff; font-size:.72rem; padding:5px 10px; border-radius:8px; z-index:500;">Cargando puntos…</div>
+              </div>
+              <div id="recRutaLista" style="margin:4px 0 12px;"><small style="color:var(--gris);">Toca los puntos del mapa en el orden que debe recorrer el móvil.</small></div>
               <button class="btn-full" style="margin:0;" onclick="recGuardar()">Guardar recorrido del día</button>
               <div class="error-msg" id="recInfo"></div>
             </div>
@@ -3253,29 +3257,110 @@ function protocoloDespacharMovil() {
     if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? '✅ Despachado. El móvil lo verá en su app.' : (d.error || 'No se pudo despachar.'); }
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
-function renderRecClientes(cli) {
-  const cont = document.getElementById('recClientesLista'); if (!cont) return;
-  const lista = (cli || []).filter((c) => !c.rolEmpresa && !c.operadorDe);
-  cont.innerHTML = lista.length ? lista.map((c) => `<label style="display:flex; gap:8px; align-items:center; padding:6px 4px; font-size:.82rem; border-bottom:1px solid var(--linea);"><input type="checkbox" class="recChk" value="${c.uid}" style="width:auto; margin:0;"><span><b>${(c.local || c.nombre || 'Cliente').replace(/</g,'&lt;')}</b> <span style="color:var(--gris);">${(c.direccion || '').replace(/</g,'&lt;')}</span></span></label>`).join('') : '<small style="color:var(--gris);">Sin clientes para armar recorrido.</small>';
-}
+/* ── 🗺 Recorridos: mapa interactivo para armar la ruta del móvil ── */
+let recMapa = null, recMarkers = {}, recRuta = [], recPolyline = null, recGeoQueue = [], recGeoActive = false;
 function recInit() {
   const sel = document.getElementById('recMovilSel');
   if (sel) saFetch({ accion: 'moviles-empresa' }).then((d) => {
     if (d.ok && d.moviles.length) sel.innerHTML = '<option value="">— Elige un móvil —</option>' + d.moviles.map((m) => `<option value="${m.uid}">🚐 ${m.nombre}</option>`).join('');
     else sel.innerHTML = '<option value="">— No hay móviles registrados —</option>';
   }).catch(() => {});
+  recInitMapa();
+}
+function recInitMapa() {
+  if (typeof L === 'undefined') return;
+  if (!recMapa) {
+    recMapa = L.map('recMapa').setView(MAPA_CENTRO_DEFECTO, 13);
+    L.tileLayer(urlTilesOperador('claro'), opcionesTiles()).addTo(recMapa);
+  }
+  setTimeout(() => { try { recMapa.invalidateSize(); } catch (e) {} }, 250);
+  // reset ruta y marcadores
+  recRuta = []; recMarkers = {};
+  if (recPolyline) { recMapa.removeLayer(recPolyline); recPolyline = null; }
+  recMapa.eachLayer((l) => { if (l instanceof L.Marker) recMapa.removeLayer(l); });
+  renderRecRuta();
   const local = (typeof operadorClientesData !== 'undefined' ? operadorClientesData : []);
-  if (local.length) renderRecClientes(local);
-  else saFetch({}).then((d) => { if (d.ok) renderRecClientes(d.clientes || []); }).catch(() => {});
+  if (local.length) recAgregarPuntos(local);
+  else saFetch({}).then((d) => { if (d.ok) recAgregarPuntos(d.clientes || []); }).catch(() => {});
+}
+function recAgregarPuntos(clientes) {
+  const cache = leerGeoCache();
+  const cli = (clientes || []).filter((c) => !c.rolEmpresa && !c.operadorDe);
+  let pendientes = 0, ubicados = 0;
+  cli.forEach((c) => {
+    const dir = (c.direccion || '').trim(); if (!dir) return;
+    const clave = dir.toLowerCase();
+    if (clave in cache) { if (cache[clave]) { recPonerMarcador(c, cache[clave]); ubicados++; } }
+    else { pendientes++; recGeoQueue.push({ clave, dir, cli: c }); }
+  });
+  const msg = document.getElementById('recMapaMsg');
+  if (msg) { if (pendientes) { msg.style.display = 'block'; msg.textContent = `Ubicando ${pendientes} direcciones… (${ubicados} en el mapa)`; } else if (!ubicados) { msg.style.display = 'block'; msg.textContent = 'Sin direcciones para ubicar.'; } else { msg.style.display = 'none'; } }
+  if (ubicados) recEncuadrar();
+  recProcesarGeo();
+}
+async function recProcesarGeo() {
+  if (recGeoActive) return; recGeoActive = true;
+  while (recGeoQueue.length) {
+    const { clave, dir, cli } = recGeoQueue.shift();
+    try {
+      let coords = await consultarNominatim(dir);
+      if (!coords && !/serena|coquimbo|chile/i.test(dir)) coords = await consultarNominatim(`${dir}, ${MAPA_CIUDAD_CONTEXTO}`);
+      guardarEnGeoCache(clave, coords);
+      if (coords) { recPonerMarcador(cli, coords); recEncuadrar(); }
+    } catch (e) {}
+    await new Promise((r) => setTimeout(r, 1100));
+  }
+  recGeoActive = false;
+  const msg = document.getElementById('recMapaMsg'); if (msg) msg.style.display = 'none';
+}
+function recIcono(c, orden) {
+  const en = orden != null;
+  const html = `<div style="width:28px;height:28px;border-radius:50%;background:${en ? 'var(--violeta)' : '#fff'};border:2px solid var(--violeta);color:${en ? '#fff' : 'var(--violeta)'};display:grid;place-items:center;font-weight:700;font-size:.78rem;box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:pointer;">${en ? orden : '•'}</div>`;
+  return L.divIcon({ className: '', html, iconSize: [28, 28], iconAnchor: [14, 14] });
+}
+function recPonerMarcador(c, coords) {
+  if (recMarkers[c.uid] || !recMapa) return;
+  const m = L.marker([coords.lat, coords.lng], { icon: recIcono(c, null) }).addTo(recMapa);
+  m.bindTooltip((c.local || c.nombre || 'Punto') + (c.direccion ? ' · ' + c.direccion : ''), { direction: 'top' });
+  m.on('click', () => recToggle(c.uid));
+  recMarkers[c.uid] = { marker: m, cliente: c, coords };
+}
+function recToggle(uid) {
+  const i = recRuta.indexOf(uid);
+  if (i >= 0) recRuta.splice(i, 1); else recRuta.push(uid);
+  recRefrescar();
+}
+function recRefrescar() {
+  Object.keys(recMarkers).forEach((uid) => {
+    const idx = recRuta.indexOf(uid);
+    recMarkers[uid].marker.setIcon(recIcono(recMarkers[uid].cliente, idx >= 0 ? idx + 1 : null));
+  });
+  if (recPolyline) { recMapa.removeLayer(recPolyline); recPolyline = null; }
+  if (recRuta.length > 1) {
+    const pts = recRuta.map((u) => recMarkers[u] ? [recMarkers[u].coords.lat, recMarkers[u].coords.lng] : null).filter(Boolean);
+    recPolyline = L.polyline(pts, { color: '#7c6cff', weight: 3, dashArray: '6,7' }).addTo(recMapa);
+  }
+  renderRecRuta();
+}
+function renderRecRuta() {
+  const cont = document.getElementById('recRutaLista'); if (!cont) return;
+  if (!recRuta.length) { cont.innerHTML = '<small style="color:var(--gris);">Toca los puntos del mapa en el orden que debe recorrer el móvil.</small>'; return; }
+  cont.innerHTML = '<strong style="font-size:.82rem; display:block; margin-bottom:4px;">Ruta del día (' + recRuta.length + ' paradas):</strong>' + recRuta.map((u, i) => {
+    const c = recMarkers[u] ? recMarkers[u].cliente : {};
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:.82rem;border-bottom:1px solid var(--linea);"><span style="width:22px;height:22px;border-radius:50%;background:var(--violeta-suave);color:#9d8fff;display:grid;place-items:center;font-weight:700;font-size:.72rem;">${i + 1}</span><span style="flex:1;">${(c.local || c.nombre || 'Punto').replace(/</g,'&lt;')}</span><button onclick="recToggle('${u}')" title="Quitar" style="border:none;background:transparent;color:#ff4d5e;cursor:pointer;font-size:.9rem;">✕</button></div>`;
+  }).join('');
+}
+function recEncuadrar() {
+  const ms = Object.values(recMarkers); if (!ms.length || !recMapa) return;
+  try { const g = L.featureGroup(ms.map((x) => x.marker)); recMapa.fitBounds(g.getBounds().pad(0.25), { maxZoom: 15 }); } catch (e) {}
 }
 function recGuardar() {
   const sel = document.getElementById('recMovilSel'); const info = document.getElementById('recInfo');
   const mUid = sel ? sel.value : '';
   if (!mUid) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Elige un móvil.'; } return; }
-  const paradas = [...document.querySelectorAll('.recChk:checked')].map((c) => c.value);
-  if (!paradas.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Marca al menos un punto.'; } return; }
-  saFetch({ accion: 'recorrido-set', movilUid: mUid, paradas }).then((d) => {
-    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `✅ Recorrido guardado con ${d.total} paradas. El móvil ya lo ve.` : (d.error || 'No se pudo guardar.'); }
+  if (!recRuta.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Toca al menos un punto en el mapa.'; } return; }
+  saFetch({ accion: 'recorrido-set', movilUid: mUid, paradas: recRuta }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `✅ Recorrido guardado con ${d.total} paradas en orden. El móvil ya lo ve.` : (d.error || 'No se pudo guardar.'); }
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
 function guardarNotaCentral(clienteUid) {
