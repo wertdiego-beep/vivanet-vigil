@@ -3369,20 +3369,40 @@ function recGuardar() {
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
 function recDist(a, b) { const dx = a.lat - b.lat, dy = a.lng - b.lng; return dx * dx + dy * dy; }
-function recAutoRuta() {
+async function recAutoRuta() {
   const q = (document.getElementById('recSector')?.value || '').trim().toLowerCase();
   const info = document.getElementById('recInfo');
   if (!q) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Escribe un sector primero.'; } return; }
-  // Candidatos: puntos ya ubicados en el mapa cuyo nombre o dirección menciona el sector.
-  const cand = Object.keys(recMarkers).filter((uid) => {
-    const c = recMarkers[uid].cliente;
-    return ((c.direccion || '') + ' ' + (c.local || '') + ' ' + (c.nombre || '')).toLowerCase().includes(q);
-  });
-  if (!cand.length) {
-    if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'No hay puntos ubicados en ese sector todavía (puede que aún se estén cargando en el mapa). Espera unos segundos y reintenta.'; }
-    return;
+  // 1) Todos los clientes de la empresa.
+  let clientes = (typeof operadorClientesData !== 'undefined' ? operadorClientesData : []);
+  if (!clientes.length) { try { const d = await saFetch({}); clientes = d.clientes || []; } catch (e) {} }
+  clientes = clientes.filter((c) => !c.rolEmpresa && !c.operadorDe);
+  // 2) Los que pertenecen al sector (por dirección o nombre).
+  const match = clientes.filter((c) => ((c.direccion || '') + ' ' + (c.local || '') + ' ' + (c.nombre || '')).toLowerCase().includes(q));
+  if (!match.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = `No hay clientes en el sector "${q}".`; } return; }
+  // 3) Geocodificar activamente los que falten (para que la ruta salga aunque no estén aún en el mapa).
+  const cache = leerGeoCache();
+  const faltan = match.filter((c) => !recMarkers[c.uid] && (c.direccion || '').trim());
+  if (faltan.length) {
+    let hechos = 0;
+    for (const c of faltan) {
+      const dir = (c.direccion || '').trim(); const clave = dir.toLowerCase();
+      if (info) { info.style.color = 'var(--gris)'; info.textContent = `Ubicando puntos del sector… (${++hechos}/${faltan.length})`; }
+      let coords = (clave in cache) ? cache[clave] : null;
+      if (!(clave in cache)) {
+        try {
+          coords = await consultarNominatim(dir);
+          if (!coords && !/serena|coquimbo|chile/i.test(dir)) coords = await consultarNominatim(`${dir}, ${MAPA_CIUDAD_CONTEXTO}`);
+        } catch (e) {}
+        guardarEnGeoCache(clave, coords);
+        await new Promise((r) => setTimeout(r, 1100));
+      }
+      if (coords) recPonerMarcador(c, coords);
+    }
   }
-  // Orden inteligente por cercanía (vecino más próximo), partiendo del punto más al oeste.
+  // 4) Armar la ruta con los que sí quedaron ubicados.
+  const cand = match.filter((c) => recMarkers[c.uid]).map((c) => c.uid);
+  if (!cand.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'No se pudieron ubicar en el mapa las direcciones de ese sector.'; } return; }
   let restan = cand.slice().sort((a, b) => recMarkers[a].coords.lng - recMarkers[b].coords.lng);
   const orden = [restan.shift()];
   while (restan.length) {
@@ -3394,7 +3414,8 @@ function recAutoRuta() {
   recRuta = orden;
   recRefrescar();
   try { const g = L.featureGroup(recRuta.map((u) => recMarkers[u].marker)); recMapa.fitBounds(g.getBounds().pad(0.3), { maxZoom: 16 }); } catch (e) {}
-  if (info) { info.style.color = '#00C776'; info.textContent = `✨ Ruta automática con ${orden.length} punto${orden.length === 1 ? '' : 's'} del sector "${q}", ordenados por cercanía. Puedes ajustarla tocando el mapa.`; }
+  const sinUbic = match.length - cand.length;
+  if (info) { info.style.color = '#00C776'; info.textContent = `✨ Ruta automática con ${orden.length} punto${orden.length === 1 ? '' : 's'} del sector "${q}", ordenados por cercanía.` + (sinUbic > 0 ? ` (${sinUbic} sin dirección ubicable)` : '') + ' Puedes ajustarla tocando el mapa.'; }
 }
 function guardarNotaCentral(clienteUid) {
   if (!clienteUid && protocoloActual) clienteUid = protocoloActual.clienteUid;
