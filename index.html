@@ -1091,6 +1091,10 @@ textarea{min-height:96px;resize:vertical}
             <div class="card">
               <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>🔒 Registro de credenciales</span><button onclick="cargarCredencialesModulo()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻ Actualizar</button></div>
               <p style="color:var(--gris); font-size:.8rem; margin-bottom:10px;" id="credModDesc">Cada cuenta que se crea para el personal queda registrada aquí: correo, cargo, quién la creó y cuándo. <b>Por seguridad, las claves nunca se guardan</b> (solo su largo); si alguien la olvida, se le asigna una nueva.</p>
+              <div id="credEmpresaWrap" style="display:none; margin-bottom:12px;">
+                <label style="font-size:.72rem; color:var(--gris);">1) Elige la empresa</label>
+                <select id="credEmpresaSel" onchange="renderCredModulo()" style="margin:4px 0 0;"></select>
+              </div>
               <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
                 <input id="credBuscar" type="text" placeholder="Buscar por nombre o correo…" oninput="renderCredModulo()" style="margin:0; flex:1; min-width:180px;">
                 <span id="credContador" style="font-size:.74rem; color:var(--gris);"></span>
@@ -4595,11 +4599,22 @@ function toggleClave(id, btn) {
 function renderCredModulo() {
   const cont = document.getElementById('credModLista'); if (!cont) return;
   const q = (document.getElementById('credBuscar')?.value || '').trim().toLowerCase();
-  let list = _credModulo;
-  if (q) list = list.filter((c) => ((c.nombre||'') + ' ' + (c.email||'') + ' ' + (c.empresaNombre||'')).toLowerCase().includes(q));
-  cont.innerHTML = renderCredencial(list, _credEsSA);
   const cc = document.getElementById('credContador');
-  if (cc) cc.textContent = _credModulo.length ? (list.length + ' de ' + _credModulo.length + ' cuenta' + (_credModulo.length === 1 ? '' : 's')) : '';
+  let list = _credModulo;
+  // Nivel superior: primero se elige la empresa, después se ve su registro.
+  if (_credEsSA) {
+    const emp = document.getElementById('credEmpresaSel')?.value || '';
+    if (!emp) {
+      cont.innerHTML = '<div class="evento"><div><strong>Elige una empresa arriba ⤴</strong><small>Selecciona de qué empresa quieres ver las credenciales.</small></div></div>';
+      if (cc) cc.textContent = '';
+      return;
+    }
+    list = list.filter((c) => c.empresaId === emp);
+  }
+  const totalEmp = list.length;
+  if (q) list = list.filter((c) => ((c.nombre||'') + ' ' + (c.email||'')).toLowerCase().includes(q));
+  cont.innerHTML = renderCredencial(list, false);
+  if (cc) cc.textContent = totalEmp ? (list.length + ' de ' + totalEmp + ' cuenta' + (totalEmp === 1 ? '' : 's')) : '0 cuentas';
 }
 function cargarCredencialesModulo() {
   const cont = document.getElementById('credModLista'); if (!cont) return;
@@ -4612,6 +4627,17 @@ function cargarCredencialesModulo() {
   saFetch({ accion: _credEsSA ? 'sa-credenciales' : 'emp-credenciales' }).then((d) => {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     _credModulo = d.credenciales || [];
+    const wrap = document.getElementById('credEmpresaWrap');
+    const sel = document.getElementById('credEmpresaSel');
+    if (_credEsSA && wrap && sel) {
+      wrap.style.display = 'block';
+      const prev = sel.value;
+      const empresas = {};
+      _credModulo.forEach((c) => { empresas[c.empresaId] = c.empresaNombre || c.empresaId; });
+      const opts = Object.keys(empresas).sort((a,b)=> (empresas[a]||'').localeCompare(empresas[b]||''));
+      sel.innerHTML = '<option value="">— Elige una empresa —</option>' + opts.map((id) => `<option value="${id}">🏢 ${empresas[id]} (${_credModulo.filter(c=>c.empresaId===id).length})</option>`).join('');
+      if (prev && empresas[prev]) sel.value = prev;
+    } else if (wrap) { wrap.style.display = 'none'; }
     renderCredModulo();
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
