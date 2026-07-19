@@ -3281,47 +3281,79 @@ function recRenderSectores() {
     return `<div style="margin-bottom:8px;"><strong style="font-size:.76rem; color:var(--violeta); display:block; margin:2px 0 4px;">🏙 ${ciudad}</strong>${items}</div>`;
   }).join('');
 }
+async function consultarNominatimBox(q) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&viewbox=${MAPA_VIEWBOX}&bounded=1&q=${encodeURIComponent(q)}`;
+  const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  if (!data || !data[0]) return null;
+  const bb = (data[0].boundingbox || []).map(Number); // [sur, norte, oeste, este]
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), bbox: (bb.length === 4 && bb.every((x) => !isNaN(x))) ? bb : null };
+}
+// Genera un patrón de patrullaje en serpentina que BARRE el área del sector.
+function recPuntosSector(centro, bbox, n) {
+  let s, no, w, e;
+  if (bbox) { s = bbox[0]; no = bbox[1]; w = bbox[2]; e = bbox[3]; }
+  else { const d = 0.006; s = centro.lat - d; no = centro.lat + d; w = centro.lng - d; e = centro.lng + d; }
+  // Recortar cajas gigantes (algunos bbox de OSM abarcan comunas enteras) a ~2.2 km.
+  const maxLat = 0.02, maxLng = 0.023;
+  if (no - s > maxLat) { const c = (no + s) / 2; s = c - maxLat / 2; no = c + maxLat / 2; }
+  if (e - w > maxLng) { const c = (e + w) / 2; w = c - maxLng / 2; e = c + maxLng / 2; }
+  // Margen interior 12%.
+  const iLat = (no - s) * 0.12, iLng = (e - w) * 0.12;
+  s += iLat; no -= iLat; w += iLng; e -= iLng;
+  const pts = [];
+  for (let r = 0; r < n; r++) {
+    const lat = n === 1 ? (s + no) / 2 : no - r * ((no - s) / (n - 1));
+    const fila = [];
+    for (let c = 0; c < n; c++) { const lng = n === 1 ? (w + e) / 2 : w + c * ((e - w) / (n - 1)); fila.push({ lat, lng }); }
+    if (r % 2 === 1) fila.reverse(); // serpentina
+    pts.push(...fila);
+  }
+  return pts;
+}
 async function recSectoresAuto() {
   const info = document.getElementById('recInfo');
   const marcados = [...document.querySelectorAll('.recSecChk:checked')].map((c) => ({ q: c.value, nombre: c.getAttribute('data-nombre') }));
   if (!marcados.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Marca al menos un sector que deba cubrir el móvil.'; } return; }
-  // Limpiar ruta actual y armar una nueva con un punto por sector.
   recRuta = []; recMarkers = {}; recWpN = 0;
   if (recPolyline) { recMapa.removeLayer(recPolyline); recPolyline = null; }
   recMapa.eachLayer((l) => { if (l instanceof L.Marker) recMapa.removeLayer(l); });
-  const cache = leerGeoCache();
-  const puntos = [];
+  // 1) Ubicar cada sector con su área (bounding box).
+  const sectores = [];
   let i = 0;
   for (const m of marcados) {
     if (info) { info.style.color = 'var(--gris)'; info.textContent = `Ubicando sectores… (${++i}/${marcados.length})`; }
-    const clave = m.q.toLowerCase();
-    let coords = (clave in cache) ? cache[clave] : null;
-    if (!(clave in cache)) {
-      try { coords = await consultarNominatim(m.q + ', Chile'); } catch (e) {}
-      guardarEnGeoCache(clave, coords);
-      await new Promise((r) => setTimeout(r, 1100));
-    }
-    if (coords) puntos.push({ nombre: m.nombre, coords });
+    let g = null;
+    try { g = await consultarNominatimBox(m.q + ', Chile'); } catch (e) {}
+    await new Promise((r) => setTimeout(r, 1100));
+    if (g) sectores.push({ nombre: m.nombre, centro: { lat: g.lat, lng: g.lng }, bbox: g.bbox });
   }
-  if (!puntos.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'No se pudieron ubicar los sectores marcados en el mapa.'; } return; }
-  // Ordenar por cercanía (vecino más próximo) desde el más al oeste.
-  let restan = puntos.slice().sort((a, b) => a.coords.lng - b.coords.lng);
-  const orden = [restan.shift()];
+  if (!sectores.length) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'No se pudieron ubicar los sectores marcados en el mapa.'; } return; }
+  // 2) Ordenar los sectores por cercanía (para pasar de uno al más próximo).
+  let restan = sectores.slice().sort((a, b) => a.centro.lng - b.centro.lng);
+  const ordenSec = [restan.shift()];
   while (restan.length) {
-    const ult = orden[orden.length - 1].coords;
+    const ult = ordenSec[ordenSec.length - 1].centro;
     let mejor = 0, mejorD = Infinity;
-    restan.forEach((p, k) => { const d = recDist(ult, p.coords); if (d < mejorD) { mejorD = d; mejor = k; } });
-    orden.push(restan.splice(mejor, 1)[0]);
+    restan.forEach((p, k) => { const d = recDist(ult, p.centro); if (d < mejorD) { mejorD = d; mejor = k; } });
+    ordenSec.push(restan.splice(mejor, 1)[0]);
   }
-  // Colocar marcadores (como puntos de ronda con nombre de sector) y armar la ruta.
-  orden.forEach((p) => {
-    const id = 'wp_' + (++recWpN);
-    recPonerMarcador({ uid: id, local: p.nombre, nombre: p.nombre, direccion: '' }, p.coords);
-    recRuta.push(id);
+  // 3) Por cada sector, generar el patrullaje en serpentina que barre su área.
+  const n = marcados.length <= 2 ? 3 : 2; // 3x3=9 puntos si son pocos; 2x2=4 si son varios.
+  let totalPuntos = 0;
+  ordenSec.forEach((sec) => {
+    const pts = recPuntosSector(sec.centro, sec.bbox, n);
+    pts.forEach((pt, k) => {
+      const id = 'wp_' + (++recWpN);
+      recPonerMarcador({ uid: id, local: sec.nombre + ' · patrulla ' + (k + 1), nombre: sec.nombre, direccion: '' }, pt);
+      recRuta.push(id);
+      totalPuntos++;
+    });
   });
   recRefrescar();
-  try { const g = L.featureGroup(recRuta.map((u) => recMarkers[u].marker)); recMapa.fitBounds(g.getBounds().pad(0.25), { maxZoom: 14 }); } catch (e) {}
-  if (info) { info.style.color = '#00C776'; info.textContent = `✨ Recorrido con ${orden.length} sector${orden.length === 1 ? '' : 'es'}: parte en ${orden[0].nombre} (verde) y termina en ${orden[orden.length - 1].nombre} (rojo). Ajústalo tocando el mapa si quieres.`; }
+  try { const g = L.featureGroup(recRuta.map((u) => recMarkers[u].marker)); recMapa.fitBounds(g.getBounds().pad(0.2), { maxZoom: 15 }); } catch (e) {}
+  if (info) { info.style.color = '#00C776'; info.textContent = `✨ Patrullaje de ${ordenSec.length} sector${ordenSec.length === 1 ? '' : 'es'} con ${totalPuntos} puntos que barren cada zona. Parte en ${ordenSec[0].nombre} (verde) y termina en ${ordenSec[ordenSec.length - 1].nombre} (rojo). Ajústalo tocando el mapa.`; }
 }
 function recInit() {
   recRenderSectores();
