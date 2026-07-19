@@ -798,9 +798,21 @@ textarea{min-height:96px;resize:vertical}
       </aside>
       <div class="op-main">
         <div class="op-topbar">
-          <div class="op-title" id="opTitulo">Monitoreo en vivo</div>
-          <span class="op-live">EN VIVO</span>
-          <span id="opReloj" style="font-family:'Chakra Petch',sans-serif; font-size:.78rem; color:var(--gris); letter-spacing:.05em;"></span>
+          <div style="display:flex; flex-direction:column; min-width:0;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="op-title" id="opTitulo">Monitoreo en vivo</div>
+              <span class="op-live">EN VIVO</span>
+              <span id="opReloj" style="font-family:'Chakra Petch',sans-serif; font-size:.78rem; color:var(--gris); letter-spacing:.05em;"></span>
+            </div>
+            <div id="opSubtitulo" style="font-size:.72rem; color:var(--gris); margin-top:1px; max-width:640px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Alertas SOS en vivo sobre el mapa de la central.</div>
+          </div>
+          <div id="opPerfilChip" style="display:none; align-items:center; gap:8px; background:var(--blanco); border:1px solid var(--linea); border-radius:99px; padding:4px 12px 4px 4px;">
+            <div id="opPerfilInicial" style="width:28px; height:28px; border-radius:50%; background:var(--violeta-suave); color:#9d8fff; display:grid; place-items:center; font-weight:700; font-size:.8rem;">D</div>
+            <div style="line-height:1.1;">
+              <div id="opPerfilNombre" style="font-size:.78rem; font-weight:700; color:var(--tinta);">—</div>
+              <div id="opPerfilRol" style="font-size:.64rem; color:var(--gris);">—</div>
+            </div>
+          </div>
           <div id="buscarMonitoreoWrap" style="position:relative; width:330px; max-width:34vw;">
             <input type="text" id="buscarMonitoreo" placeholder="Buscar cliente por nombre, local o dirección…" autocomplete="off" oninput="buscarClienteMonitoreo()" onfocus="buscarClienteMonitoreo()" style="margin:0; padding:8px 12px; font-size:.8rem;">
             <div id="buscarMonitoreoRes" style="display:none; position:absolute; top:calc(100% + 5px); left:0; right:0; background:var(--blanco); border:1px solid var(--linea); border-radius:12px; max-height:260px; overflow-y:auto; z-index:3000; box-shadow:0 14px 34px rgba(0,0,0,.45);"></div>
@@ -1533,6 +1545,18 @@ async function cargarPanelOperador() {
     if (data.esSuperadmin) { const n = document.getElementById('navPlataforma'); if (n) n.style.display = ''; }
     _saSoyMaestra = data.esMaestra === true;
     _miRolEmpresa = data.rolEmpresa || '';
+    // Chip de perfil: quién soy y con qué rol.
+    (function(){
+      const chip = document.getElementById('opPerfilChip'); if (!chip) return;
+      const nombre = (auth.currentUser && (auth.currentUser.displayName || (auth.currentUser.email || '').split('@')[0])) || 'Operador';
+      const rolesTxt = { jefe:'Jefe/a', gerente:'Gerente', supervisor:'Supervisor', guardia:'Guardia', empleado:'Empleado/a', tecnico:'Técnico' };
+      let rol = data.esSuperadmin ? '👑 Superadmin' : (rolesTxt[data.rolEmpresa] || 'Operador');
+      const emp = (data.empresaId && data.empresaId !== 'sos360-la-serena') ? ' · ' + data.empresaId : '';
+      document.getElementById('opPerfilInicial').textContent = nombre.slice(0,1).toUpperCase();
+      document.getElementById('opPerfilNombre').textContent = nombre;
+      document.getElementById('opPerfilRol').textContent = rol + emp;
+      chip.style.display = 'flex';
+    })();
     const np = document.getElementById('navPersonal');
     // Solo el jefe/gerente de cada empresa gestiona su personal. El superadmin
     // (nosotros) administra empresas y planes, no la gente interna del cliente.
@@ -4155,6 +4179,16 @@ document.addEventListener('click', (e) => {
 });
 
 const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Plataforma SOS360', reportes:'Reportes de incidentes', personal:'Personal y roles' };
+const opDescripciones = {
+  monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
+  clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
+  tecnico: 'Visitas técnicas agendadas y su seguimiento.',
+  historial: 'Reporte del día e historial de todas las alarmas, con quién atendió y el resultado. Exportable a Excel.',
+  equipo: 'Código para incorporar técnicos a tu central.',
+  reportes: 'Incidentes que reportan tus clientes con foto y categoría. Márcalos revisados al gestionarlos.',
+  personal: 'Tu equipo: crea cuentas, asigna cargos, promueve operadores y edita sus datos.',
+  plataforma: 'Nivel superior: administra las empresas de seguridad, sus planes y funciones. Solo tú lo ves.'
+};
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
   return auth.currentUser.getIdToken().then((t) => fetch('/api/operador-datos', {
@@ -4591,6 +4625,8 @@ function opGo(v){
   document.querySelectorAll('.op-view').forEach(s=>s.classList.toggle('active', s.id==='op-view-'+v));
   const t = document.getElementById('opTitulo');
   if (t) t.textContent = opTitulos[v] || '';
+  const sub = document.getElementById('opSubtitulo');
+  if (sub) sub.textContent = opDescripciones[v] || '';
   if (v==='monitoreo' && operadorMapa) setTimeout(()=>operadorMapa.invalidateSize(), 120);
   if (v==='plataforma') cargarPlataforma();
   if (v==='reportes') cargarReportesPanel();
