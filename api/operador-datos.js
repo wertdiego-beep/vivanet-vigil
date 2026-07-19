@@ -511,7 +511,57 @@ export default async function handler(req, res) {
         method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields })
       });
+      // Registro de credencial (auditoria). Por SEGURIDAD no se guarda la clave en texto:
+      // solo el evento (correo, cargo, quien la creo y cuando) + el largo de la clave.
+      try {
+        const miNombreC = perfilOp.fields?.nombre?.stringValue || perfilOp.fields?.displayName?.stringValue || '';
+        await fetch(`${base0}/credenciales/${su.localId}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','creadoPorUid','creadoPorNombre','creadoEn'].map((k)=>`updateMask.fieldPaths=${k}`).join('&'), {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: {
+            email: { stringValue: email }, nombre: { stringValue: nombre }, rol: { stringValue: rol },
+            empresaId: { stringValue: empresaOperador }, esOperador: { booleanValue: !!req.body.esOperador },
+            claveLargo: { integerValue: String(pass.length) },
+            creadoPorUid: { stringValue: uid }, creadoPorNombre: { stringValue: miNombreC },
+            creadoEn: { timestampValue: new Date().toISOString() }
+          } })
+        });
+      } catch (e) {}
       res.status(200).json({ ok: true, uid: su.localId });
+      return;
+    }
+    if (accion === 'emp-credenciales' || accion === 'sa-credenciales') {
+      // Registro de cuentas creadas. sa-* = todas (solo nivel superior); emp-* = solo la propia empresa (jefe/gerente).
+      const esCredSA = accion === 'sa-credenciales';
+      const miRolC = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (esCredSA && !esSA) { res.status(403).json({ error: 'Solo el nivel superior ve el registro global.' }); return; }
+      if (!esCredSA && !esSA && miRolC !== 'jefe' && miRolC !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente ve este registro.' }); return; }
+      const q = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'credenciales' }], limit: 300 } })
+      }).then((r) => r.json());
+      let creds = (q || []).filter((x) => x.document).map((x) => {
+        const f = x.document.fields || {};
+        return {
+          uid: x.document.name.split('/').pop(),
+          email: f.email?.stringValue || '', nombre: f.nombre?.stringValue || '',
+          rol: f.rol?.stringValue || '', empresaId: f.empresaId?.stringValue || '',
+          esOperador: f.esOperador?.booleanValue === true,
+          claveLargo: Number(f.claveLargo?.integerValue || 0),
+          creadoPorNombre: f.creadoPorNombre?.stringValue || '',
+          creadoEn: f.creadoEn?.timestampValue || null
+        };
+      });
+      if (!esCredSA) creds = creds.filter((c) => c.empresaId === empresaOperador);
+      let empresasNom = {};
+      if (esCredSA) {
+        try {
+          const es = await fetch(`${base0}/empresas`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json());
+          (es.documents || []).forEach((d) => { empresasNom[d.name.split('/').pop()] = d.fields?.nombre?.stringValue || ''; });
+        } catch (e) {}
+      }
+      creds.forEach((c) => { c.empresaNombre = empresasNom[c.empresaId] || c.empresaId; });
+      creds.sort((a, b) => new Date(b.creadoEn || 0) - new Date(a.creadoEn || 0));
+      res.status(200).json({ ok: true, credenciales: creds });
       return;
     }
     if (accion === 'emp-quitar') {
