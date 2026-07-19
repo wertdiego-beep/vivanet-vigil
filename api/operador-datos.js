@@ -514,6 +514,22 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true, uid: su.localId });
       return;
     }
+    if (accion === 'emp-quitar') {
+      // Quita a la persona del equipo: sin rol, sin empresa, sin operador.
+      // NO destruye su cuenta (reversible): solo la desvincula de la empresa.
+      const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRol !== 'jefe' && miRol !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente puede quitar personal.' }); return; }
+      const destino = (req.body.personalUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(destino) || destino === uid) { res.status(400).json({ error: destino === uid ? 'No puedes quitarte a ti mismo.' : 'Persona no válida' }); return; }
+      const docD = await fetch(`${base0}/usuarios/${destino}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!esSA && (docD.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Esa persona es de otra empresa.' }); return; }
+      await fetch(`${base0}/usuarios/${destino}?updateMask.fieldPaths=rolEmpresa&updateMask.fieldPaths=operadorDe&updateMask.fieldPaths=empresaId`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { rolEmpresa: { stringValue: '' }, operadorDe: { stringValue: '' }, empresaId: { stringValue: 'sin-empresa' } } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
     if (accion === 'emp-editar') {
       const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRol !== 'jefe' && miRol !== 'gerente') { res.status(403).json({ error: 'No autorizado' }); return; }
