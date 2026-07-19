@@ -3266,7 +3266,7 @@ function protocoloDespacharMovil() {
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
 /* ── 🗺 Recorridos: mapa interactivo para armar la ruta del móvil ── */
-let recMapa = null, recMarkers = {}, recRuta = [], recPolyline = null, recGeoQueue = [], recGeoActive = false, recWpN = 0;
+let recMapa = null, recMarkers = {}, recRuta = [], recPolyline = null, recGeoQueue = [], recGeoActive = false, recWpN = 0, recCallesTimer = null, recRutaReqId = 0;
 const SECTORES_REGION = {
   'La Serena': ['Centro','La Pampa','Las Compañías','La Antena','Pedro Aguirre Cerda','Cuatro Esquinas','La Florida','Las Torres','El Milagro','Colina El Pino','San Joaquín','El Olivar','La Cantera','Barrio Universitario','Puertas del Mar','Villa San Bartolomé'],
   'Coquimbo': ['Centro','Parte Alta','Tierras Blancas','San Juan','Sindempart','Las Torres','El Llano','Los Nogales','Pan de Azúcar','Guayacán','Peñuelas','Baquedano','El Culebrón','La Cantera']
@@ -3448,10 +3448,43 @@ function recRefrescar() {
   });
   if (recPolyline) { recMapa.removeLayer(recPolyline); recPolyline = null; }
   if (recRuta.length > 1) {
+    // Línea recta provisional mientras calculamos el trazado por calles.
     const pts = recRuta.map((u) => recMarkers[u] ? [recMarkers[u].coords.lat, recMarkers[u].coords.lng] : null).filter(Boolean);
-    recPolyline = L.polyline(pts, { color: '#7c6cff', weight: 3, dashArray: '6,7' }).addTo(recMapa);
+    recPolyline = L.polyline(pts, { color: '#7c6cff', weight: 2, dashArray: '4,8', opacity: 0.5 }).addTo(recMapa);
+    clearTimeout(recCallesTimer);
+    recCallesTimer = setTimeout(recDibujarCalles, 500);
   }
   renderRecRuta();
+}
+// Traza la ruta siguiendo las CALLES reales (motor OSRM de OpenStreetMap).
+async function recDibujarCalles() {
+  if (!recMapa || recRuta.length < 2) return;
+  const reqId = ++recRutaReqId;
+  const coords = recRuta.map((u) => recMarkers[u] && recMarkers[u].coords).filter(Boolean);
+  if (coords.length < 2) return;
+  const path = coords.map((c) => `${c.lng},${c.lat}`).join(';');
+  const url = `https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`;
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    if (reqId !== recRutaReqId) return; // llegó una petición más nueva
+    if (d.code === 'Ok' && d.routes && d.routes[0] && d.routes[0].geometry) {
+      // Pegar cada punto a la calle más cercana (para que el móvil navegue por calle real).
+      if (Array.isArray(d.waypoints)) {
+        d.waypoints.forEach((wp, i) => {
+          const uid = recRuta[i];
+          if (uid && recMarkers[uid] && wp && wp.location) {
+            const lat = wp.location[1], lng = wp.location[0];
+            recMarkers[uid].coords = { lat, lng };
+            try { recMarkers[uid].marker.setLatLng([lat, lng]); } catch (e) {}
+          }
+        });
+      }
+      const linea = d.routes[0].geometry.coordinates.map((c) => [c[1], c[0]]);
+      if (recPolyline) recMapa.removeLayer(recPolyline);
+      recPolyline = L.polyline(linea, { color: '#7c6cff', weight: 4, opacity: 0.9 }).addTo(recMapa);
+    }
+  } catch (e) { /* si OSRM falla, queda la línea recta provisional */ }
 }
 function renderRecRuta() {
   const cont = document.getElementById('recRutaLista'); if (!cont) return;
