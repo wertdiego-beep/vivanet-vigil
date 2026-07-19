@@ -4571,9 +4571,14 @@ function renderCredencial(list, showEmpresa) {
         <span style="font-size:.6rem; font-weight:700; color:#9d8fff; background:var(--violeta-suave); padding:2px 8px; border-radius:99px;">${(c.rol || '').toUpperCase()}</span>
         ${c.esOperador ? '<span style="font-size:.6rem; font-weight:700; color:var(--verde); background:var(--verde-suave); padding:2px 8px; border-radius:99px;">OPERADOR</span>' : ''}
       </div>
-      <div style="color:var(--gris); margin-top:4px;">${(c.email || '').replace(/</g,'&lt;')} · 🔒 clave de ${c.claveLargo || '?'} caracteres (oculta)</div>
+      <div style="color:var(--gris); margin-top:4px;">${(c.email || '').replace(/</g,'&lt;')} · 🔑 ${c.clave ? `<span id="clv_${c.uid}" data-c="${encodeURIComponent(c.clave)}" style="font-family:monospace; letter-spacing:.05em;">••••••</span> <button onclick="toggleClave('clv_${c.uid}', this)" style="border:none; background:var(--violeta-suave); color:#9d8fff; border-radius:8px; padding:2px 8px; font-size:.68rem; cursor:pointer;">👁 ver</button>` : `<span style="color:var(--gris);">clave propia del usuario (no visible)</span>`}</div>
       <div style="color:var(--gris); font-size:.72rem; margin-top:2px;">${showEmpresa ? '🏢 ' + (c.empresaNombre || c.empresaId) + ' · ' : ''}Creada por ${c.creadoPorNombre || '—'}${c.creadoEn ? ' · ' + new Date(c.creadoEn).toLocaleString('es-CL') : ''}</div>
     </div>`).join('');
+}
+function toggleClave(id, btn) {
+  const el = document.getElementById(id); if (!el) return;
+  if (el.textContent === '••••••') { el.textContent = decodeURIComponent(el.dataset.c || ''); if (btn) btn.textContent = '🙈 ocultar'; }
+  else { el.textContent = '••••••'; if (btn) btn.textContent = '👁 ver'; }
 }
 function renderCredModulo() {
   const cont = document.getElementById('credModLista'); if (!cont) return;
@@ -4589,8 +4594,8 @@ function cargarCredencialesModulo() {
   _credEsSA = window._esSApanel === true;
   const desc = document.getElementById('credModDesc');
   if (desc) desc.innerHTML = _credEsSA
-    ? 'Bitácora de <b>todas las empresas</b>: cada cuenta de personal creada, con correo, cargo, empresa, autor y fecha. <b>Por seguridad las claves nunca se guardan</b> (solo su largo). Solo el nivel superior ve este módulo.'
-    : 'Bitácora de las cuentas que se han creado en <b>tu empresa</b> (correo, cargo, autor y fecha). Solo el jefe o gerente lo ve. <b>Por seguridad las claves no se guardan</b>; si alguien la olvida, se le asigna una nueva.';
+    ? 'Bitácora de <b>todas las empresas</b>: cada cuenta de personal creada, con correo, cargo, clave, empresa, autor y fecha. La clave se muestra con el botón 👁. Solo el nivel superior ve este módulo.'
+    : 'Bitácora de las cuentas que has creado en <b>tu empresa</b> (correo, cargo, clave, autor y fecha). Toca 👁 para ver la clave que le asignaste. Solo el jefe o gerente ve este módulo.';
   cont.innerHTML = '<div class="evento"><div><strong>Cargando…</strong></div></div>';
   saFetch({ accion: _credEsSA ? 'sa-credenciales' : 'emp-credenciales' }).then((d) => {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
