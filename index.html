@@ -4710,21 +4710,24 @@ function movilGeoStart() {
 function movilGeoCheck(pos) {
   const { latitude, longitude } = pos.coords;
   const el = document.getElementById('movilGeoEstado');
-  if (el) el.innerHTML = '📡 <b style="color:var(--verde);">GPS activo</b> · las paradas se marcan solas al pasar por cada punto.';
-  (_movilRuta || []).forEach((p, i) => {
-    if (!p || p.estado === 'visitada' || !p.lat || !p.lng || movilGeoMarcando.has(i)) return;
-    if (movilDistM(latitude, longitude, p.lat, p.lng) <= MOVIL_GEO_RADIO_M) {
-      movilGeoMarcando.add(i);
-      saFetch({ accion: 'movil-parada', idx: i, estado: 'visitada', nota: 'Marcada automáticamente por GPS' }).then((d) => {
-        movilGeoMarcando.delete(i);
-        if (d.ok) {
-          p.estado = 'visitada';
-          if (navigator.vibrate) navigator.vibrate([180, 80, 180]);
-          renderMovilRecorrido({ ok: true, paradas: _movilRuta });
-        }
-      }).catch(() => movilGeoMarcando.delete(i));
-    }
-  });
+  if (el) el.innerHTML = '📡 <b style="color:var(--verde);">GPS activo</b> · las paradas se marcan solas al pasar, EN ORDEN (la 3 se activa solo después de la 2).';
+  // ORDEN ESTRICTO: solo puede activarse la SIGUIENTE parada pendiente.
+  // La 3 no se marca aunque pases cerca, si la 2 aún no está lista.
+  const i = (_movilRuta || []).findIndex((p) => p && p.estado !== 'visitada');
+  if (i < 0) return;
+  const p = _movilRuta[i];
+  if (!p.lat || !p.lng || movilGeoMarcando.has(i)) return;
+  if (movilDistM(latitude, longitude, p.lat, p.lng) <= MOVIL_GEO_RADIO_M) {
+    movilGeoMarcando.add(i);
+    saFetch({ accion: 'movil-parada', idx: i, estado: 'visitada', nota: 'Marcada automáticamente por GPS' }).then((d) => {
+      movilGeoMarcando.delete(i);
+      if (d.ok) {
+        p.estado = 'visitada';
+        if (navigator.vibrate) navigator.vibrate([180, 80, 180]);
+        renderMovilRecorrido({ ok: true, paradas: _movilRuta });
+      }
+    }).catch(() => movilGeoMarcando.delete(i));
+  }
 }
 function movilNav(ubic, direccion) {
   let url;
@@ -4796,16 +4799,20 @@ function renderMovilRecorrido(d) {
   cont.innerHTML = bloques.map(([desde, hasta], bi) => {
     const seg = _movilRuta.slice(desde, hasta);
     const listas = seg.filter((p) => p.estado === 'visitada').length;
+    const nextIdx = _movilRuta.findIndex((q) => q && q.estado !== 'visitada');
     const filas = seg.map((p, i) => {
       const gi = desde + i;
       const ok = p.estado === 'visitada';
+      const esSiguiente = gi === nextIdx;
       return `
-      <div style="display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid var(--linea); ${ok ? 'opacity:.5;' : ''}">
-        <div style="width:32px; height:32px; border-radius:50%; flex-shrink:0; background:${ok ? '#16a34a' : 'var(--violeta-suave)'}; color:${ok ? '#fff' : '#9d8fff'}; display:grid; place-items:center; font-weight:700; font-size:.8rem;">${ok ? '✓' : movilLetra(i)}</div>
+      <div style="display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid var(--linea); ${ok ? 'opacity:.5;' : (esSiguiente ? '' : 'opacity:.65;')}">
+        <div style="width:32px; height:32px; border-radius:50%; flex-shrink:0; background:${ok ? '#16a34a' : (esSiguiente ? 'var(--violeta)' : 'var(--violeta-suave)')}; color:${ok ? '#fff' : (esSiguiente ? '#fff' : '#9d8fff')}; display:grid; place-items:center; font-weight:700; font-size:.8rem;">${ok ? '✓' : movilLetra(i)}</div>
         <div style="flex:1; min-width:0;">
-          <div style="font-weight:700; font-size:.88rem; ${ok ? 'text-decoration:line-through;' : ''}">${(p.nombre || 'Punto').replace(/</g,'&lt;')}</div>
+          <div style="font-weight:700; font-size:.88rem; ${ok ? 'text-decoration:line-through;' : ''}">${(p.nombre || 'Punto').replace(/</g,'&lt;')} ${esSiguiente ? '<span style="font-size:.6rem; color:var(--violeta); font-weight:700;">← SIGUIENTE</span>' : ''}</div>
         </div>
-        ${!ok ? `<button onclick="movilVisitarParada(${gi})" title="Marcar visitada" style="width:42px; height:42px; border-radius:12px; border:none; background:#16a34a; color:#fff; font-size:1.05rem; cursor:pointer;">✓</button>` : ''}
+        ${!ok ? (esSiguiente
+          ? `<button onclick="movilVisitarParada(${gi})" title="Marcar visitada" style="width:42px; height:42px; border-radius:12px; border:none; background:#16a34a; color:#fff; font-size:1.05rem; cursor:pointer;">✓</button>`
+          : `<span title="Se desbloquea al completar la anterior" style="width:42px; height:42px; border-radius:12px; display:grid; place-items:center; color:var(--gris); font-size:1rem;">🔒</span>`) : ''}
       </div>`;
     }).join('');
     return `
