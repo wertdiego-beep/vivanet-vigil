@@ -4753,24 +4753,47 @@ function renderMovilRecorrido(d) {
   const ptxt = document.getElementById('movilProgresoTxt'); if (ptxt) ptxt.textContent = total ? hechas + ' / ' + total + ' visitadas' : '';
   movilResumen(document.querySelectorAll('#movilDespachos > div').length);
   if (!total) { cont.innerHTML = '<div class="evento"><div><strong>Sin recorrido para hoy.</strong><small>La central arma tu ruta del día.</small></div></div>'; return; }
-  const btnNav = total >= 2 ? `<button onclick="movilIniciarRecorrido()" style="width:100%; margin-bottom:14px; padding:16px; border-radius:14px; border:none; background:linear-gradient(135deg,#5b4bdb,#7c6cff); color:#fff; font-weight:700; font-size:1.02rem; cursor:pointer;">🧭 INICIAR RECORRIDO</button>` : '';
-  cont.innerHTML = btnNav + _movilRuta.map((p, i) => {
-    const ok = p.estado === 'visitada';
+  // Dividir en RECORRIDOS de hasta 10 puntos: Recorrido 1, Recorrido 2…
+  const bloques = [];
+  for (let b = 0; b < total; b += MOVIL_MAX_STOPS) bloques.push([b, Math.min(b + MOVIL_MAX_STOPS, total)]);
+  cont.innerHTML = bloques.map(([desde, hasta], bi) => {
+    const seg = _movilRuta.slice(desde, hasta);
+    const listas = seg.filter((p) => p.estado === 'visitada').length;
+    const filas = seg.map((p, i) => {
+      const gi = desde + i;
+      const ok = p.estado === 'visitada';
+      return `
+      <div style="display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid var(--linea); ${ok ? 'opacity:.5;' : ''}">
+        <div style="width:32px; height:32px; border-radius:50%; flex-shrink:0; background:${ok ? '#16a34a' : 'var(--violeta-suave)'}; color:${ok ? '#fff' : '#9d8fff'}; display:grid; place-items:center; font-weight:700; font-size:.8rem;">${ok ? '✓' : movilLetra(i)}</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:700; font-size:.88rem; ${ok ? 'text-decoration:line-through;' : ''}">${(p.nombre || 'Punto').replace(/</g,'&lt;')}</div>
+        </div>
+        ${!ok ? `<button onclick="movilVisitarParada(${gi})" title="Marcar visitada" style="width:42px; height:42px; border-radius:12px; border:none; background:#16a34a; color:#fff; font-size:1.05rem; cursor:pointer;">✓</button>` : ''}
+      </div>`;
+    }).join('');
     return `
-    <div style="display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--linea); ${ok ? 'opacity:.55;' : ''}">
-      <div style="width:34px; height:34px; border-radius:50%; flex-shrink:0; background:${ok ? '#16a34a' : 'var(--violeta-suave)'}; color:${ok ? '#fff' : '#9d8fff'}; display:grid; place-items:center; font-weight:700;">${ok ? '✓' : i + 1}</div>
-      <div style="flex:1; min-width:0;">
-        <div style="font-weight:700; font-size:.9rem; ${ok ? 'text-decoration:line-through;' : ''}">${(p.nombre || 'Punto ' + (i + 1)).replace(/</g,'&lt;')}</div>
-        ${p.direccion ? `<div style="font-size:.72rem; color:var(--gris); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.direccion.replace(/</g,'&lt;')}</div>` : ''}
+    <div style="border:1px solid var(--linea); border-radius:16px; padding:14px; margin-bottom:14px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <strong style="font-size:1rem;">📍 Recorrido ${bi + 1}</strong>
+        <span style="font-size:.74rem; color:var(--gris);">${listas} / ${seg.length} listas</span>
       </div>
-      ${!ok ? `<button onclick='movilNav(${JSON.stringify(p.lat && p.lng ? { lat: p.lat, lng: p.lng } : null)}, ${JSON.stringify(p.direccion || "")})' title="Navegar" style="width:42px; height:42px; border-radius:12px; border:1px solid var(--linea); background:transparent; color:var(--violeta); font-size:1.05rem; cursor:pointer;">🧭</button>
-      <button onclick="movilVisitarParada(${i})" title="Marcar visitada" style="width:42px; height:42px; border-radius:12px; border:none; background:#16a34a; color:#fff; font-size:1.05rem; cursor:pointer;">✓</button>` : ''}
+      <button onclick="movilIniciarRecorrido(${desde})" style="width:100%; padding:15px; border-radius:13px; border:none; background:linear-gradient(135deg,#5b4bdb,#7c6cff); color:#fff; font-weight:700; font-size:1rem; cursor:pointer; margin-bottom:6px;">🧭 INICIAR RECORRIDO ${bi + 1}</button>
+      <button onclick="movilReportarIncidente(${bi + 1})" style="width:100%; padding:12px; border-radius:13px; border:1.5px solid #e0a020; background:rgba(224,160,32,.1); color:#e0a020; font-weight:700; cursor:pointer; margin-bottom:8px;">🚨 Reportar incidente en este recorrido</button>
+      ${filas}
     </div>`;
   }).join('');
 }
-function movilIniciarRecorrido() {
+function movilReportarIncidente(nRec) {
+  const nota = prompt('¿Qué pasó? Describe el incidente (Recorrido ' + nRec + '):') || '';
+  if (!nota.trim()) return;
+  const conFoto = confirm('¿Adjuntar una foto? Aceptar = sí, Cancelar = enviar solo el texto');
+  const texto = '[Recorrido ' + nRec + '] ' + nota.trim();
+  if (conFoto) { _movilFotoCtx = { tipo: 'incidente', texto }; const inp = document.getElementById('movilFotoInput'); inp.value = ''; inp.click(); }
+  else saFetch({ accion: 'movil-incidente', texto }).then((d) => { alert(d.ok ? '✅ Incidente enviado a la central.' : (d.error || 'No se pudo enviar.')); });
+}
+function movilIniciarRecorrido(desde) {
   if (!_movilRuta || _movilRuta.length < 2) return;
-  _movilChunk = 0;
+  _movilChunk = desde || 0;
   document.getElementById('movilNavOverlay').style.display = 'block';
   movilRenderPaso();
 }
@@ -4793,7 +4816,6 @@ function movilNavegarTodo() {
     window.open(web, '_blank');
   }
 }
-function movilChunkSig() { const total = _movilRuta.length; const fin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total); if (fin < total) { _movilChunk = fin - 1; movilRenderPaso(); } }
 function movilLetra(i) { return String.fromCharCode(65 + i); }
 function movilRenderPaso() {
   const body = document.getElementById('movilNavBody'); if (!body) return;
@@ -4816,15 +4838,12 @@ function movilRenderPaso() {
   }).join('');
   body.innerHTML = `
     <div style="background:var(--blanco); border:1px solid var(--linea); border-radius:16px; padding:16px; margin-bottom:16px;">
-      <div style="font-size:.78rem; color:var(--gris); margin-bottom:8px;">${hayMas || _movilChunk > 0 ? `Parte del recorrido: puntos ${_movilChunk + 1} al ${chunkFin} (de ${total})` : `Tu recorrido de hoy: ${total} puntos, en este orden`}</div>
+      <div style="font-size:.78rem; color:var(--gris); margin-bottom:8px;">📍 Recorrido ${Math.floor(_movilChunk / MOVIL_MAX_STOPS) + 1} · ${seg.length} puntos, en este orden</div>
       ${lista}
     </div>
     <button onclick="movilNavegarTodo()" style="width:100%; padding:18px; border-radius:14px; border:none; background:linear-gradient(135deg,#16a34a,#22c55e); color:#fff; font-weight:700; font-size:1.1rem; cursor:pointer;">🧭 ABRIR RUTA EN GOOGLE MAPS</button>
     <p style="text-align:center; font-size:.78rem; color:var(--gris); margin:10px 0 0; line-height:1.5;">Las letras (A, B, C…) son las mismas que verás en Google Maps.<br>Solo toca <b>Iniciar</b> allá y sigue la voz.</p>
-    ${hayMas ? `<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--linea); text-align:center;">
-      <p style="font-size:.78rem; color:var(--gris); margin:0 0 8px;">Cuando llegues al punto ${movilLetra(seg.length - 1)} (el rojo), vuelve a esta pantalla y toca:</p>
-      <button onclick="movilChunkSig()" style="width:100%; padding:13px; border-radius:12px; border:1px solid var(--violeta); background:var(--violeta-suave); color:#9d8fff; font-weight:700; cursor:pointer;">Cargar los puntos que faltan ▶</button>
-    </div>` : ''}`;
+    ${hayMas ? `<p style="text-align:center; font-size:.76rem; color:var(--gris); margin:14px 0 0;">Al terminar, vuelve a la app e inicia el <b>Recorrido ${Math.floor(_movilChunk / MOVIL_MAX_STOPS) + 2}</b>.</p>` : ''}`;
 }
 function movilVisitarParada(idx) {
   const nota = prompt('Nota de la parada (opcional):') || '';
@@ -4839,7 +4858,8 @@ function movilVisitarParada(idx) {
     const file = this.files[0]; if (!file || !_movilFotoCtx) return;
     const ctx = _movilFotoCtx; _movilFotoCtx = null;
     comprimirImagen(file, (b64) => {
-      if (ctx.tipo === 'despacho') saFetch({ accion: 'movil-reporte', clienteUid: ctx.clienteUid, alertaId: ctx.alertaId, nota: ctx.nota, foto: b64 }).then((d) => { if (d.ok) { alert('Documentado y enviado a la central.'); cargarPanelMovil(); } else alert(d.error || 'Error'); });
+      if (ctx.tipo === 'incidente') saFetch({ accion: 'movil-incidente', texto: ctx.texto, foto: b64 }).then((d) => { alert(d.ok ? '✅ Incidente con foto enviado a la central.' : (d.error || 'Error')); });
+      else if (ctx.tipo === 'despacho') saFetch({ accion: 'movil-reporte', clienteUid: ctx.clienteUid, alertaId: ctx.alertaId, nota: ctx.nota, foto: b64 }).then((d) => { if (d.ok) { alert('Documentado y enviado a la central.'); cargarPanelMovil(); } else alert(d.error || 'Error'); });
       else saFetch({ accion: 'movil-parada', idx: ctx.idx, estado: 'visitada', nota: ctx.nota, foto: b64 }).then((d) => { if (d.ok) cargarPanelMovil(); else alert(d.error || 'Error'); });
     });
   });
