@@ -1147,6 +1147,7 @@ textarea{min-height:96px;resize:vertical}
               </div>
               <div id="recRutaLista" style="margin:4px 0 12px;"><small style="color:var(--gris);">Toca los puntos del mapa en el orden que debe recorrer el móvil.</small></div>
               <button class="btn-full" style="margin:0;" onclick="recGuardar()">Guardar recorrido del día</button>
+              <button style="margin:10px 0 0; width:100%; padding:12px; border-radius:14px; border:1px solid rgba(229,52,75,.5); background:transparent; color:var(--rojo); font-weight:700; font-size:.85rem; cursor:pointer;" onclick="recCancelar()">🗑 Cancelar el recorrido asignado a este móvil</button>
               <div class="error-msg" id="recInfo"></div>
             </div>
           </section>
@@ -3986,6 +3987,16 @@ function recGuardar() {
   const paradas = recRuta.map((id) => { const m = recMarkers[id]; return { clienteUid: id.indexOf('wp_') === 0 ? '' : id, nombre: (m.cliente.local || m.cliente.nombre || 'Punto de ronda'), direccion: m.cliente.direccion || '', lat: m.coords.lat, lng: m.coords.lng }; });
   saFetch({ accion: 'recorrido-set', movilUid: mUid, paradas }).then((d) => {
     if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? `✅ Recorrido guardado con ${d.total} paradas en orden. El móvil ya lo ve.` : (d.error || 'No se pudo guardar.'); }
+  }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
+}
+function recCancelar() {
+  const sel = document.getElementById('recMovilSel'); const info = document.getElementById('recInfo');
+  const mUid = sel ? sel.value : '';
+  if (!mUid) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Elige el móvil al que quieres cancelarle el recorrido.'; } return; }
+  const nom = sel.options[sel.selectedIndex]?.textContent || 'este móvil';
+  if (!confirm('¿Cancelar el recorrido del día de ' + nom + '? El móvil dejará de verlo en su app.')) return;
+  saFetch({ accion: 'recorrido-cancelar', movilUid: mUid }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? '✅ Recorrido cancelado. El móvil ya no lo ve en su app.' : (d.error || 'No se pudo cancelar.'); }
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
 function recDist(a, b) { const dx = a.lat - b.lat, dy = a.lng - b.lng; return dx * dx + dy * dy; }
