@@ -1181,6 +1181,7 @@ textarea{min-height:96px;resize:vertical}
                 <div style="flex:1;"><label style="font-size:.72rem; color:var(--gris);">Hora de entrada</label><input type="time" id="asistEnt" value="09:00"></div>
                 <div style="flex:1;"><label style="font-size:.72rem; color:var(--gris);">Hora de salida</label><input type="time" id="asistSal" value="18:00"></div>
               </div>
+              <label style="display:flex; gap:9px; align-items:center; margin:2px 0 10px; font-size:.84rem;"><input type="checkbox" id="asistBloqueoChk" checked style="width:auto; margin:0;"> 🔒 Bloquear la app hasta que marque asistencia <span style="color:var(--gris); font-size:.72rem;">(desmárcalo para dejarla entrar sin registrarse)</span></label>
               <button class="btn-full" style="margin:0;" onclick="asistGuardarCfg()">Guardar punto y horario</button>
               <div class="error-msg" id="asistCfgInfo"></div>
             </div>
@@ -3583,6 +3584,7 @@ function asistCargarPersona() {
     document.getElementById('asistLugar').value = p.config.lugar || '';
     if (p.config.entrada) document.getElementById('asistEnt').value = p.config.entrada;
     if (p.config.salida) document.getElementById('asistSal').value = p.config.salida;
+    document.getElementById('asistBloqueoChk').checked = p.config.bloqueo !== false;
   }
 }
 function asistGuardarCfg() {
@@ -3591,7 +3593,8 @@ function asistGuardarCfg() {
   if (!uid) { info.style.color = 'var(--rojo)'; info.textContent = 'Elige a la persona.'; return; }
   if (!asistCoords) { info.style.color = 'var(--rojo)'; info.textContent = 'Toca en el mapa el punto de trabajo.'; return; }
   saFetch({ accion: 'asist-config-set', personalUid: uid, lat: asistCoords.lat, lng: asistCoords.lng,
-    lugar: document.getElementById('asistLugar').value, entrada: document.getElementById('asistEnt').value, salida: document.getElementById('asistSal').value
+    lugar: document.getElementById('asistLugar').value, entrada: document.getElementById('asistEnt').value, salida: document.getElementById('asistSal').value,
+    bloqueo: document.getElementById('asistBloqueoChk').checked
   }).then((d) => {
     info.style.color = d.ok ? '#00C776' : 'var(--rojo)';
     info.textContent = d.ok ? '✅ Guardado. La persona ya puede marcar asistencia en ese punto.' : (d.error || 'Error');
@@ -4928,6 +4931,7 @@ async function asistLockInit() {
     const d = await saFetch({ accion: 'asist-mi-config' });
     if (!d || !d.ok) return;                       // sin rol, o función cortada: no aplica
     if (d.config.lat == null) return;              // sin punto asignado: no aplica
+    if (d.config.bloqueo === false) return;        // el panel permitió entrar sin marcar
     if (d.hoy && d.hoy.entradaHora) return;        // ya marcó hoy: app libre
     asistLockShow(d.config);
   } catch (e) {}
