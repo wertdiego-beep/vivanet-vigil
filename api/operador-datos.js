@@ -403,7 +403,7 @@ export default async function handler(req, res) {
         }).map((d) => {
           const id = d.name.split('/').pop();
           const praw = d.fields?.permisosOp?.mapValue?.fields || {};
-          const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true };
+          const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true };
           Object.keys(praw).forEach((k) => { permisos[k] = praw[k].booleanValue !== false; });
           return {
             uid: id,
@@ -465,7 +465,7 @@ export default async function handler(req, res) {
           return;
         }
         const praw = docU.fields?.permisosOp?.mapValue?.fields || {};
-        const permisosDest = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true };
+        const permisosDest = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true };
         Object.keys(praw).forEach((k) => { permisosDest[k] = praw[k].booleanValue !== false; });
         res.status(200).json({ ok: true, permisos: permisosDest, empresa: docU.fields?.operadorDe?.stringValue || docU.fields?.empresaId?.stringValue || 'sos360-la-serena' });
         return;
@@ -917,7 +917,7 @@ export default async function handler(req, res) {
     if (accion === 'emp-roles-permisos') {
       const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRol !== 'jefe') { res.status(403).json({ error: 'Solo el jefe define los permisos por rol.' }); return; }
-      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales','moviles','asistencia'];
+      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales','moviles','asistencia','operativos','encurso','registro'];
       const ROLES = ['gerente','supervisor','guardia','empleado','tecnico'];
       const empDoc = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       const rpRaw = empDoc.fields?.rolesPermisos?.mapValue?.fields || {};
@@ -929,7 +929,7 @@ export default async function handler(req, res) {
     if (accion === 'emp-roles-permisos-set') {
       const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRol !== 'jefe') { res.status(403).json({ error: 'Solo el jefe define los permisos por rol.' }); return; }
-      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales','moviles','asistencia'];
+      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales','moviles','asistencia','operativos','encurso','registro'];
       const ROLES = ['gerente','supervisor','guardia','empleado','tecnico'];
       const rolD = (req.body.rol || '').trim();
       const key = (req.body.key || '').trim();
@@ -1084,6 +1084,7 @@ export default async function handler(req, res) {
       // La central despacha un móvil con una MISIÓN: objetivo + descripción + lugar.
       const prawMi = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
       if (!esSA && prawMi.moviles?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a la gestión de móviles.' }); return; }
+      if (!esSA && prawMi.operativos?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso al despacho de operativos.' }); return; }
       const mUid = (req.body.movilUid || '').trim();
       const titulo = String(req.body.titulo || '').trim().slice(0, 120);
       const descripcion = String(req.body.descripcion || '').trim().slice(0, 600);
@@ -1112,6 +1113,8 @@ export default async function handler(req, res) {
     if (accion === 'mision-listar') {
       const prawMl = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
       if (!esSA && prawMl.moviles?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a la gestión de móviles.' }); return; }
+      if (!esSA && req.body.registro && prawMl.registro?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso al registro de operativos.' }); return; }
+      if (!esSA && !req.body.registro && prawMl.encurso?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso al seguimiento de operativos.' }); return; }
       const docs = await fetch(`${base0}/empresas/${empresaOperador}/misiones?pageSize=100`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       let misiones = (docs.documents || []).map((dd) => ({
         id: dd.name.split('/').pop(),
@@ -1141,6 +1144,8 @@ export default async function handler(req, res) {
       return;
     }
     if (accion === 'mision-cerrar') {
+      const prawMc = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
+      if (!esSA && prawMc.encurso?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso al seguimiento de operativos.' }); return; }
       const mid = (req.body.misionId || '').trim();
       if (!/^[A-Za-z0-9]+$/.test(mid)) { res.status(400).json({ error: 'Operativo no válido' }); return; }
       const resultado = String(req.body.resultado || '').trim().slice(0, 600);
@@ -1369,7 +1374,7 @@ export default async function handler(req, res) {
     // Permisos del operador: (1) plantilla por rol que define el jefe (pirámide) y
     // (2) cortes individuales de la plataforma. Se aplica el más restrictivo.
     const praw = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
-    const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true };
+    const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true };
     const miRolE = perfilOp.fields?.rolEmpresa?.stringValue || '';
     if (!esSA && miRolE && miRolE !== 'jefe') {
       try {
