@@ -1090,6 +1090,8 @@ textarea{min-height:96px;resize:vertical}
                 <input id="espNueva" placeholder="Ej: Electricista, Rescatista, Paramédico…" style="flex:1; min-width:180px; margin:0;" onkeydown="if(event.key==='Enter'){event.preventDefault(); espAgregar();}">
                 <button onclick="espAgregar()" style="width:auto; padding:9px 16px; border-radius:99px; border:none; background:var(--violeta); color:#fff; font-weight:700; font-size:.78rem; cursor:pointer;">Agregar</button>
               </div>
+              <div style="font-size:.7rem; color:var(--gris); margin:10px 0 6px;">💡 O elige de las especialidades más comunes en una municipalidad (toca para agregar):</div>
+              <div id="espSugeridas" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
 
               <div style="font-size:.72rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#9d8fff; margin:16px 0 8px;">👥 Grupos / cuadrillas</div>
               <div id="gruposLista" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;"></div>
@@ -6228,7 +6230,7 @@ function cargarPersonal() {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     _empData.especialidades = d.especialidades || [];
     _empData.grupos = d.grupos || [];
-    renderEspChips(); renderGruposLista();
+    renderEspChips(); renderEspSugeridas(); renderGruposLista();
     if (!d.personal.length) { cont.innerHTML = '<div class="evento"><div><strong>Aún no tienes personal con cargo.</strong><small>Cuando alguien se una con tu código de empresa, aparecerá aquí para asignarle un rol.</small></div></div>'; return; }
     const esc = (x) => String(x || '').replace(/</g, '&lt;');
     const grupoDe = (gid) => _empData.grupos.find((g) => g.id === gid);
@@ -6265,6 +6267,28 @@ function cargarPersonal() {
     }).join('');
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
+const ESP_SUGERIDAS = [
+  'Electricista', 'Gásfiter / Plomero', 'Carpintero', 'Albañil / Maestro', 'Soldador', 'Pintor',
+  'Operador de maquinaria', 'Chofer / Conductor', 'Rescatista', 'Rescatista acuático', 'Paramédico',
+  'Enfermero/a', 'Médico', 'Bombero', 'Buzo', 'Podador / Jardinero', 'Recolector de residuos',
+  'Barredor / Aseo', 'Guardia de seguridad', 'Vigilante nocturno', 'Inspector municipal',
+  'Fiscalizador', 'Asistente social', 'Psicólogo/a', 'Veterinario/a', 'Manejo animal',
+  'Topógrafo', 'Ingeniero en obras', 'Técnico eléctrico', 'Técnico en telecomunicaciones',
+  'Motorista / Motobomba', 'Señalética / Tránsito', 'Alumbrado público', 'Áreas verdes',
+  'Emergencias / Protección civil', 'Logística / Bodega', 'Administrativo/a'
+];
+function renderEspSugeridas() {
+  const c = document.getElementById('espSugeridas'); if (!c) return;
+  const esc = (x) => String(x || '').replace(/</g, '&lt;');
+  const disponibles = ESP_SUGERIDAS.filter((e) => !(_empData.especialidades || []).includes(e));
+  c.innerHTML = disponibles.length ? disponibles.map((e) => `<button onclick="espAgregarNombre('${esc(e).replace(/'/g,"\\'")}')" style="font-size:.72rem; padding:5px 12px; border-radius:99px; border:1px dashed var(--linea); background:transparent; color:var(--tinta); cursor:pointer;">+ ${esc(e)}</button>`).join('') : '<small style="color:var(--gris);">Ya agregaste todas las sugeridas.</small>';
+}
+function espAgregarNombre(nombre) {
+  const v = String(nombre || '').trim();
+  if (!v || (_empData.especialidades || []).includes(v)) return;
+  const nueva = [..._empData.especialidades, v];
+  saFetch({ accion: 'emp-especialidades-set', especialidades: nueva }).then((d) => { if (d.ok) { _empData.especialidades = d.especialidades || nueva; renderEspChips(); renderEspSugeridas(); cargarPersonal(); } else alert(d.error || 'Error'); });
+}
 function renderEspChips() {
   const c = document.getElementById('espChips'); if (!c) return;
   const esc = (x) => String(x || '').replace(/</g, '&lt;');
@@ -6280,11 +6304,11 @@ function espAgregar() {
   if (!v) return;
   if (_empData.especialidades.includes(v)) { inp.value = ''; return; }
   const nueva = [..._empData.especialidades, v];
-  saFetch({ accion: 'emp-especialidades-set', especialidades: nueva }).then((d) => { if (d.ok) { _empData.especialidades = d.especialidades || nueva; inp.value = ''; renderEspChips(); cargarPersonal(); } else alert(d.error || 'Error'); });
+  saFetch({ accion: 'emp-especialidades-set', especialidades: nueva }).then((d) => { if (d.ok) { _empData.especialidades = d.especialidades || nueva; inp.value = ''; renderEspChips(); renderEspSugeridas(); cargarPersonal(); } else alert(d.error || 'Error'); });
 }
 function espQuitar(nombre) {
   const nueva = _empData.especialidades.filter((e) => e !== nombre);
-  saFetch({ accion: 'emp-especialidades-set', especialidades: nueva }).then((d) => { if (d.ok) { _empData.especialidades = d.especialidades || nueva; renderEspChips(); cargarPersonal(); } });
+  saFetch({ accion: 'emp-especialidades-set', especialidades: nueva }).then((d) => { if (d.ok) { _empData.especialidades = d.especialidades || nueva; renderEspChips(); renderEspSugeridas(); cargarPersonal(); } });
 }
 function grpCrear() {
   const inp = document.getElementById('grpNombre'); const nombre = (inp?.value || '').trim();
