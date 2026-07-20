@@ -1186,7 +1186,12 @@ textarea{min-height:96px;resize:vertical}
               <div class="error-msg" id="asistCfgInfo"></div>
             </div>
             <div class="card">
-              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>📋 Asistencia de hoy</span><button onclick="asistPanelListar()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
+              <div class="card-title">📋 Registro de asistencia</div>
+              <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+                <input type="date" id="asistFechaSel" style="margin:0; width:auto;">
+                <button class="btn-full" style="width:auto; margin:0; padding:9px 16px;" onclick="asistPanelListar(document.getElementById('asistFechaSel').value)">🔍 Buscar fecha</button>
+                <button onclick="document.getElementById('asistFechaSel').value='';asistPanelListar()" style="padding:9px 14px; border-radius:12px; border:1px solid var(--linea); background:transparent; color:var(--gris); cursor:pointer; font-size:.78rem;">Hoy</button>
+              </div>
               <div id="asistLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
             </div>
           </section>
@@ -1215,6 +1220,16 @@ textarea{min-height:96px;resize:vertical}
               <textarea id="saCategoriasTxt" style="min-height:110px; font-size:.85rem;"></textarea>
               <button class="btn-full" onclick="saGuardarCategorias()">Guardar categorías</button>
               <div class="error-msg" id="saCatInfo"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">🕒 Registros de asistencia (todas las empresas)</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Consulta el registro de asistencia de cualquier empresa por fecha: entradas, atrasos y jornadas. Solo lectura.</p>
+              <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+                <select id="saAsistEmpresa" style="margin:0; width:auto; min-width:180px;"></select>
+                <input type="date" id="saAsistFecha" style="margin:0; width:auto;">
+                <button class="btn-full" style="width:auto; margin:0; padding:9px 16px;" onclick="saAsistBuscar()">🔍 Buscar</button>
+              </div>
+              <div id="saAsistLista"><small style="color:var(--gris);">Elige empresa y fecha, y toca Buscar.</small></div>
             </div>
             <div class="card" style="border:1px solid var(--violeta);">
               <div class="card-title">🏛 Cómo funciona la jerarquía de permisos</div>
@@ -3525,8 +3540,8 @@ function asistPanelInit() {
   setTimeout(() => { try { asistMapaL.invalidateSize(); } catch (e) {} }, 250);
   asistPanelListar();
 }
-function asistPanelListar() {
-  saFetch({ accion: 'asist-listar' }).then((d) => {
+function asistPanelListar(fecha) {
+  saFetch({ accion: 'asist-listar', fecha: fecha || undefined }).then((d) => {
     if (!d.ok) { const c = document.getElementById('asistLista'); if (c) c.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     _asistData = d;
     const sel = document.getElementById('asistPersonaSel');
@@ -3575,6 +3590,31 @@ async function asistBuscarLugar() {
     asistMarker.bindPopup('📍 ' + nombreCorto).openPopup();
     if (info) { info.style.color = '#00C776'; info.innerHTML = '✅ Encontrado: <b>' + nombreCorto.replace(/</g,'&lt;') + '</b>. El pin quedó puesto; muévelo tocando el mapa si necesitas afinar.'; }
   } catch (e) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error buscando la dirección.'; } }
+}
+function saAsistBuscar() {
+  const emp = document.getElementById('saAsistEmpresa').value;
+  const fecha = document.getElementById('saAsistFecha').value;
+  const cont = document.getElementById('saAsistLista'); if (!cont) return;
+  cont.innerHTML = '<div class="evento"><div><strong>Buscando…</strong></div></div>';
+  saFetch({ accion: 'asist-listar', empresaIdA: emp, fecha: fecha || undefined }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    if (!d.personal.length) { cont.innerHTML = '<div class="evento"><div><strong>Esa empresa no tiene personal con cargo.</strong></div></div>'; return; }
+    cont.innerHTML = `<div style="font-size:.74rem; color:var(--gris); margin-bottom:6px;">Fecha: ${d.fecha}</div>` + d.personal.map((p) => {
+      const r = p.registro, tieneCfg = p.config && p.config.lat != null;
+      let estado;
+      if (!tieneCfg) estado = '<span style="color:var(--gris); font-size:.74rem;">Sin punto asignado</span>';
+      else if (!r || !r.entradaHora) estado = '<span style="color:#e5344b; font-size:.74rem; font-weight:700;">✗ Sin entrada</span>';
+      else {
+        const ent = `Entrada ${r.entradaHora}` + (r.atrasoMin > 0 ? ` <b style="color:#e5344b;">(+${r.atrasoMin} min)</b>` : ' <b style="color:#16a34a;">✓</b>');
+        const sal = r.salidaHora ? ` · Salida ${r.salidaHora}` + (r.jornadaOk === false ? ' <b style="color:#e5344b;">(antes)</b>' : ' <b style="color:#16a34a;">✓</b>') : ' · sin salida';
+        estado = `<span style="font-size:.76rem;">${ent}${sal}</span>`;
+      }
+      return `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--linea);">
+        <strong style="flex:1; font-size:.84rem;">${p.nombre.replace(/</g,'&lt;')} <span style="font-size:.6rem; color:#9d8fff;">${p.rol.toUpperCase()}</span></strong>
+        ${estado}
+      </div>`;
+    }).join('');
+  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
 function asistCargarPersona() {
   const uid = document.getElementById('asistPersonaSel').value;
@@ -5283,6 +5323,8 @@ function cargarPlataforma() {
     window._saEmpresas = d.empresas;
     const sel = document.getElementById('saFnEmpresa');
     if (sel) { const prev = sel.value; sel.innerHTML = d.empresas.map((e) => `<option value="${e.id}">${e.nombre}</option>`).join(''); if (prev) sel.value = prev; }
+    const selA = document.getElementById('saAsistEmpresa');
+    if (selA) { const prevA = selA.value; selA.innerHTML = d.empresas.map((e) => `<option value="${e.id}">🏢 ${e.nombre}</option>`).join(''); if (prevA) selA.value = prevA; }
     saCargarFunciones();
     cont.innerHTML = d.empresas.map((e) => `
       <div style="border:1px solid ${e.estado === 'activa' ? 'var(--linea)' : 'rgba(229,52,75,.5)'}; border-radius:14px; padding:14px; text-align:center; position:relative;">
