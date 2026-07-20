@@ -792,7 +792,8 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="plataforma" id="navPlataforma" style="display:none"><span>🏢</span><em>Plataforma</em></button>
         <button class="op-nav" data-opview="credenciales" id="navCredenciales" style="display:none"><span>🔒</span><em>Credenciales</em></button>
         <button class="op-nav" data-opview="roles" id="navRoles" style="display:none"><span>🔺</span><em>Roles</em></button>
-        <button class="op-nav" data-opview="recorridos" id="navRecorridos" style="display:none"><span>🚨</span><em>Recorridos y operativos</em></button>
+        <button class="op-nav" data-opview="recorridos" id="navRecorridos" style="display:none"><span>🗺️</span><em>Recorridos</em></button>
+        <button class="op-nav" data-opview="operativos" id="navOperativos"><span>🚨</span><em>Operativos</em></button>
         <button class="op-nav" data-opview="chatmov" id="navChatMov"><span>💬</span><em>Móviles</em></button>
         <button class="op-nav" data-opview="asistencia" id="navAsistencia" style="display:none"><span>🕒</span><em>Asistencia</em></button>
         <div class="op-side-foot">
@@ -1119,36 +1120,6 @@ textarea{min-height:96px;resize:vertical}
           </section>
           <!-- ── Vista/Módulo: Recorridos de móviles (gerente/jefe) ── -->
           <section class="op-view" id="op-view-recorridos">
-
-            <div class="card">
-              <div class="card-title">🚨 Despachar operativo</div>
-              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Llega un aviso (ej: de la municipalidad) → eliges el móvil según su tipo, defines el objetivo y lo despachas. El móvil recibe el operativo al instante y reporta desde terreno con fotos.</p>
-              <label style="font-size:.72rem; color:var(--gris);">Móvil (con su tipo)</label>
-              <select id="misMovilSel" style="margin:4px 0 8px;"><option value="">— Elige el móvil —</option></select>
-              <label style="font-size:.72rem; color:var(--gris);">Objetivo del operativo</label>
-              <input type="text" id="misTitulo" placeholder="Ej: Entregar medicamentos a adulto mayor aislado" maxlength="120" style="margin:4px 0 8px;">
-              <label style="font-size:.72rem; color:var(--gris);">Descripción / instrucciones</label>
-              <textarea id="misDesc" placeholder="Ej: Sector anegado por lluvia. Familia González, 2 adultos mayores. Llevar insulina y verificar estado de la vivienda. Reportar con fotos." maxlength="600" style="min-height:70px; margin:4px 0 8px;"></textarea>
-              <label style="font-size:.72rem; color:var(--gris);">Dirección del lugar</label>
-              <div style="display:flex; gap:7px; margin:4px 0 4px;">
-                <input type="text" id="misDir" placeholder="Ej: Los Aromos 1250, La Serena" style="margin:0; flex:1;" onkeydown="if(event.key==='Enter')misBuscarDir()">
-                <button class="btn-full" style="width:auto; margin:0; padding:9px 14px;" onclick="misBuscarDir()">📍 Ubicar</button>
-              </div>
-              <div id="misDirInfo" style="font-size:.72rem; color:var(--gris); margin-bottom:10px;"></div>
-              <button class="btn-full" style="margin:0; background:var(--rojo); font-size:1rem; padding:14px;" onclick="misionDespachar()">🚨 DESPACHAR MÓVIL</button>
-              <div class="error-msg" id="misInfo"></div>
-            </div>
-            <div class="card">
-              <div class="card-title">🚐 Tipos de móvil</div>
-              <p style="color:var(--gris); font-size:.76rem; margin-bottom:8px;">Define qué es cada móvil para despachar el correcto según la emergencia.</p>
-              <div id="misTiposLista"><small style="color:var(--gris);">Cargando móviles…</small></div>
-            </div>
-            <div class="card">
-              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>📡 Operativos en curso y reportes de terreno</span><button onclick="misionListar()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
-              <div id="misLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
-            </div>
-          
-
             <div class="card">
               <div class="card-title">🗺 Mandar recorrido a un móvil</div>
               <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Como gerente de seguridad, arma la ruta del día en el mapa: elige el móvil, toca los puntos en el orden que debe recorrer y guárdalo. El móvil lo ve al instante en su app.</p>
@@ -1194,6 +1165,37 @@ textarea{min-height:96px;resize:vertical}
                 <input type="file" id="chatMovFotoInput" accept="image/*" style="display:none;">
               </div>
             </div>
+          </section>
+          <!-- ── Vista: Operativos (despacho de emergencia) ── -->
+          <section class="op-view" id="op-view-operativos">
+            <div class="card">
+              <div class="card-title">🚨 Despachar operativo</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Llega un aviso (ej: de la municipalidad) → eliges el móvil según su tipo, defines el objetivo y lo despachas. El móvil recibe el operativo al instante y reporta desde terreno con fotos.</p>
+              <label style="font-size:.72rem; color:var(--gris);">Móvil (con su tipo)</label>
+              <select id="misMovilSel" style="margin:4px 0 8px;"><option value="">— Elige el móvil —</option></select>
+              <label style="font-size:.72rem; color:var(--gris);">Objetivo del operativo</label>
+              <input type="text" id="misTitulo" placeholder="Ej: Entregar medicamentos a adulto mayor aislado" maxlength="120" style="margin:4px 0 8px;">
+              <label style="font-size:.72rem; color:var(--gris);">Descripción / instrucciones</label>
+              <textarea id="misDesc" placeholder="Ej: Sector anegado por lluvia. Familia González, 2 adultos mayores. Llevar insulina y verificar estado de la vivienda. Reportar con fotos." maxlength="600" style="min-height:70px; margin:4px 0 8px;"></textarea>
+              <label style="font-size:.72rem; color:var(--gris);">Dirección del lugar</label>
+              <div style="display:flex; gap:7px; margin:4px 0 4px;">
+                <input type="text" id="misDir" placeholder="Ej: Los Aromos 1250, La Serena" style="margin:0; flex:1;" onkeydown="if(event.key==='Enter')misBuscarDir()">
+                <button class="btn-full" style="width:auto; margin:0; padding:9px 14px;" onclick="misBuscarDir()">📍 Ubicar</button>
+              </div>
+              <div id="misDirInfo" style="font-size:.72rem; color:var(--gris); margin-bottom:10px;"></div>
+              <button class="btn-full" style="margin:0; background:var(--rojo); font-size:1rem; padding:14px;" onclick="misionDespachar()">🚨 DESPACHAR MÓVIL</button>
+              <div class="error-msg" id="misInfo"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">🚐 Tipos de móvil</div>
+              <p style="color:var(--gris); font-size:.76rem; margin-bottom:8px;">Define qué es cada móvil para despachar el correcto según la emergencia.</p>
+              <div id="misTiposLista"><small style="color:var(--gris);">Cargando móviles…</small></div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>📡 Operativos en curso y reportes de terreno</span><button onclick="misionListar()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
+              <div id="misLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+            </div>
+          
           </section>
           <!-- ── Vista: Asistencia del personal (jefe/gerente) ── -->
           <section class="op-view" id="op-view-asistencia">
@@ -1814,8 +1816,8 @@ async function cargarPanelOperador() {
     const ncm = document.getElementById('navChatMov');
     if (ncm) ncm.style.display = data.esSuperadmin ? 'none' : '';
     const nre = document.getElementById('navRecorridos');
-    // Recorridos y misiones: gerente/jefe de cada empresa, y el superadmin como central.
-    if (nre) nre.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
+    // Recorridos: lo manda el gerente de seguridad (o el jefe).
+    if (nre) nre.style.display = (!data.esSuperadmin && (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente')) ? '' : 'none';
     window._esSApanel = data.esSuperadmin === true;
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     aplicarFuncionesApp(data.funciones);
@@ -3701,7 +3703,7 @@ function misionInit() {
   }).catch(() => {});
   misionListar();
   clearInterval(_misTimer);
-  _misTimer = setInterval(() => { if (document.getElementById('op-view-recorridos')?.classList.contains('active')) misionListar(); }, 8000);
+  _misTimer = setInterval(() => { if (document.getElementById('op-view-operativos')?.classList.contains('active')) misionListar(); }, 8000);
 }
 function movilTipoSet(uid, tipo) {
   saFetch({ accion: 'movil-tipo', movilUid: uid, tipo }).then((d) => { if (d.ok) misionInit(); else alert(d.error || 'Error'); });
@@ -5061,7 +5063,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos y operativos', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', operativos:'Operativos y despachos', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -5073,7 +5075,8 @@ const opDescripciones = {
   plataforma: 'Nivel superior: administra las empresas de seguridad, sus planes y funciones. Solo tú lo ves.',
   credenciales: 'Bitácora de todas las cuentas de personal creadas (correo, cargo, autor y fecha). Las claves no se guardan por seguridad.',
   roles: 'Define en pirámide qué ve y hace cada cargo de tu empresa. Solo el jefe.',
-  recorridos: 'Despacha operativos de emergencia y manda a cada móvil su ruta del día.',
+  recorridos: 'Manda a cada móvil su ruta del día. Solo el gerente o el jefe.',
+  operativos: 'Despacha móviles con un objetivo claro y sigue sus reportes de terreno con fotos, en vivo.',
   chatmov: 'Mensajes y fotos con cada móvil de reacción, en ambos sentidos.',
   asistencia: 'Punto de trabajo, horario y marcaje por GPS de cada trabajador. Jefe y gerente.'
 };
@@ -6054,7 +6057,8 @@ function opGo(v){
   if (v==='plataforma') cargarPlataforma();
   if (v==='reportes') cargarReportesPanel();
   if (v==='personal') cargarPersonal();
-  if (v==='recorridos') { recInit(); misionInit(); }
+  if (v==='recorridos') recInit();
+  if (v==='operativos') misionInit();
   if (v==='chatmov') chatMovInit();
   if (v==='asistencia') asistPanelInit();
   if (v==='credenciales') cargarCredencialesModulo();
