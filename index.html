@@ -797,6 +797,8 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="encurso" id="navEnCurso"><span>📡</span><em>En curso</em></button>
         <button class="op-nav" data-opview="regop" id="navRegOp"><span>📜</span><em>Registro</em></button>
         <button class="op-nav" data-opview="informes" id="navInformes"><span>📊</span><em>Informes</em></button>
+        <button class="op-nav" data-opview="llamados" id="navLlamados"><span>📞</span><em>Llamados</em></button>
+        <button class="op-nav" data-opview="tickets" id="navTickets"><span>🎫</span><em>Tickets</em></button>
         <button class="op-nav" data-opview="chatmov" id="navChatMov"><span>💬</span><em>Móviles</em></button>
         <button class="op-nav" data-opview="asistencia" id="navAsistencia" style="display:none"><span>🕒</span><em>Asistencia</em></button>
         <div class="op-side-foot">
@@ -1230,6 +1232,98 @@ textarea{min-height:96px;resize:vertical}
               <p style="color:var(--gris); font-size:.76rem; margin-bottom:10px;">Toda la información importante del día en un solo lugar, ordenada por hora: operativos, alarmas SOS, reportes e incidentes, y asistencia.</p>
               <div id="infResumen" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;"></div>
               <div id="infCuerpo"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+            </div>
+          </section>
+          <!-- ── Vista: Atención de llamados (toma de información ciudadana) ── -->
+          <section class="op-view" id="op-view-llamados">
+            <div class="card">
+              <div class="card-title">📞 Toma de información del llamado</div>
+              <p style="color:var(--gris); font-size:.76rem; margin-bottom:12px;">Ficha de atención ciudadana (basada en la FIBE y la ficha OIRS municipal). Completa los datos mientras atiendes y genera el ticket con folio.</p>
+
+              <div style="font-size:.7rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#9d8fff; margin:2px 0 8px;">1 · Datos del llamado</div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px;">
+                <div><label style="font-size:.72rem; color:var(--gris);">Medio de contacto</label>
+                  <select id="tkMedio" style="margin:3px 0 0;"><option value="telefono">📞 Teléfono</option><option value="presencial">🏢 Presencial</option><option value="radio">📻 Radio</option><option value="redes">💬 Redes sociales</option></select></div>
+                <div><label style="font-size:.72rem; color:var(--gris);">Teléfono de contacto</label>
+                  <input id="tkTelefono" type="tel" placeholder="+56 9 ..." style="margin:3px 0 0;"></div>
+              </div>
+
+              <div style="font-size:.7rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#9d8fff; margin:14px 0 8px;">2 · Quién llama</div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px;">
+                <div style="grid-column:1/-1;"><label style="font-size:.72rem; color:var(--gris);">Nombre completo *</label>
+                  <input id="tkNombre" placeholder="Nombre y apellidos" style="margin:3px 0 0;"></div>
+                <div><label style="font-size:.72rem; color:var(--gris);">RUT (opcional)</label>
+                  <input id="tkRut" placeholder="12.345.678-9" style="margin:3px 0 0;"></div>
+                <div><label style="font-size:.72rem; color:var(--gris);">Edad</label>
+                  <input id="tkEdad" type="number" min="0" max="120" placeholder="—" style="margin:3px 0 0;"></div>
+              </div>
+
+              <div style="font-size:.7rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#9d8fff; margin:14px 0 8px;">3 · Dónde (presiona Enter en la calle para ubicarla en el mapa)</div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px;">
+                <div style="grid-column:1/-1;"><label style="font-size:.72rem; color:var(--gris);">Calle y número *</label>
+                  <input id="tkCalle" placeholder="Ej: Los Aromos 1250" style="margin:3px 0 0;" onkeydown="if(event.key==='Enter'){event.preventDefault(); tkBuscarDir();}"></div>
+                <div><label style="font-size:.72rem; color:var(--gris);">Sector / población</label>
+                  <input id="tkSector" placeholder="Ej: Las Compañías" style="margin:3px 0 0;"></div>
+                <div><label style="font-size:.72rem; color:var(--gris);">Comuna</label>
+                  <select id="tkComuna" style="margin:3px 0 0;"><option>La Serena</option><option>Coquimbo</option><option>Otra</option></select></div>
+                <div style="grid-column:1/-1;"><label style="font-size:.72rem; color:var(--gris);">Referencia (esquina, color de casa, cómo llegar)</label>
+                  <input id="tkReferencia" placeholder="Ej: casa verde frente a la plaza" style="margin:3px 0 0;"></div>
+              </div>
+              <div id="tkDirInfo" style="font-size:.74rem; margin-top:5px;"></div>
+
+              <div style="font-size:.7rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#9d8fff; margin:14px 0 8px;">4 · Personas en el lugar</div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px;">
+                <div><label style="font-size:.72rem; color:var(--gris);">Total personas</label><input id="tkPersonas" type="number" min="0" placeholder="0" style="margin:3px 0 0;"></div>
+                <div><label style="font-size:.72rem; color:var(--gris);">Adultos mayores</label><input id="tkAdultosM" type="number" min="0" placeholder="0" style="margin:3px 0 0;"></div>
+                <div><label style="font-size:.72rem; color:var(--gris);">Niños/as</label><input id="tkNinos" type="number" min="0" placeholder="0" style="margin:3px 0 0;"></div>
+                <div><label style="font-size:.72rem; color:var(--gris);">Con discapacidad / postrados</label><input id="tkDiscapacidad" type="number" min="0" placeholder="0" style="margin:3px 0 0;"></div>
+              </div>
+              <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:.8rem; cursor:pointer;"><input type="checkbox" id="tkElectro" style="width:auto; margin:0;"> ⚡ Hay una persona <strong>electrodependiente</strong> (equipos médicos que necesitan luz)</label>
+
+              <div style="font-size:.7rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#9d8fff; margin:14px 0 8px;">5 · El problema</div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px;">
+                <div><label style="font-size:.72rem; color:var(--gris);">Categoría *</label>
+                  <select id="tkCategoria" style="margin:3px 0 0;">
+                    <option value="">— Elige —</option>
+                    <option value="anegamiento">🌊 Anegamiento / inundación</option>
+                    <option value="vivienda">🏠 Daño en vivienda / techumbre</option>
+                    <option value="luz">⚡ Corte de luz</option>
+                    <option value="agua">💧 Corte o falta de agua</option>
+                    <option value="arbol">🌳 Árbol o poste caído</option>
+                    <option value="albergue">🛏 Damnificado / necesita albergue</option>
+                    <option value="salud">💊 Salud / medicamentos</option>
+                    <option value="rescate">🚨 Rescate / persona atrapada</option>
+                    <option value="seguridad">🛡 Seguridad</option>
+                    <option value="animal">🐕 Animal herido</option>
+                    <option value="otro">📌 Otro</option>
+                  </select></div>
+                <div><label style="font-size:.72rem; color:var(--gris);">Prioridad *</label>
+                  <select id="tkPrioridad" style="margin:3px 0 0;"><option value="alta">🔴 Alta — riesgo para personas</option><option value="media" selected>🟡 Media — daño importante</option><option value="baja">🟢 Baja — puede esperar</option></select></div>
+                <div style="grid-column:1/-1;"><label style="font-size:.72rem; color:var(--gris);">Descripción detallada del problema *</label>
+                  <textarea id="tkDescripcion" rows="3" placeholder="Qué pasó, desde cuándo, qué tan grave está, qué pide la persona…" style="margin:3px 0 0; width:100%; resize:vertical;"></textarea></div>
+              </div>
+
+              <div style="font-size:.7rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#9d8fff; margin:14px 0 8px;">6 · Necesidades inmediatas</div>
+              <div id="tkNecesidades" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+
+              <button class="btn-full" style="margin:16px 0 0;" onclick="tkGenerar()">🎫 Generar ticket</button>
+              <div class="error-msg" id="tkInfo"></div>
+            </div>
+          </section>
+          <!-- ── Vista: Tickets ciudadanos ── -->
+          <section class="op-view" id="op-view-tickets">
+            <div class="card">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;"><span>🎫 Tickets ciudadanos</span>
+                <span style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <select id="tkfEstado" onchange="ticketsListar()" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
+                    <option value="">Todos los estados</option><option value="ingresado">📥 Ingresados</option><option value="en_gestion">🔧 En gestión</option><option value="derivado">📤 Derivados</option><option value="resuelto">✅ Resueltos</option><option value="cerrado">🔒 Cerrados</option>
+                  </select>
+                  <input type="date" id="tkfFecha" onchange="ticketsListar()" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
+                  <button onclick="document.getElementById('tkfFecha').value=''; document.getElementById('tkfEstado').value=''; ticketsListar();" style="width:auto; padding:6px 12px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">Todos</button>
+                </span>
+              </div>
+              <p style="color:var(--gris); font-size:.76rem; margin-bottom:10px;">Todos los problemas que reporta la gente, con su folio, estado y bitácora de gestión.</p>
+              <div id="tkLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
             </div>
           </section>
           <!-- ── Vista: Asistencia del personal (jefe/gerente) ── -->
@@ -1858,6 +1952,10 @@ async function cargarPanelOperador() {
     if (nop) nop.style.display = data.esSuperadmin ? 'none' : '';
     const nec = document.getElementById('navEnCurso');
     if (nec) nec.style.display = data.esSuperadmin ? 'none' : '';
+    const nll = document.getElementById('navLlamados');
+    if (nll) nll.style.display = data.esSuperadmin ? 'none' : '';
+    const ntk = document.getElementById('navTickets');
+    if (ntk) ntk.style.display = data.esSuperadmin ? 'none' : '';
     window._esSApanel = data.esSuperadmin === true;
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     aplicarFuncionesApp(data.funciones);
@@ -3870,6 +3968,103 @@ function informeCargar() {
       + secc('🕒 Asistencia del personal', fAsi, 'Sin marcajes de asistencia este día.');
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
+/* ── 📞 Atención de llamados y 🎫 tickets ciudadanos ── */
+const TK_CATS = { anegamiento: '🌊 Anegamiento / inundación', vivienda: '🏠 Daño en vivienda / techumbre', luz: '⚡ Corte de luz', agua: '💧 Corte o falta de agua', arbol: '🌳 Árbol o poste caído', albergue: '🛏 Damnificado / albergue', salud: '💊 Salud / medicamentos', rescate: '🚨 Rescate / persona atrapada', seguridad: '🛡 Seguridad', animal: '🐕 Animal herido', otro: '📌 Otro' };
+const TK_ESTADOS = { ingresado: ['📥', 'Ingresado', '#9d8fff'], en_gestion: ['🔧', 'En gestión', '#ff9f43'], derivado: ['📤', 'Derivado', '#38bdf8'], resuelto: ['✅', 'Resuelto', '#22aa5a'], cerrado: ['🔒', 'Cerrado', '#8a8fa3'] };
+const TK_PRIO = { alta: ['🔴', '#e5344b'], media: ['🟡', '#ff9f43'], baja: ['🟢', '#22aa5a'] };
+const TK_NECES = ['💧 Agua potable', '🍞 Alimentos', '🧣 Frazadas / abrigo', '🛏 Colchones / camas', '🪵 Materiales / mediagua', '🩺 Atención médica', '🚌 Evacuación / traslado', '🚜 Maquinaria / escombros', '⛽ Bomba de agua'];
+let _tkCoords = null;
+function tkInit() {
+  const cont = document.getElementById('tkNecesidades');
+  if (cont && !cont.childElementCount) {
+    cont.innerHTML = TK_NECES.map((n, i) => `<label style="display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border:1px solid var(--linea); border-radius:99px; font-size:.76rem; cursor:pointer;"><input type="checkbox" class="tkNec" value="${n}" style="width:auto; margin:0;"> ${n}</label>`).join('');
+  }
+}
+function tkBuscarDir() {
+  const calle = (document.getElementById('tkCalle')?.value || '').trim();
+  const comuna = document.getElementById('tkComuna')?.value || 'La Serena';
+  const info = document.getElementById('tkDirInfo');
+  if (!calle) return;
+  if (info) { info.style.color = 'var(--gris)'; info.textContent = 'Buscando la dirección…'; }
+  consultarNominatim(calle + ', ' + comuna).then((r) => {
+    if (r && r.lat) { _tkCoords = { lat: r.lat, lng: r.lng }; if (info) { info.style.color = '#00C776'; info.textContent = '✅ Dirección encontrada y marcada: ' + calle + ', ' + comuna + '.'; } }
+    else { _tkCoords = null; if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'No se encontró la calle. Revisa el nombre o deja la referencia bien clara.'; } }
+  }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Sin conexión al buscador de calles.'; } });
+}
+function tkGenerar() {
+  const g = (id) => (document.getElementById(id)?.value || '').trim();
+  const info = document.getElementById('tkInfo');
+  const nombre = g('tkNombre'), categoria = g('tkCategoria'), descripcion = g('tkDescripcion'), calle = g('tkCalle');
+  if (!nombre || !categoria || !descripcion || !calle) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Faltan campos obligatorios (*): nombre, calle, categoría y descripción.'; } return; }
+  const necesidades = [...document.querySelectorAll('.tkNec:checked')].map((c) => c.value);
+  const cuerpo = { accion: 'ticket-crear', medio: g('tkMedio'), telefono: g('tkTelefono'), nombre, rut: g('tkRut'), edad: g('tkEdad'), calle, sector: g('tkSector'), comuna: g('tkComuna'), referencia: g('tkReferencia'), personas: g('tkPersonas'), adultosMayores: g('tkAdultosM'), ninos: g('tkNinos'), discapacidad: g('tkDiscapacidad'), electrodependiente: document.getElementById('tkElectro')?.checked === true, categoria, prioridad: g('tkPrioridad'), descripcion, necesidades };
+  if (_tkCoords) { cuerpo.lat = _tkCoords.lat; cuerpo.lng = _tkCoords.lng; }
+  if (info) { info.style.color = 'var(--gris)'; info.textContent = 'Generando el ticket…'; }
+  saFetch(cuerpo).then((d) => {
+    if (!d.ok) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = d.error || 'No se pudo crear.'; } return; }
+    if (info) { info.style.color = '#00C776'; info.textContent = `✅ Ticket ${d.folio} generado. Dile a la persona su número de folio: ${d.folio}.`; }
+    ['tkTelefono','tkNombre','tkRut','tkEdad','tkCalle','tkSector','tkReferencia','tkPersonas','tkAdultosM','tkNinos','tkDiscapacidad','tkDescripcion'].forEach((id) => { const e = document.getElementById(id); if (e) e.value = ''; });
+    const el = document.getElementById('tkElectro'); if (el) el.checked = false;
+    const ca = document.getElementById('tkCategoria'); if (ca) ca.value = '';
+    document.querySelectorAll('.tkNec:checked').forEach((c) => { c.checked = false; });
+    const di = document.getElementById('tkDirInfo'); if (di) di.textContent = '';
+    _tkCoords = null;
+  }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
+}
+function ticketsListar() {
+  const cont = document.getElementById('tkLista'); if (!cont) return;
+  saFetch({ accion: 'ticket-listar' }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    const esc = (x) => String(x || '').replace(/</g, '&lt;');
+    const fh = (iso) => iso ? new Date(iso).toLocaleString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+    const fchile = (iso) => iso ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)) : '';
+    const fEst = document.getElementById('tkfEstado')?.value || '';
+    const fFec = document.getElementById('tkfFecha')?.value || '';
+    let lista = d.tickets || [];
+    if (fEst) lista = lista.filter((t) => t.estado === fEst);
+    if (fFec) lista = lista.filter((t) => fchile(t.creadaEn) === fFec);
+    if (!lista.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin tickets' + (fEst || fFec ? ' con ese filtro.' : ' aún.') + '</strong><small>Los llamados que tomes en 📞 Llamados aparecerán aquí.</small></div></div>'; return; }
+    cont.innerHTML = lista.map((t) => {
+      const est = TK_ESTADOS[t.estado] || TK_ESTADOS.ingresado;
+      const pr = TK_PRIO[t.prioridad] || TK_PRIO.media;
+      const gest = (t.gestiones || []).map((gg) => `<div style="font-size:.72rem; color:var(--gris); padding:3px 0;">${(TK_ESTADOS[gg.estado] || ['·'])[0]} <em>${fh(gg.creadaEn)}</em> · ${esc(gg.por)}${gg.texto ? ' — ' + esc(gg.texto) : ''}</div>`).join('');
+      return `
+      <div style="border:1px solid ${t.prioridad === 'alta' && t.estado !== 'cerrado' && t.estado !== 'resuelto' ? 'rgba(229,52,75,.5)' : 'var(--linea)'}; border-radius:14px; padding:14px 16px; margin-bottom:12px; ${t.estado === 'cerrado' ? 'opacity:.55;' : ''}">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <strong style="font-size:.95rem; color:#9d8fff;">${esc(t.folio)}</strong>
+          <strong style="font-size:.88rem;">${TK_CATS[t.categoria] || esc(t.categoria)}</strong>
+          <span style="font-size:.62rem; font-weight:800; padding:3px 10px; border-radius:99px; background:${est[2]}22; color:${est[2]}; border:1px solid ${est[2]}55;">${est[0]} ${est[1].toUpperCase()}</span>
+          <span style="font-size:.66rem; font-weight:700; color:${pr[1]};">${pr[0]} ${(t.prioridad || '').toUpperCase()}</span>
+          ${t.electrodependiente ? '<span style="font-size:.62rem; font-weight:800; padding:3px 10px; border-radius:99px; background:rgba(255,159,67,.15); color:#ff9f43; border:1px solid rgba(255,159,67,.4);">⚡ ELECTRODEPENDIENTE</span>' : ''}
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:4px 14px; margin:8px 0 4px; font-size:.76rem;">
+          <div><span style="color:var(--gris);">Solicitante:</span> <strong>${esc(t.nombre)}</strong>${t.rut ? ' · ' + esc(t.rut) : ''}${t.edad ? ' · ' + t.edad + ' años' : ''}</div>
+          <div><span style="color:var(--gris);">Teléfono:</span> ${t.telefono ? `<a href="tel:${esc(t.telefono)}" style="color:#9d8fff;">${esc(t.telefono)}</a>` : '—'} · ${esc(t.medio)}</div>
+          <div><span style="color:var(--gris);">Dirección:</span> ${esc(t.calle)}${t.sector ? ', ' + esc(t.sector) : ''}, ${esc(t.comuna)}${t.lat ? ` <a href="https://www.google.com/maps?q=${t.lat},${t.lng}" target="_blank" style="color:#9d8fff;">[mapa]</a>` : ''}</div>
+          <div><span style="color:var(--gris);">Ingresado:</span> ${fh(t.creadaEn)} por ${esc(t.tomadoPor)}</div>
+          ${t.referencia ? `<div style="grid-column:1/-1;"><span style="color:var(--gris);">Referencia:</span> ${esc(t.referencia)}</div>` : ''}
+          ${t.personas ? `<div style="grid-column:1/-1;"><span style="color:var(--gris);">Personas:</span> ${t.personas} total${t.adultosMayores ? ' · ' + t.adultosMayores + ' adulto(s) mayor(es)' : ''}${t.ninos ? ' · ' + t.ninos + ' niño(s)' : ''}${t.discapacidad ? ' · ' + t.discapacidad + ' con discapacidad' : ''}</div>` : ''}
+        </div>
+        <div style="font-size:.82rem; background:var(--violeta-suave); color:#c9c0ff; border-radius:10px; padding:8px 12px; margin:6px 0;">📝 ${esc(t.descripcion)}</div>
+        ${(t.necesidades || []).length ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin:6px 0;">${t.necesidades.map((n) => `<span style="font-size:.68rem; padding:4px 10px; border-radius:99px; background:var(--fondo); border:1px solid var(--linea);">${esc(n)}</span>`).join('')}</div>` : ''}
+        ${gest ? `<div style="border-top:1px dashed var(--linea); margin-top:8px; padding-top:6px;">${gest}</div>` : ''}
+        ${t.estado !== 'cerrado' ? `
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
+          <select id="tkE-${t.id}" style="width:auto; margin:0; padding:8px 10px; font-size:.78rem;">
+            ${Object.keys(TK_ESTADOS).map((k) => `<option value="${k}" ${t.estado === k ? 'selected' : ''}>${TK_ESTADOS[k][0]} ${TK_ESTADOS[k][1]}</option>`).join('')}
+          </select>
+          <input id="tkN-${t.id}" placeholder="Nota de gestión (qué se hizo)…" style="flex:1; min-width:170px; margin:0; padding:8px 12px; font-size:.78rem;">
+          <button onclick="tkEstadoGuardar('${t.id}')" style="width:auto; padding:8px 16px; border-radius:99px; border:none; background:var(--violeta); color:#fff; font-size:.76rem; font-weight:700; cursor:pointer;">Guardar</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+  }).catch(() => {});
+}
+function tkEstadoGuardar(id) {
+  const estado = document.getElementById('tkE-' + id)?.value;
+  const nota = document.getElementById('tkN-' + id)?.value || '';
+  saFetch({ accion: 'ticket-estado', ticketId: id, estado, nota }).then((d) => { if (d.ok) ticketsListar(); else alert(d.error || 'Error'); });
+}
 function regOpListar() {
   const cont = document.getElementById('regOpLista'); if (!cont) return;
   saFetch({ accion: 'mision-listar', registro: true }).then((d) => {
@@ -5212,7 +5407,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', operativos:'Operativos y despachos', encurso:'Operativos en curso', regop:'Registro de operativos', informes:'Informe operativo del día', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', operativos:'Operativos y despachos', encurso:'Operativos en curso', regop:'Registro de operativos', informes:'Informe operativo del día', llamados:'Atención de llamados', tickets:'Tickets ciudadanos', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -5229,6 +5424,8 @@ const opDescripciones = {
   encurso: 'Seguimiento en vivo: en qué estado va cada operativo, con sus reportes de terreno y fotos.',
   regop: 'Bitácora: quién despachó cada operativo, día y hora, objetivo y cómo se cumplió.',
   informes: 'Toda la información importante del día, ordenada y en un solo lugar.',
+  llamados: 'Ficha de atención: toma los datos del llamado y genera un ticket con folio.',
+  tickets: 'Los problemas que reporta la gente, con folio, estado y bitácora de gestión.',
   chatmov: 'Mensajes y fotos con cada móvil de reacción, en ambos sentidos.',
   asistencia: 'Punto de trabajo, horario y marcaje por GPS de cada trabajador. Jefe y gerente.'
 };
@@ -6234,6 +6431,8 @@ function opGo(v){
   if (v==='operativos') misionInit();
   if (v==='regop') regOpListar();
   if (v==='informes') informeCargar();
+  if (v==='llamados') tkInit();
+  if (v==='tickets') ticketsListar();
   if (v==='encurso') { misionListar(); clearInterval(_misTimer); _misTimer = setInterval(() => { if (document.getElementById('op-view-encurso')?.classList.contains('active')) misionListar(); }, 8000); }
   if (v==='chatmov') chatMovInit();
   if (v==='asistencia') asistPanelInit();
