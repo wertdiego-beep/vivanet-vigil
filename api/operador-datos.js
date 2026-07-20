@@ -1080,6 +1080,63 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true });
       return;
     }
+    if (accion === 'informe-dia') {
+      // Informe operativo del día: todo lo importante de la empresa, ordenado.
+      const fchI = (iso) => iso ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)) : '';
+      const hoyI = fchI(new Date().toISOString());
+      const fechaI = /^\d{4}-\d{2}-\d{2}$/.test(req.body.fecha || '') ? req.body.fecha : hoyI;
+      const [clientesTodosI, alertasTodasI, misDocsI, repsQI, asisDocsI] = await Promise.all([
+        listarClientes(accessToken),
+        listarAlertasRecientes(accessToken),
+        fetch(`${base0}/empresas/${empresaOperador}/misiones?pageSize=100`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
+        fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'reportes', allDescendants: true }], limit: 100 } })
+        }).then((r) => r.ok ? r.json() : []),
+        fetch(`${base0}/empresas/${empresaOperador}/asistencia?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
+      ]);
+      const miosI = new Set(clientesTodosI.filter((c) => c.empresaId === empresaOperador).map((c) => c.uid));
+      const nombreDeI = {};
+      clientesTodosI.forEach((c) => { nombreDeI[c.uid] = c.local || c.nombre || 'Cliente'; });
+      // 1) Operativos despachados ese día (con descripción, resultado y reportes de terreno).
+      const opsDia = (misDocsI.documents || []).filter((dd) => fchI(dd.fields?.creadaEn?.timestampValue) === fechaI).map((dd) => ({
+        id: dd.name.split('/').pop(),
+        titulo: dd.fields?.titulo?.stringValue || '', descripcion: dd.fields?.descripcion?.stringValue || '',
+        movilNombre: dd.fields?.movilNombre?.stringValue || '', tipo: dd.fields?.tipo?.stringValue || '',
+        direccion: dd.fields?.direccion?.stringValue || '', estado: dd.fields?.estado?.stringValue || '',
+        creadaEn: dd.fields?.creadaEn?.timestampValue || null, creadaPor: dd.fields?.creadaPor?.stringValue || '',
+        resultado: dd.fields?.resultado?.stringValue || '', cerradaPor: dd.fields?.cerradaPor?.stringValue || ''
+      })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0));
+      for (const m of opsDia.slice(0, 15)) {
+        try {
+          const rp = await fetch(`${base0}/empresas/${empresaOperador}/misiones/${m.id}/reportes?pageSize=30`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+          m.reportes = (rp.documents || []).map((rr) => ({ texto: rr.fields?.texto?.stringValue || '', foto: rr.fields?.foto?.stringValue || null, creadaEn: rr.fields?.creadaEn?.timestampValue || null })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0));
+        } catch (e) { m.reportes = []; }
+      }
+      // 2) Alarmas SOS del día de la empresa.
+      const sosDia = alertasTodasI.filter((a) => miosI.has(a.clienteUid) && fchI(a.creadaEn) === fechaI).map((a) => ({
+        creadaEn: a.creadaEn, cliente: nombreDeI[a.clienteUid] || 'Cliente', estado: a.estado,
+        resultado: a.resultado || '', atendidaPor: a.atendidaPor || '', nota: a.notaAtencion || '',
+        movilNombre: a.movilNombre || '', movilEstado: a.movilEstado || ''
+      })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0));
+      // 3) Reportes de clientes e incidentes de recorrido del día.
+      const repsDia = (repsQI || []).filter((r) => r.document).map((r) => {
+        const parts = r.document.name.split('/'); parts.pop(); parts.pop();
+        const cuid = parts.pop(); const ff = r.document.fields || {};
+        return { clienteUid: cuid, cliente: ff.anonimo?.booleanValue === true ? 'Anónimo' : (nombreDeI[cuid] || 'Cliente'), categoria: ff.categoria?.stringValue || 'Otro', icono: ff.icono?.stringValue || '📌', texto: ff.texto?.stringValue || '', foto: ff.foto?.stringValue || null, estado: ff.estado?.stringValue || 'pendiente', creadaEn: ff.creadaEn?.timestampValue || null };
+      }).filter((x) => miosI.has(x.clienteUid) && fchI(x.creadaEn) === fechaI)
+        .sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0));
+      // 4) Asistencia del día.
+      const asisDia = (asisDocsI.documents || []).filter((dd) => dd.fields?.fecha?.stringValue === fechaI).map((dd) => ({
+        nombre: nombreDeI[dd.fields?.uid?.stringValue || ''] || 'Trabajador/a',
+        entradaHora: dd.fields?.entradaHora?.stringValue || null,
+        atrasoMin: dd.fields?.atrasoMin ? parseInt(dd.fields.atrasoMin.integerValue) : null,
+        salidaHora: dd.fields?.salidaHora?.stringValue || null,
+        jornadaOk: dd.fields?.jornadaOk?.booleanValue ?? null
+      })).sort((a, b) => (a.entradaHora || '99').localeCompare(b.entradaHora || '99'));
+      res.status(200).json({ ok: true, fecha: fechaI, operativos: opsDia, sos: sosDia, reportes: repsDia, asistencia: asisDia });
+      return;
+    }
     if (accion === 'mision-crear') {
       // La central despacha un móvil con una MISIÓN: objetivo + descripción + lugar.
       const prawMi = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
