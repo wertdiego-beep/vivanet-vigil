@@ -793,6 +793,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="credenciales" id="navCredenciales" style="display:none"><span>🔒</span><em>Credenciales</em></button>
         <button class="op-nav" data-opview="roles" id="navRoles" style="display:none"><span>🔺</span><em>Roles</em></button>
         <button class="op-nav" data-opview="recorridos" id="navRecorridos" style="display:none"><span>🗺️</span><em>Recorridos</em></button>
+        <button class="op-nav" data-opview="chatmov" id="navChatMov"><span>💬</span><em>Móviles</em></button>
         <div class="op-side-foot">
           <button class="op-nav" id="opPushBtn" onclick="opActivarPush()" title="Recibe una notificación en este dispositivo cuando llegue un SOS, aunque el panel esté cerrado"><span>🔔</span><em>Avisos SOS</em></button>
           <button class="op-nav" onclick="go('s-mas')"><span>👤</span><em>Mi cuenta</em></button>
@@ -1146,6 +1147,23 @@ textarea{min-height:96px;resize:vertical}
               <div class="error-msg" id="recInfo"></div>
             </div>
           </section>
+          <!-- ── Vista: Chat con móviles (central y jefatura) ── -->
+          <section class="op-view" id="op-view-chatmov">
+            <div class="card">
+              <div class="card-title">💬 Chat con los móviles</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Mensajes y fotos en ambos sentidos con cada móvil de reacción. La central y el jefe de seguridad tienen cada uno su canal separado con el móvil.</p>
+              <select id="chatMovSel" onchange="chatMovAbrir()" style="margin-bottom:10px;"><option value="">— Elige un móvil —</option></select>
+              <div id="chatMovBox" style="display:none;">
+                <div id="chatMovMsgs" style="height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid var(--linea); border-radius:14px; margin-bottom:10px;"></div>
+                <div style="display:flex; gap:7px;">
+                  <button onclick="document.getElementById('chatMovFotoInput').value='';document.getElementById('chatMovFotoInput').click()" style="width:46px; border-radius:12px; border:1px solid var(--linea); background:transparent; color:var(--violeta); font-size:1.1rem; cursor:pointer;">📷</button>
+                  <input id="chatMovTxt" type="text" placeholder="Mensaje al móvil…" style="margin:0; flex:1;" onkeydown="if(event.key==='Enter')chatMovEnviar()">
+                  <button onclick="chatMovEnviar()" class="btn-full" style="width:auto; margin:0; padding:9px 18px;">➤</button>
+                </div>
+                <input type="file" id="chatMovFotoInput" accept="image/*" style="display:none;">
+              </div>
+            </div>
+          </section>
           <!-- ── Vista: Plataforma (solo superadmin: nosotros) ── -->
           <section class="op-view" id="op-view-plataforma">
             <div style="margin:2px 0 16px;">
@@ -1242,7 +1260,35 @@ textarea{min-height:96px;resize:vertical}
         <div id="movilGeoEstado" style="font-size:.72rem; color:var(--gris); margin:-6px 0 10px;">📡 Activando GPS… las paradas se marcarán solas al pasar por cada punto.</div>
         <div id="movilRecorrido"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
       </div>
+      <div class="card" style="border-radius:20px;">
+        <strong style="font-size:1rem; display:block; margin-bottom:10px;">📞 Contacto</strong>
+        <div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--linea);">
+          <div style="width:40px; height:40px; border-radius:50%; background:var(--violeta-suave); display:grid; place-items:center; font-size:1.15rem;">🏢</div>
+          <div style="flex:1;"><strong style="font-size:.9rem;">Central</strong><div id="movilTelCentral" style="font-size:.72rem; color:var(--gris);">—</div></div>
+          <button onclick="movilAbrirChat('central')" style="padding:11px 14px; border-radius:12px; border:none; background:var(--violeta); color:#fff; font-weight:700; cursor:pointer;">💬 Chat</button>
+          <a id="movilLlamarCentral" href="#" style="display:none; padding:11px 14px; border-radius:12px; background:#16a34a; color:#fff; font-weight:700; text-decoration:none;">📞</a>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; padding:10px 0;">
+          <div style="width:40px; height:40px; border-radius:50%; background:var(--violeta-suave); display:grid; place-items:center; font-size:1.15rem;">👑</div>
+          <div style="flex:1;"><strong style="font-size:.9rem;">Jefe de seguridad</strong><div id="movilTelJefe" style="font-size:.72rem; color:var(--gris);">—</div></div>
+          <button onclick="movilAbrirChat('jefe')" style="padding:11px 14px; border-radius:12px; border:none; background:var(--violeta); color:#fff; font-weight:700; cursor:pointer;">💬 Chat</button>
+          <a id="movilLlamarJefe" href="#" style="display:none; padding:11px 14px; border-radius:12px; background:#16a34a; color:#fff; font-weight:700; text-decoration:none;">📞</a>
+        </div>
+      </div>
       <input type="file" id="movilFotoInput" accept="image/*" capture="environment" style="display:none;">
+      <input type="file" id="movilChatFotoInput" accept="image/*" capture="environment" style="display:none;">
+      <div id="movilChatOverlay" style="display:none; position:fixed; inset:0; z-index:6500; background:var(--fondo); flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 18px; border-bottom:1px solid var(--linea);">
+          <strong id="movilChatTitulo" style="font-size:1rem;">💬 Chat</strong>
+          <button onclick="movilCerrarChat()" style="background:none;border:none;color:var(--gris);font-size:1.4rem;cursor:pointer;">✕</button>
+        </div>
+        <div id="movilChatMsgs" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:14px;"></div>
+        <div style="display:flex; gap:7px; padding:12px 14px; border-top:1px solid var(--linea);">
+          <button onclick="document.getElementById('movilChatFotoInput').value='';document.getElementById('movilChatFotoInput').click()" style="width:46px; border-radius:12px; border:1px solid var(--linea); background:transparent; color:var(--violeta); font-size:1.15rem; cursor:pointer;">📷</button>
+          <input id="movilChatTxt" type="text" placeholder="Escribe un mensaje…" style="margin:0; flex:1;" onkeydown="if(event.key==='Enter')movilChatEnviar()">
+          <button onclick="movilChatEnviar()" style="width:52px; border-radius:12px; border:none; background:var(--violeta); color:#fff; font-size:1.1rem; cursor:pointer;">➤</button>
+        </div>
+      </div>
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
       <div id="movilNavOverlay" style="display:none; position:fixed; inset:0; z-index:6000; background:var(--fondo); padding:18px; overflow:auto;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
@@ -3415,6 +3461,50 @@ async function recSectoresAuto() {
     info.textContent = `✨ Patrullaje de ${ordenSec.length} sector${ordenSec.length === 1 ? '' : 'es'} (${totalPuntos} puntos)${cs ? ' + ' + cs + ' calle' + (cs === 1 ? '' : 's') + ' obligatoria' + (cs === 1 ? '' : 's') : ''}, por calles reales. ${recRuta.length ? 'Inicio en verde, fin en rojo.' : ''} Ajústalo tocando el mapa.`;
   }
 }
+let _chatMovUid = null, _chatMovTimer = null;
+function chatMovInit() {
+  const sel = document.getElementById('chatMovSel');
+  if (sel) saFetch({ accion: 'moviles-empresa' }).then((d) => {
+    if (d.ok && d.moviles.length) sel.innerHTML = '<option value="">— Elige un móvil —</option>' + d.moviles.map((m) => `<option value="${m.uid}">🚐 ${m.nombre}</option>`).join('');
+    else sel.innerHTML = '<option value="">— No hay móviles registrados —</option>';
+  }).catch(() => {});
+}
+function chatMovAbrir() {
+  const sel = document.getElementById('chatMovSel');
+  _chatMovUid = sel ? sel.value : null;
+  const box = document.getElementById('chatMovBox');
+  if (!_chatMovUid) { if (box) box.style.display = 'none'; clearInterval(_chatMovTimer); return; }
+  if (box) box.style.display = 'block';
+  chatMovListar();
+  clearInterval(_chatMovTimer);
+  _chatMovTimer = setInterval(() => { if (document.getElementById('op-view-chatmov')?.classList.contains('active') && _chatMovUid) chatMovListar(); }, 4000);
+}
+function chatMovListar() {
+  if (!_chatMovUid) return;
+  saFetch({ accion: 'chat-movil-listar', movilUid: _chatMovUid }).then((d) => {
+    const cont = document.getElementById('chatMovMsgs'); if (!cont || !d.ok) return;
+    cont.innerHTML = (d.mensajes || []).map((m) => {
+      const mio = m.de !== 'movil';
+      return `<div style="align-self:${mio ? 'flex-end' : 'flex-start'}; max-width:78%; background:${mio ? 'var(--violeta)' : 'var(--fondo)'}; color:${mio ? '#fff' : 'var(--tinta)'}; border:1px solid var(--linea); padding:8px 12px; border-radius:14px; font-size:.84rem;">${m.foto ? `<img src="${m.foto}" style="max-width:100%; border-radius:10px; display:block; margin-bottom:${m.texto ? '6px' : '0'};">` : ''}${(m.texto || '').replace(/</g,'&lt;')}</div>`;
+    }).join('') || '<small style="color:var(--gris); text-align:center;">Sin mensajes aún con este móvil.</small>';
+    cont.scrollTop = cont.scrollHeight;
+  }).catch(() => {});
+}
+function chatMovEnviar(foto) {
+  const inp = document.getElementById('chatMovTxt');
+  const texto = (inp.value || '').trim();
+  if ((!texto && !foto) || !_chatMovUid) return;
+  inp.value = '';
+  saFetch({ accion: 'chat-movil-enviar', movilUid: _chatMovUid, texto, foto: foto || null }).then(() => chatMovListar());
+}
+(function () {
+  const inp = document.getElementById('chatMovFotoInput');
+  if (!inp) return;
+  inp.addEventListener('change', function () {
+    const file = this.files[0]; if (!file || !_chatMovUid) return;
+    comprimirImagen(file, (b64) => { if (b64) chatMovEnviar(b64); });
+  });
+})();
 function recInit() {
   recRenderSectores();
   recRenderCalles();
@@ -4661,7 +4751,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', chatmov:'Chat con los móviles' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -4673,7 +4763,8 @@ const opDescripciones = {
   plataforma: 'Nivel superior: administra las empresas de seguridad, sus planes y funciones. Solo tú lo ves.',
   credenciales: 'Bitácora de todas las cuentas de personal creadas (correo, cargo, autor y fecha). Las claves no se guardan por seguridad.',
   roles: 'Define en pirámide qué ve y hace cada cargo de tu empresa. Solo el jefe.',
-  recorridos: 'Manda a cada móvil su ruta del día. Solo el gerente o el jefe.'
+  recorridos: 'Manda a cada móvil su ruta del día. Solo el gerente o el jefe.',
+  chatmov: 'Mensajes y fotos con cada móvil de reacción, en ambos sentidos.'
 };
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
@@ -4690,7 +4781,55 @@ function cargarPanelMovil() {
   saFetch({ accion: 'movil-despachos' }).then(renderMovilDespachos).catch(() => {});
   saFetch({ accion: 'movil-recorrido' }).then(renderMovilRecorrido).catch(() => {});
   movilGeoStart();
+  movilCargarContactos();
 }
+let _movilChatCanal = null, _movilChatTimer = null, _movilContactos = null;
+function movilCargarContactos() {
+  if (_movilContactos) return;
+  saFetch({ accion: 'movil-contactos' }).then((d) => {
+    if (!d.ok) return;
+    _movilContactos = d;
+    const tc = document.getElementById('movilTelCentral'); if (tc) tc.textContent = d.central.telefono || 'Sin teléfono registrado';
+    const lc = document.getElementById('movilLlamarCentral'); if (lc && d.central.telefono) { lc.href = 'tel:' + d.central.telefono; lc.style.display = 'inline-block'; }
+    const tj = document.getElementById('movilTelJefe'); if (tj) tj.textContent = d.jefe ? (d.jefe.nombre + (d.jefe.telefono ? ' · ' + d.jefe.telefono : '')) : 'Sin jefe registrado';
+    const lj = document.getElementById('movilLlamarJefe'); if (lj && d.jefe && d.jefe.telefono) { lj.href = 'tel:' + d.jefe.telefono; lj.style.display = 'inline-block'; }
+  }).catch(() => {});
+}
+function movilAbrirChat(canal) {
+  _movilChatCanal = canal;
+  document.getElementById('movilChatTitulo').textContent = canal === 'jefe' ? '💬 Chat con el jefe de seguridad' : '💬 Chat con la central';
+  document.getElementById('movilChatOverlay').style.display = 'flex';
+  movilChatListar();
+  clearInterval(_movilChatTimer);
+  _movilChatTimer = setInterval(movilChatListar, 4000);
+}
+function movilCerrarChat() { document.getElementById('movilChatOverlay').style.display = 'none'; clearInterval(_movilChatTimer); _movilChatTimer = null; _movilChatCanal = null; }
+function movilChatListar() {
+  if (!_movilChatCanal) return;
+  saFetch({ accion: 'movil-chat-listar', canal: _movilChatCanal }).then((d) => {
+    const cont = document.getElementById('movilChatMsgs'); if (!cont || !d.ok) return;
+    cont.innerHTML = (d.mensajes || []).map((m) => {
+      const mio = m.de === 'movil';
+      return `<div style="align-self:${mio ? 'flex-end' : 'flex-start'}; max-width:82%; background:${mio ? 'var(--violeta)' : 'var(--blanco)'}; color:${mio ? '#fff' : 'var(--tinta)'}; border:1px solid var(--linea); padding:8px 12px; border-radius:14px; font-size:.86rem;">${m.foto ? `<img src="${m.foto}" style="max-width:100%; border-radius:10px; display:block; margin-bottom:${m.texto ? '6px' : '0'};">` : ''}${(m.texto || '').replace(/</g,'&lt;')}</div>`;
+    }).join('') || '<small style="color:var(--gris); text-align:center;">Sin mensajes aún. Escribe el primero.</small>';
+    cont.scrollTop = cont.scrollHeight;
+  }).catch(() => {});
+}
+function movilChatEnviar(foto) {
+  const inp = document.getElementById('movilChatTxt');
+  const texto = (inp.value || '').trim();
+  if (!texto && !foto) return;
+  inp.value = '';
+  saFetch({ accion: 'movil-chat-enviar', canal: _movilChatCanal, texto, foto: foto || null }).then(() => movilChatListar());
+}
+(function () {
+  const inp = document.getElementById('movilChatFotoInput');
+  if (!inp) return;
+  inp.addEventListener('change', function () {
+    const file = this.files[0]; if (!file || !_movilChatCanal) return;
+    comprimirImagen(file, (b64) => { if (b64) movilChatEnviar(b64); });
+  });
+})();
 /* ── 📡 Auto-marcado de paradas por GPS ── */
 let movilGeoId = null; const movilGeoMarcando = new Set();
 const MOVIL_GEO_RADIO_M = 120; // a menos de 120 m del punto, se marca sola
@@ -5479,6 +5618,7 @@ function opGo(v){
   if (v==='reportes') cargarReportesPanel();
   if (v==='personal') cargarPersonal();
   if (v==='recorridos') recInit();
+  if (v==='chatmov') chatMovInit();
   if (v==='credenciales') cargarCredencialesModulo();
   if (v==='roles') cargarRolesPermisos();
 }
