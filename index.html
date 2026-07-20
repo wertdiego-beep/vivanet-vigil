@@ -1211,6 +1211,15 @@ textarea{min-height:96px;resize:vertical}
               <button class="btn-full" onclick="saGuardarCategorias()">Guardar categorías</button>
               <div class="error-msg" id="saCatInfo"></div>
             </div>
+            <div class="card" style="border:1px solid var(--violeta);">
+              <div class="card-title">🏛 Cómo funciona la jerarquía de permisos</div>
+              <div style="display:flex; flex-direction:column; gap:8px; font-size:.8rem; line-height:1.5;">
+                <div><b style="color:#9d8fff;">Nivel 1 · Plataforma (tú):</b> en "Funciones por empresa" defines QUÉ módulos tiene cada empresa según su plan. Lo que cortas aquí desaparece para toda esa empresa.</div>
+                <div><b style="color:#9d8fff;">Nivel 2 · Jefe de la empresa:</b> en su módulo "Roles" define qué ve cada CARGO (gerente, supervisor, guardia…) dentro de lo que su plan permite.</div>
+                <div><b style="color:#9d8fff;">Nivel 3 · Operador individual:</b> aquí abajo puedes cortar permisos a UNA persona específica, sin tocar al resto.</div>
+                <div style="color:var(--gris); border-top:1px solid var(--linea); padding-top:6px;">Regla de oro: si algo está cortado en cualquier nivel, queda cortado — <b>siempre gana el más restrictivo</b>.</div>
+              </div>
+            </div>
             <div class="card">
               <div class="card-title">👤 Operadores</div>
               <p style="color:var(--gris); font-size:.78rem; margin-bottom:6px;">Toca los íconos para prender o apagar funciones. Verde = activa · gris = cortada.</p>
@@ -1223,6 +1232,8 @@ textarea{min-height:96px;resize:vertical}
                   <div><b>🔧 Técnico</b> — Las visitas técnicas y el código para incorporar técnicos. <span style="color:var(--gris);">Si la cortas: no gestiona visitas ni suma técnicos al equipo.</span></div>
                   <div><b>📄 Exportar</b> — Descargar el historial y las zonas a Excel. <span style="color:var(--gris);">Si la cortas: trabaja normal pero no puede llevarse los datos fuera del panel.</span></div>
                   <div><b>📐 Zonas</b> — Marcar perímetros en el mapa y ver las zonas calientes. <span style="color:var(--gris);">Si la cortas: pierde el análisis por sector; el monitoreo normal sigue igual.</span></div>
+                  <div><b>🚐 Móviles</b> — Gestión de móviles de reacción: recorridos, despacho y chat. <span style="color:var(--gris);">Si la cortas: esa persona no puede mandar recorridos, despachar móviles ni chatear con ellos.</span></div>
+                  <div><b>🕒 Asistencia</b> — Gestión de asistencia del personal (puntos de trabajo, horarios y registros). <span style="color:var(--gris);">Si la cortas: esa persona no puede asignar puntos ni ver la asistencia.</span></div>
                   <div><b>🔒 Credenciales</b> — El módulo con la bitácora de cuentas creadas y sus claves. <span style="color:var(--gris);">Si la cortas: al operador le desaparece el módulo Credenciales del menú y el servidor le bloquea el acceso, aunque sea jefe o gerente. Útil para que solo ciertas personas vean las claves del personal.</span></div>
                   <div style="color:var(--gris); border-top:1px solid var(--linea); padding-top:8px;">Lo que <b>nunca</b> se corta: el mapa de monitoreo en vivo y la sirena — sin eso, un operador no es operador. Los cambios se aplican en su panel en segundos.</div>
                 </div>
@@ -5339,8 +5350,8 @@ function enviarDifusion() {
   }).catch(() => { btn.disabled = false; btn.textContent = 'Enviar a todos mis clientes'; info.textContent = 'Error de conexión.'; });
 }
 
-const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas', 'credenciales'];
-const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas', credenciales: '🔒 Credenciales' };
+const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas', 'credenciales', 'moviles', 'asistencia'];
+const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas', credenciales: '🔒 Credenciales', moviles: '🚐 Móviles', asistencia: '🕒 Asistencia' };
 let _saOps = [];
 let _saSoyMaestra = false;
 function saToggleSuperadmin(destino, esSA) {
@@ -5429,6 +5440,12 @@ function aplicarPermisosOperador(p, esSA) {
   const zb = document.getElementById('zonaBtn'); if (zb) zb.style.display = p.zonas === false ? 'none' : '';
   const cb = document.getElementById('calorBtn'); if (cb) cb.style.display = p.zonas === false ? 'none' : '';
   nav('credenciales', p.credenciales !== false);
+  // Jerarquía: si la plataforma o la pirámide cortan estas áreas, se ocultan.
+  if (p.moviles === false) {
+    const r1 = document.getElementById('navRecorridos'); if (r1) r1.style.display = 'none';
+    const r2 = document.getElementById('navChatMov'); if (r2) r2.style.display = 'none';
+  }
+  if (p.asistencia === false) { const r3 = document.getElementById('navAsistencia'); if (r3) r3.style.display = 'none'; }
 }
 
 /* ── 👔 PERSONAL Y ROLES de la empresa ── */
