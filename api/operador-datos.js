@@ -503,7 +503,7 @@ export default async function handler(req, res) {
     }
 
     // ── Acciones del MÓVIL DE REACCIÓN (rol 'movil'; no es operador de central) ──
-    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte', 'movil-incidente'];
+    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte', 'movil-incidente', 'movil-contactos', 'movil-chat-listar', 'movil-chat-enviar'];
     if (_accMovil.includes(accion)) {
       const miRolM = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolM !== 'movil') { res.status(403).json({ error: 'Solo un móvil de reacción puede usar esto.' }); return; }
@@ -561,6 +561,43 @@ export default async function handler(req, res) {
         await fetch(`${base0}/usuarios/${cUid}/alertas/${aId}?updateMask.fieldPaths=movilEstado&updateMask.fieldPaths=movilEstadoEn`, {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: { movilEstado: { stringValue: est }, movilEstadoEn: { timestampValue: new Date().toISOString() } } })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'movil-contactos') {
+        // Teléfonos de la central (empresa) y del jefe/gerente de seguridad.
+        const [empDoc, todos] = await Promise.all([
+          fetch(`${base0}/empresas/${empMovil}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
+          listarClientes(accessToken)
+        ]);
+        const jefe = todos.find((c) => c.empresaId === empMovil && c.rolEmpresa === 'jefe') || todos.find((c) => c.empresaId === empMovil && c.rolEmpresa === 'gerente');
+        res.status(200).json({ ok: true,
+          central: { nombre: empDoc.fields?.nombre?.stringValue || 'Central', telefono: empDoc.fields?.telefono?.stringValue || '' },
+          jefe: jefe ? { nombre: jefe.nombre || 'Jefe de seguridad', telefono: jefe.telefono || '' } : null
+        });
+        return;
+      }
+      if (accion === 'movil-chat-listar') {
+        const col = req.body.canal === 'jefe' ? 'chatJefe' : 'chatCentral';
+        const docs = await fetch(`${base0}/usuarios/${uid}/${col}?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const mensajes = (docs.documents || []).map((dd) => ({
+          de: dd.fields?.de?.stringValue || '', texto: dd.fields?.texto?.stringValue || '',
+          foto: dd.fields?.foto?.stringValue || null, creadaEn: dd.fields?.creadaEn?.timestampValue || null
+        })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0)).slice(-40);
+        res.status(200).json({ ok: true, mensajes });
+        return;
+      }
+      if (accion === 'movil-chat-enviar') {
+        const col = req.body.canal === 'jefe' ? 'chatJefe' : 'chatCentral';
+        const texto = String(req.body.texto || '').trim().slice(0, 500);
+        const foto = req.body.foto ? String(req.body.foto).slice(0, 900000) : null;
+        if (!texto && !foto) { res.status(400).json({ error: 'Mensaje vacío' }); return; }
+        const fields = { de: { stringValue: 'movil' }, texto: { stringValue: texto }, creadaEn: { timestampValue: new Date().toISOString() } };
+        if (foto) fields.foto = { stringValue: foto };
+        await fetch(`${base0}/usuarios/${uid}/${col}`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields })
         });
         res.status(200).json({ ok: true });
         return;
@@ -800,6 +837,37 @@ export default async function handler(req, res) {
       const moviles = clientes.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa === 'movil')
         .map((c) => ({ uid: c.uid, nombre: c.nombre || c.local || 'Móvil', telefono: c.telefono || '' }));
       res.status(200).json({ ok: true, moviles });
+      return;
+    }
+    if (accion === 'chat-movil-listar' || accion === 'chat-movil-enviar') {
+      // Chat del panel con un móvil. El canal depende del rol:
+      // jefe/gerente -> chatJefe · operadores de central -> chatCentral.
+      const mUid = (req.body.movilUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(mUid)) { res.status(400).json({ error: 'Móvil no válido' }); return; }
+      const docM = await fetch(`${base0}/usuarios/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!esSA && (docM.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Ese móvil es de otra empresa.' }); return; }
+      const miRolC2 = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      const esJefatura = miRolC2 === 'jefe' || miRolC2 === 'gerente';
+      const col = esJefatura ? 'chatJefe' : 'chatCentral';
+      if (accion === 'chat-movil-listar') {
+        const docs = await fetch(`${base0}/usuarios/${mUid}/${col}?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const mensajes = (docs.documents || []).map((dd) => ({
+          de: dd.fields?.de?.stringValue || '', texto: dd.fields?.texto?.stringValue || '',
+          foto: dd.fields?.foto?.stringValue || null, creadaEn: dd.fields?.creadaEn?.timestampValue || null
+        })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0)).slice(-40);
+        res.status(200).json({ ok: true, mensajes, canal: col });
+        return;
+      }
+      const texto = String(req.body.texto || '').trim().slice(0, 500);
+      const foto = req.body.foto ? String(req.body.foto).slice(0, 900000) : null;
+      if (!texto && !foto) { res.status(400).json({ error: 'Mensaje vacío' }); return; }
+      const fields = { de: { stringValue: esJefatura ? 'jefe' : 'central' }, texto: { stringValue: texto }, creadaEn: { timestampValue: new Date().toISOString() } };
+      if (foto) fields.foto = { stringValue: foto };
+      await fetch(`${base0}/usuarios/${mUid}/${col}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+      res.status(200).json({ ok: true });
       return;
     }
     if (accion === 'despachar-movil') {
