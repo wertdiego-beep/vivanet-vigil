@@ -110,6 +110,7 @@ async function listarClientes(accessToken) {
         grupoFamiliarId: f.grupoFamiliarId?.stringValue || '',
         ultimaSenal: f.ultimaSenal?.timestampValue || f.ultimaSenal?.stringValue || null,
         operadorDe: f.operadorDe?.stringValue || '',
+        tipoMovil: f.tipoMovil?.stringValue || '',
         // Multitenant: usuarios sin empresa pertenecen a la empresa original.
         empresaId: f.empresaId?.stringValue || 'sos360-la-serena'
       };
@@ -503,7 +504,7 @@ export default async function handler(req, res) {
     }
 
     // ── Acciones del MÓVIL DE REACCIÓN (rol 'movil'; no es operador de central) ──
-    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte', 'movil-incidente', 'movil-contactos', 'movil-chat-listar', 'movil-chat-enviar'];
+    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte', 'movil-incidente', 'movil-contactos', 'movil-chat-listar', 'movil-chat-enviar', 'movil-misiones', 'movil-mision-estado', 'movil-mision-reporte'];
     if (_accMovil.includes(accion)) {
       const miRolM = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolM !== 'movil') { res.status(403).json({ error: 'Solo un móvil de reacción puede usar esto.' }); return; }
@@ -561,6 +562,56 @@ export default async function handler(req, res) {
         await fetch(`${base0}/usuarios/${cUid}/alertas/${aId}?updateMask.fieldPaths=movilEstado&updateMask.fieldPaths=movilEstadoEn`, {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: { movilEstado: { stringValue: est }, movilEstadoEn: { timestampValue: new Date().toISOString() } } })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'movil-misiones') {
+        // Misiones activas asignadas a este móvil.
+        const docs = await fetch(`${base0}/empresas/${empMovil}/misiones?pageSize=100`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const misiones = (docs.documents || []).map((dd) => ({
+          id: dd.name.split('/').pop(),
+          movilUid: dd.fields?.movilUid?.stringValue || '',
+          titulo: dd.fields?.titulo?.stringValue || '',
+          descripcion: dd.fields?.descripcion?.stringValue || '',
+          direccion: dd.fields?.direccion?.stringValue || '',
+          lat: dd.fields?.lat ? parseFloat(dd.fields.lat.doubleValue ?? dd.fields.lat.integerValue) : null,
+          lng: dd.fields?.lng ? parseFloat(dd.fields.lng.doubleValue ?? dd.fields.lng.integerValue) : null,
+          tipo: dd.fields?.tipo?.stringValue || 'patrullaje',
+          estado: dd.fields?.estado?.stringValue || 'despachado',
+          creadaEn: dd.fields?.creadaEn?.timestampValue || null
+        })).filter((m) => m.movilUid === uid && m.estado !== 'resuelto' && m.estado !== 'cerrada')
+          .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
+        res.status(200).json({ ok: true, misiones });
+        return;
+      }
+      if (accion === 'movil-mision-estado') {
+        const mid = (req.body.misionId || '').trim();
+        const est = ['en_camino', 'en_sitio', 'resuelto'].includes(req.body.estado) ? req.body.estado : '';
+        if (!/^[A-Za-z0-9]+$/.test(mid) || !est) { res.status(400).json({ error: 'Datos no válidos' }); return; }
+        const docM = await fetch(`${base0}/empresas/${empMovil}/misiones/${mid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        if ((docM.fields?.movilUid?.stringValue || '') !== uid) { res.status(403).json({ error: 'Esa misión no es tuya.' }); return; }
+        await fetch(`${base0}/empresas/${empMovil}/misiones/${mid}?updateMask.fieldPaths=estado&updateMask.fieldPaths=estadoEn`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { estado: { stringValue: est }, estadoEn: { timestampValue: new Date().toISOString() } } })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'movil-mision-reporte') {
+        // Reporte de situación desde terreno: texto + foto. Se pueden enviar varios.
+        const mid = (req.body.misionId || '').trim();
+        if (!/^[A-Za-z0-9]+$/.test(mid)) { res.status(400).json({ error: 'Misión no válida' }); return; }
+        const docM = await fetch(`${base0}/empresas/${empMovil}/misiones/${mid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        if ((docM.fields?.movilUid?.stringValue || '') !== uid) { res.status(403).json({ error: 'Esa misión no es tuya.' }); return; }
+        const texto = String(req.body.texto || '').trim().slice(0, 800);
+        const foto = req.body.foto ? String(req.body.foto).slice(0, 900000) : null;
+        if (!texto && !foto) { res.status(400).json({ error: 'Envía al menos un texto o una foto.' }); return; }
+        const fields = { texto: { stringValue: texto }, creadaEn: { timestampValue: new Date().toISOString() } };
+        if (foto) fields.foto = { stringValue: foto };
+        await fetch(`${base0}/empresas/${empMovil}/misiones/${mid}/reportes`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields })
         });
         res.status(200).json({ ok: true });
         return;
@@ -904,7 +955,7 @@ export default async function handler(req, res) {
       // Lista los móviles de reacción de la empresa del operador (para despachar / armar recorrido).
       const clientes = await listarClientes(accessToken);
       const moviles = clientes.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa === 'movil')
-        .map((c) => ({ uid: c.uid, nombre: c.nombre || c.local || 'Móvil', telefono: c.telefono || '' }));
+        .map((c) => ({ uid: c.uid, nombre: c.nombre || c.local || 'Móvil', telefono: c.telefono || '', tipo: c.tipoMovil || 'patrullaje' }));
       res.status(200).json({ ok: true, moviles });
       return;
     }
@@ -1009,6 +1060,88 @@ export default async function handler(req, res) {
       await fetch(`${base0}/usuarios/${mUid}/${col}`, {
         method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
+    if (accion === 'movil-tipo') {
+      // Asignar el TIPO de un móvil (salud, reparaciones, rescate, patrullaje, ayuda).
+      const prawT = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
+      if (!esSA && prawT.moviles?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a la gestión de móviles.' }); return; }
+      const mUid = (req.body.movilUid || '').trim();
+      const tipo = ['salud', 'reparaciones', 'rescate', 'patrullaje', 'ayuda'].includes(req.body.tipo) ? req.body.tipo : 'patrullaje';
+      if (!/^[A-Za-z0-9]+$/.test(mUid)) { res.status(400).json({ error: 'Móvil no válido' }); return; }
+      const docMv = await fetch(`${base0}/usuarios/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!esSA && (docMv.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Ese móvil es de otra empresa.' }); return; }
+      await fetch(`${base0}/usuarios/${mUid}?updateMask.fieldPaths=tipoMovil`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { tipoMovil: { stringValue: tipo } } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
+    if (accion === 'mision-crear') {
+      // La central despacha un móvil con una MISIÓN: objetivo + descripción + lugar.
+      const prawMi = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
+      if (!esSA && prawMi.moviles?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a la gestión de móviles.' }); return; }
+      const mUid = (req.body.movilUid || '').trim();
+      const titulo = String(req.body.titulo || '').trim().slice(0, 120);
+      const descripcion = String(req.body.descripcion || '').trim().slice(0, 600);
+      if (!/^[A-Za-z0-9]+$/.test(mUid) || !titulo) { res.status(400).json({ error: 'Faltan el móvil o el objetivo de la misión.' }); return; }
+      const docMv = await fetch(`${base0}/usuarios/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!esSA && (docMv.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Ese móvil es de otra empresa.' }); return; }
+      const fields = {
+        movilUid: { stringValue: mUid },
+        movilNombre: { stringValue: docMv.fields?.nombre?.stringValue || 'Móvil' },
+        tipo: { stringValue: docMv.fields?.tipoMovil?.stringValue || 'patrullaje' },
+        titulo: { stringValue: titulo },
+        descripcion: { stringValue: descripcion },
+        direccion: { stringValue: String(req.body.direccion || '').slice(0, 200) },
+        estado: { stringValue: 'despachado' },
+        creadaEn: { timestampValue: new Date().toISOString() },
+        creadaPor: { stringValue: perfilOp.fields?.nombre?.stringValue || '' }
+      };
+      if (req.body.lat != null && !isNaN(Number(req.body.lat))) { fields.lat = { doubleValue: Number(req.body.lat) }; fields.lng = { doubleValue: Number(req.body.lng) }; }
+      const crea = await fetch(`${base0}/empresas/${empresaOperador}/misiones`, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      }).then((r) => r.json());
+      res.status(200).json({ ok: true, misionId: (crea.name || '').split('/').pop() });
+      return;
+    }
+    if (accion === 'mision-listar') {
+      const prawMl = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
+      if (!esSA && prawMl.moviles?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a la gestión de móviles.' }); return; }
+      const docs = await fetch(`${base0}/empresas/${empresaOperador}/misiones?pageSize=100`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      let misiones = (docs.documents || []).map((dd) => ({
+        id: dd.name.split('/').pop(),
+        movilUid: dd.fields?.movilUid?.stringValue || '', movilNombre: dd.fields?.movilNombre?.stringValue || 'Móvil',
+        tipo: dd.fields?.tipo?.stringValue || 'patrullaje',
+        titulo: dd.fields?.titulo?.stringValue || '', descripcion: dd.fields?.descripcion?.stringValue || '',
+        direccion: dd.fields?.direccion?.stringValue || '',
+        estado: dd.fields?.estado?.stringValue || 'despachado',
+        creadaEn: dd.fields?.creadaEn?.timestampValue || null,
+        estadoEn: dd.fields?.estadoEn?.timestampValue || null
+      })).sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 15);
+      // Reportes de terreno de cada misión (texto + fotos).
+      for (const m of misiones) {
+        try {
+          const rp = await fetch(`${base0}/empresas/${empresaOperador}/misiones/${m.id}/reportes?pageSize=30`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+          m.reportes = (rp.documents || []).map((rr) => ({
+            texto: rr.fields?.texto?.stringValue || '', foto: rr.fields?.foto?.stringValue || null,
+            creadaEn: rr.fields?.creadaEn?.timestampValue || null
+          })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0));
+        } catch (e) { m.reportes = []; }
+      }
+      res.status(200).json({ ok: true, misiones });
+      return;
+    }
+    if (accion === 'mision-cerrar') {
+      const mid = (req.body.misionId || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(mid)) { res.status(400).json({ error: 'Misión no válida' }); return; }
+      await fetch(`${base0}/empresas/${empresaOperador}/misiones/${mid}?updateMask.fieldPaths=estado&updateMask.fieldPaths=estadoEn`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { estado: { stringValue: 'cerrada' }, estadoEn: { timestampValue: new Date().toISOString() } } })
       });
       res.status(200).json({ ok: true });
       return;
