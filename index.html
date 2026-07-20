@@ -5718,8 +5718,8 @@ function enviarDifusion() {
   }).catch(() => { btn.disabled = false; btn.textContent = 'Enviar a todos mis clientes'; info.textContent = 'Error de conexión.'; });
 }
 
-const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas', 'credenciales', 'moviles', 'asistencia'];
-const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas', credenciales: '🔒 Credenciales', moviles: '🚐 Móviles', asistencia: '🕒 Asistencia' };
+const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas', 'credenciales', 'moviles', 'asistencia', 'operativos', 'encurso', 'registro'];
+const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas', credenciales: '🔒 Credenciales', moviles: '🚐 Móviles', asistencia: '🕒 Asistencia', operativos: '🚨 Operativos', encurso: '📡 En curso', registro: '📜 Registro' };
 let _saOps = [];
 let _saSoyMaestra = false;
 function saToggleSuperadmin(destino, esSA) {
@@ -5814,6 +5814,9 @@ function aplicarPermisosOperador(p, esSA) {
     const r2 = document.getElementById('navChatMov'); if (r2) r2.style.display = 'none';
   }
   if (p.asistencia === false) { const r3 = document.getElementById('navAsistencia'); if (r3) r3.style.display = 'none'; }
+  if (p.operativos === false) { const r4 = document.getElementById('navOperativos'); if (r4) r4.style.display = 'none'; }
+  if (p.encurso === false) { const r5 = document.getElementById('navEnCurso'); if (r5) r5.style.display = 'none'; }
+  if (p.registro === false) { const r6 = document.getElementById('navRegOp'); if (r6) r6.style.display = 'none'; }
 }
 
 /* ── 👔 PERSONAL Y ROLES de la empresa ── */
@@ -5953,7 +5956,7 @@ function renderRolesPermisos() {
       <strong style="font-size:.86rem; display:block; margin-bottom:8px;">${rol.n}</strong>
       <div style="display:flex; gap:7px; flex-wrap:wrap;">${btns}</div>
     </div>`;
-  }).join('') + '<div style="margin-top:10px; font-size:.72rem; color:var(--gris); line-height:1.6;">🚨 Atender · 👥 Clientes · 🕘 Historial · 🔧 Técnico · 📄 Exportar · 📐 Zonas · 🔒 Credenciales. El monitoreo en vivo del mapa nunca se corta.</div>';
+  }).join('') + '<div style="margin-top:10px; font-size:.72rem; color:var(--gris); line-height:1.6;">🚨 Atender · 👥 Clientes · 🕘 Historial · 🔧 Técnico · 📄 Exportar · 📐 Zonas · 🔒 Credenciales · 🚐 Móviles · 🕒 Asistencia · 🚨 Operativos · 📡 En curso · 📜 Registro. El monitoreo en vivo del mapa nunca se corta.</div>';
 }
 function toggleRolPermiso(rol, key) {
   if (!_rolesPermisos[rol]) _rolesPermisos[rol] = {};
