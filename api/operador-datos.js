@@ -939,6 +939,7 @@ export default async function handler(req, res) {
     if (accion === 'asist-listar') {
       const miRolAs = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolAs !== 'jefe' && miRolAs !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente ve la asistencia.' }); return; }
+      const empAsist = (esSA && /^[a-z0-9-]+$/.test(req.body.empresaIdA || '')) ? req.body.empresaIdA : empresaOperador;
       const prawAS = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
       if (!esSA && prawAS.asistencia?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a la asistencia.' }); return; }
       if (!esSA) {
@@ -951,7 +952,7 @@ export default async function handler(req, res) {
       const fecha = /^\d{4}-\d{2}-\d{2}$/.test(req.body.fecha || '') ? req.body.fecha : pf2;
       const [todos, regs] = await Promise.all([
         listarClientes(accessToken),
-        fetch(`${base0}/empresas/${empresaOperador}/asistencia?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
+        fetch(`${base0}/empresas/${empAsist}/asistencia?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
       ]);
       const regPor = {};
       (regs.documents || []).forEach((dd) => {
@@ -974,7 +975,7 @@ export default async function handler(req, res) {
           bloqueo: dd.fields?.asistBloqueo?.booleanValue !== false
         };
       });
-      const personal = todos.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa)
+      const personal = todos.filter((c) => c.empresaId === empAsist && c.rolEmpresa)
         .map((c) => ({ uid: c.uid, nombre: c.nombre || 'Sin nombre', rol: c.rolEmpresa, config: cfgPor[c.uid] || {}, registro: regPor[c.uid] || null }));
       res.status(200).json({ ok: true, fecha, personal });
       return;
