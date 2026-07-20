@@ -1316,7 +1316,7 @@ textarea{min-height:96px;resize:vertical}
               <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;"><span>🎫 Tickets ciudadanos</span>
                 <span style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                   <select id="tkfEstado" onchange="ticketsListar()" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
-                    <option value="">Todos los estados</option><option value="ingresado">📥 Ingresados</option><option value="en_gestion">🔧 En gestión</option><option value="derivado">📤 Derivados</option><option value="resuelto">✅ Resueltos</option><option value="cerrado">🔒 Cerrados</option>
+                    <option value="">Todos los estados</option><option value="ingresado">📥 Ingresados</option><option value="asignado">👤 Asignados</option><option value="en_gestion">🔧 En gestión</option><option value="derivado">📤 Derivados</option><option value="resuelto">✅ Resueltos</option><option value="cerrado">🔒 Cerrados</option>
                   </select>
                   <input type="date" id="tkfFecha" onchange="ticketsListar()" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
                   <button onclick="document.getElementById('tkfFecha').value=''; document.getElementById('tkfEstado').value=''; ticketsListar();" style="width:auto; padding:6px 12px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">Todos</button>
@@ -3970,7 +3970,9 @@ function informeCargar() {
 }
 /* ── 📞 Atención de llamados y 🎫 tickets ciudadanos ── */
 const TK_CATS = { anegamiento: '🌊 Anegamiento / inundación', vivienda: '🏠 Daño en vivienda / techumbre', luz: '⚡ Corte de luz', agua: '💧 Corte o falta de agua', arbol: '🌳 Árbol o poste caído', albergue: '🛏 Damnificado / albergue', salud: '💊 Salud / medicamentos', rescate: '🚨 Rescate / persona atrapada', seguridad: '🛡 Seguridad', animal: '🐕 Animal herido', otro: '📌 Otro' };
-const TK_ESTADOS = { ingresado: ['📥', 'Ingresado', '#9d8fff'], en_gestion: ['🔧', 'En gestión', '#ff9f43'], derivado: ['📤', 'Derivado', '#38bdf8'], resuelto: ['✅', 'Resuelto', '#22aa5a'], cerrado: ['🔒', 'Cerrado', '#8a8fa3'] };
+const TK_ESTADOS = { ingresado: ['📥', 'Ingresado', '#9d8fff'], asignado: ['👤', 'Asignado', '#c084fc'], en_gestion: ['🔧', 'En gestión', '#ff9f43'], derivado: ['📤', 'Derivado', '#38bdf8'], resuelto: ['✅', 'Resuelto', '#22aa5a'], cerrado: ['🔒', 'Cerrado', '#8a8fa3'] };
+const TK_AREAS = ['🚨 Emergencias', '🏗 Obras / reparaciones', '⚡ Eléctrica', '💧 Agua', '🛏 Social / albergue', '💊 Salud', '🛡 Seguridad', '📌 Otra'];
+let _tkPersonal = null;
 const TK_PRIO = { alta: ['🔴', '#e5344b'], media: ['🟡', '#ff9f43'], baja: ['🟢', '#22aa5a'] };
 const TK_NECES = ['💧 Agua potable', '🍞 Alimentos', '🧣 Frazadas / abrigo', '🛏 Colchones / camas', '🪵 Materiales / mediagua', '🩺 Atención médica', '🚌 Evacuación / traslado', '🚜 Maquinaria / escombros', '⛽ Bomba de agua'];
 let _tkCoords = null;
@@ -4013,7 +4015,8 @@ function tkGenerar() {
 }
 function ticketsListar() {
   const cont = document.getElementById('tkLista'); if (!cont) return;
-  saFetch({ accion: 'ticket-listar' }).then((d) => {
+  const pPersonal = _tkPersonal ? Promise.resolve(_tkPersonal) : saFetch({ accion: 'emp-personal' }).then((p) => { _tkPersonal = (p.ok && p.personal) ? p.personal : []; return _tkPersonal; }).catch(() => []);
+  Promise.all([saFetch({ accion: 'ticket-listar' }), pPersonal]).then(([d, personal]) => {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     const esc = (x) => String(x || '').replace(/</g, '&lt;');
     const fh = (iso) => iso ? new Date(iso).toLocaleString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -4036,6 +4039,7 @@ function ticketsListar() {
           <span style="font-size:.62rem; font-weight:800; padding:3px 10px; border-radius:99px; background:${est[2]}22; color:${est[2]}; border:1px solid ${est[2]}55;">${est[0]} ${est[1].toUpperCase()}</span>
           <span style="font-size:.66rem; font-weight:700; color:${pr[1]};">${pr[0]} ${(t.prioridad || '').toUpperCase()}</span>
           ${t.electrodependiente ? '<span style="font-size:.62rem; font-weight:800; padding:3px 10px; border-radius:99px; background:rgba(255,159,67,.15); color:#ff9f43; border:1px solid rgba(255,159,67,.4);">⚡ ELECTRODEPENDIENTE</span>' : ''}
+          ${t.asignadoNombre ? `<span style="font-size:.64rem; font-weight:700; padding:3px 10px; border-radius:99px; background:rgba(192,132,252,.14); color:#c084fc; border:1px solid rgba(192,132,252,.4);">👤 ${esc(t.asignadoNombre)}${t.area ? ' · ' + esc(t.area) : ''}</span>` : ''}
         </div>
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:4px 14px; margin:8px 0 4px; font-size:.76rem;">
           <div><span style="color:var(--gris);">Solicitante:</span> <strong>${esc(t.nombre)}</strong>${t.rut ? ' · ' + esc(t.rut) : ''}${t.edad ? ' · ' + t.edad + ' años' : ''}</div>
@@ -4048,6 +4052,19 @@ function ticketsListar() {
         <div style="font-size:.82rem; background:var(--violeta-suave); color:#c9c0ff; border-radius:10px; padding:8px 12px; margin:6px 0;">📝 ${esc(t.descripcion)}</div>
         ${(t.necesidades || []).length ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin:6px 0;">${t.necesidades.map((n) => `<span style="font-size:.68rem; padding:4px 10px; border-radius:99px; background:var(--fondo); border:1px solid var(--linea);">${esc(n)}</span>`).join('')}</div>` : ''}
         ${gest ? `<div style="border-top:1px dashed var(--linea); margin-top:8px; padding-top:6px;">${gest}</div>` : ''}
+        ${t.estado !== 'cerrado' && t.estado !== 'resuelto' ? `
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center; padding:9px 12px; background:var(--fondo); border:1px dashed var(--linea); border-radius:12px;">
+          <span style="font-size:.7rem; font-weight:800; color:#c084fc;">👤 ASIGNAR:</span>
+          <select id="tkA-${t.id}" style="width:auto; margin:0; padding:8px 10px; font-size:.78rem;">
+            <option value="">— Especialista —</option>
+            ${personal.map((p) => `<option value="${p.uid}" ${t.asignadoUid === p.uid ? 'selected' : ''}>${(p.nombre || '').replace(/</g,'&lt;')} (${p.rol})</option>`).join('')}
+          </select>
+          <select id="tkAr-${t.id}" style="width:auto; margin:0; padding:8px 10px; font-size:.78rem;">
+            <option value="">— Área —</option>
+            ${TK_AREAS.map((a) => `<option value="${a}" ${t.area === a ? 'selected' : ''}>${a}</option>`).join('')}
+          </select>
+          <button onclick="tkAsignar('${t.id}')" style="width:auto; padding:8px 16px; border-radius:99px; border:1px solid #c084fc; background:rgba(192,132,252,.12); color:#c084fc; font-size:.76rem; font-weight:700; cursor:pointer;">Asignar</button>
+        </div>` : ''}
         ${t.estado !== 'cerrado' ? `
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
           <select id="tkE-${t.id}" style="width:auto; margin:0; padding:8px 10px; font-size:.78rem;">
@@ -4059,6 +4076,14 @@ function ticketsListar() {
       </div>`;
     }).join('');
   }).catch(() => {});
+}
+function tkAsignar(id) {
+  const uid = document.getElementById('tkA-' + id)?.value;
+  const area = document.getElementById('tkAr-' + id)?.value || '';
+  if (!uid) { alert('Elige al especialista que se hará cargo.'); return; }
+  saFetch({ accion: 'ticket-asignar', ticketId: id, asignadoUid: uid, area }).then((d) => {
+    if (d.ok) ticketsListar(); else alert(d.error || 'Error');
+  });
 }
 function tkEstadoGuardar(id) {
   const estado = document.getElementById('tkE-' + id)?.value;
