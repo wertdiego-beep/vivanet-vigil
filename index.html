@@ -1068,6 +1068,8 @@ textarea{min-height:96px;resize:vertical}
                 <label>Teléfono</label><input type="text" id="aeTel" placeholder="+56 9 …">
                 <label>Cargo</label>
                 <select id="aeRol"></select>
+                <label>Especialidad (opcional)</label>
+                <select id="aeEspecialidad"></select>
                 <label style="display:flex; gap:9px; align-items:center; margin:8px 0;"><input type="checkbox" id="aeOperador" style="width:auto; margin:0;"> 🖥 Que además pueda operar la central</label>
                 <button class="btn-full" id="aeGuardarBtn" onclick="guardarEmpleado()">Crear cuenta</button>
                 <button class="btn-full" style="background:transparent; color:var(--gris); border:1px solid var(--linea);" onclick="document.getElementById('altaEmpleado').style.display='none'">Cancelar</button>
@@ -1075,7 +1077,26 @@ textarea{min-height:96px;resize:vertical}
               </div>
               <div id="personalLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
               <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--linea); font-size:.75rem; color:var(--gris); line-height:1.6;">
-                <b>Roles disponibles:</b> 👑 Jefe/a (manda todo) · 🎩 Gerente (gestiona personal) · 🛡 Supervisor (coordina turnos) · 👮 Guardia · 👤 Empleado/a · 🔧 Técnico · 🚐 Móvil de reacción.
+                <b>Roles disponibles:</b> 👑 Jefe/a (manda todo) · 🎩 Gerente (gestiona personal) · 🛡 Supervisor (coordina turnos) · 👮 Guardia · 👤 Empleado/a · 🔧 Técnico · 🚐 Móvil de reacción. Además puedes ponerle a cada uno su <b>especialidad</b> y su <b>grupo</b>.
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">🏷 Especialidades y grupos</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:12px;">Crea las especialidades de tu rubro y arma grupos o cuadrillas para el personal que trabaja en equipo. Después se los asignas a cada persona arriba.</p>
+
+              <div style="font-size:.72rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#9d8fff; margin-bottom:8px;">🏷 Especialidades</div>
+              <div id="espChips" style="display:flex; gap:7px; flex-wrap:wrap; margin-bottom:8px;"></div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <input id="espNueva" placeholder="Ej: Electricista, Rescatista, Paramédico…" style="flex:1; min-width:180px; margin:0;" onkeydown="if(event.key==='Enter'){event.preventDefault(); espAgregar();}">
+                <button onclick="espAgregar()" style="width:auto; padding:9px 16px; border-radius:99px; border:none; background:var(--violeta); color:#fff; font-weight:700; font-size:.78rem; cursor:pointer;">Agregar</button>
+              </div>
+
+              <div style="font-size:.72rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#9d8fff; margin:16px 0 8px;">👥 Grupos / cuadrillas</div>
+              <div id="gruposLista" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;"></div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <input id="grpNombre" placeholder="Ej: Cuadrilla Norte, Turno noche…" style="flex:1; min-width:180px; margin:0;" onkeydown="if(event.key==='Enter'){event.preventDefault(); grpCrear();}">
+                <input type="color" id="grpColor" value="#38bdf8" style="width:44px; height:40px; padding:2px; margin:0; border-radius:10px; cursor:pointer;">
+                <button onclick="grpCrear()" style="width:auto; padding:9px 16px; border-radius:99px; border:none; background:var(--violeta); color:#fff; font-weight:700; font-size:.78rem; cursor:pointer;">Crear grupo</button>
               </div>
             </div>
             <div class="card">
@@ -6128,6 +6149,8 @@ function abrirAltaEmpleado() {
   if (!c) return;
   const sel = document.getElementById('aeRol');
   if (sel) sel.innerHTML = ROLES_EMP.map((r) => `<option value="${r.k}">${r.n}</option>`).join('');
+  const selE = document.getElementById('aeEspecialidad');
+  if (selE) selE.innerHTML = '<option value="">🏷 Sin especialidad</option>' + (_empData.especialidades || []).map((e) => `<option value="${String(e).replace(/</g,'&lt;')}">${String(e).replace(/</g,'&lt;')}</option>`).join('');
   ['aeNombre','aeEmail','aePass','aeTel'].forEach((id) => { const e = document.getElementById(id); if (e) e.value = ''; });
   document.getElementById('aeOperador').checked = false;
   document.getElementById('aeInfo').textContent = '';
@@ -6144,7 +6167,8 @@ function guardarEmpleado() {
     pass: document.getElementById('aePass').value.trim(),
     telefono: document.getElementById('aeTel').value.trim(),
     rol: document.getElementById('aeRol').value,
-    esOperador: document.getElementById('aeOperador').checked
+    esOperador: document.getElementById('aeOperador').checked,
+    especialidad: (document.getElementById('aeEspecialidad')||{}).value || ''
   };
   if (!datos.nombre || !datos.email || datos.pass.length < 6) { info.textContent = 'Completa nombre, correo y una clave de 6+ caracteres.'; return; }
   b.disabled = true; b.textContent = 'Creando…';
@@ -6195,30 +6219,87 @@ function empHacerOperador(uid, esOp) {
     cargarPersonal();
   });
 }
+let _empData = { especialidades: [], grupos: [] };
 function cargarPersonal() {
   empCargarCodigo(false);
   const cont = document.getElementById('personalLista');
   if (!cont) return;
   saFetch({ accion: 'emp-personal' }).then((d) => {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    _empData.especialidades = d.especialidades || [];
+    _empData.grupos = d.grupos || [];
+    renderEspChips(); renderGruposLista();
     if (!d.personal.length) { cont.innerHTML = '<div class="evento"><div><strong>Aún no tienes personal con cargo.</strong><small>Cuando alguien se una con tu código de empresa, aparecerá aquí para asignarle un rol.</small></div></div>'; return; }
-    cont.innerHTML = d.personal.map((p, i) => `
+    const esc = (x) => String(x || '').replace(/</g, '&lt;');
+    const grupoDe = (gid) => _empData.grupos.find((g) => g.id === gid);
+    cont.innerHTML = d.personal.map((p, i) => {
+      const g = grupoDe(p.grupoId);
+      return `
       <div style="border-bottom:1px solid var(--linea); padding:12px 0;">
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <div style="width:38px; height:38px; border-radius:50%; background:var(--violeta-suave); color:#9d8fff; display:grid; place-items:center; font-weight:700;">${(p.nombre || '?').slice(0,1).toUpperCase()}</div>
+          <div style="width:38px; height:38px; border-radius:50%; background:${g ? g.color + '33' : 'var(--violeta-suave)'}; color:${g ? g.color : '#9d8fff'}; display:grid; place-items:center; font-weight:700; border:2px solid ${g ? g.color : 'transparent'};">${(p.nombre || '?').slice(0,1).toUpperCase()}</div>
           <div style="flex:1; min-width:140px;">
-            <strong style="font-size:.9rem;">${p.nombre} ${p.esOperador ? '<span style="font-size:.6rem; color:var(--verde); background:var(--verde-suave); padding:2px 8px; border-radius:99px;">OPERADOR</span>' : ''}</strong>
-            <div style="font-size:.72rem; color:var(--gris);">${p.email || 'sin correo'}${p.telefono ? ' · ' + p.telefono : ''}</div>
+            <strong style="font-size:.9rem;">${esc(p.nombre)} ${p.esOperador ? '<span style="font-size:.6rem; color:var(--verde); background:var(--verde-suave); padding:2px 8px; border-radius:99px;">OPERADOR</span>' : ''}</strong>
+            <div style="font-size:.72rem; color:var(--gris);">${esc(p.email) || 'sin correo'}${p.telefono ? ' · ' + esc(p.telefono) : ''}</div>
+            <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:4px;">
+              ${p.especialidad ? `<span style="font-size:.62rem; padding:2px 9px; border-radius:99px; background:var(--fondo); border:1px solid var(--linea);">🏷 ${esc(p.especialidad)}</span>` : ''}
+              ${g ? `<span style="font-size:.62rem; padding:2px 9px; border-radius:99px; background:${g.color}22; color:${g.color}; border:1px solid ${g.color}66;">👥 ${esc(g.nombre)}</span>` : ''}
+            </div>
           </div>
           <select onchange="cambiarRol('${p.uid}', this.value)" style="width:auto; margin:0; padding:7px 10px; font-size:.8rem;">
             ${ROLES_EMP.map((r) => `<option value="${r.k}" ${p.rol === r.k ? 'selected' : ''}>${r.n}</option>`).join('')}
+          </select>
+          <select onchange="personaSet('${p.uid}','especialidad',this.value)" title="Especialidad" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
+            <option value="">🏷 Sin especialidad</option>
+            ${_empData.especialidades.map((e) => `<option value="${esc(e)}" ${p.especialidad === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}
+          </select>
+          <select onchange="personaSet('${p.uid}','grupoId',this.value)" title="Grupo" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
+            <option value="">👥 Sin grupo</option>
+            ${_empData.grupos.map((gr) => `<option value="${gr.id}" ${p.grupoId === gr.id ? 'selected' : ''}>${esc(gr.nombre)}</option>`).join('')}
           </select>
           <button onclick='abrirEditarEmpleado(${JSON.stringify(p).replace(/'/g,"&#39;")})' title="Editar datos" style="padding:6px 10px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid var(--linea); background:transparent; color:var(--gris);">✏️</button>
           <button onclick="empHacerOperador('${p.uid}', ${p.esOperador === true})" style="padding:6px 12px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid ${p.esOperador ? 'rgba(229,52,75,.5)' : 'var(--violeta)'}; background:${p.esOperador ? 'rgba(229,52,75,.1)' : 'var(--violeta-suave)'}; color:${p.esOperador ? '#ff4d5e' : '#9d8fff'};">${p.esOperador ? 'Quitar op.' : 'Hacer op.'}</button>
           <button onclick="quitarEmpleado('${p.uid}', '${(p.nombre || 'esta persona').replace(/'/g, '')}')" title="Quitar del equipo" style="padding:6px 10px; border-radius:99px; font-size:.72rem; cursor:pointer; border:1px solid rgba(229,52,75,.5); background:rgba(229,52,75,.1); color:#ff4d5e;">🗑</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
+}
+function renderEspChips() {
+  const c = document.getElementById('espChips'); if (!c) return;
+  const esc = (x) => String(x || '').replace(/</g, '&lt;');
+  c.innerHTML = _empData.especialidades.length ? _empData.especialidades.map((e) => `<span style="display:inline-flex; align-items:center; gap:6px; font-size:.74rem; padding:5px 12px; border-radius:99px; background:var(--violeta-suave); color:#9d8fff;">🏷 ${esc(e)} <span onclick="espQuitar('${esc(e).replace(/'/g,'')}')" style="cursor:pointer; font-weight:700;">✕</span></span>`).join('') : '<small style="color:var(--gris);">Aún no creas especialidades.</small>';
+}
+function renderGruposLista() {
+  const c = document.getElementById('gruposLista'); if (!c) return;
+  const esc = (x) => String(x || '').replace(/</g, '&lt;');
+  c.innerHTML = _empData.grupos.length ? _empData.grupos.map((g) => `<div style="display:flex; align-items:center; gap:10px; padding:8px 12px; border:1px solid var(--linea); border-radius:12px;"><span style="width:16px; height:16px; border-radius:50%; background:${g.color};"></span><strong style="flex:1; font-size:.82rem;">${esc(g.nombre)}</strong><button onclick="grpEliminar('${g.id}','${esc(g.nombre).replace(/'/g,'')}')" style="padding:4px 10px; border-radius:99px; font-size:.68rem; cursor:pointer; border:1px solid rgba(229,52,75,.5); background:rgba(229,52,75,.1); color:#ff4d5e;">Eliminar</button></div>`).join('') : '<small style="color:var(--gris);">Aún no creas grupos.</small>';
+}
+function espAgregar() {
+  const inp = document.getElementById('espNueva'); const v = (inp?.value || '').trim();
+  if (!v) return;
+  if (_empData.especialidades.includes(v)) { inp.value = ''; return; }
+  const nueva = [..._empData.especialidades, v];
+  saFetch({ accion: 'emp-especialidades-set', especialidades: nueva }).then((d) => { if (d.ok) { _empData.especialidades = d.especialidades || nueva; inp.value = ''; renderEspChips(); cargarPersonal(); } else alert(d.error || 'Error'); });
+}
+function espQuitar(nombre) {
+  const nueva = _empData.especialidades.filter((e) => e !== nombre);
+  saFetch({ accion: 'emp-especialidades-set', especialidades: nueva }).then((d) => { if (d.ok) { _empData.especialidades = d.especialidades || nueva; renderEspChips(); cargarPersonal(); } });
+}
+function grpCrear() {
+  const inp = document.getElementById('grpNombre'); const nombre = (inp?.value || '').trim();
+  const color = document.getElementById('grpColor')?.value || '#9d8fff';
+  if (!nombre) { alert('Ponle un nombre al grupo.'); return; }
+  saFetch({ accion: 'emp-grupo-crear', nombre, color }).then((d) => { if (d.ok) { inp.value = ''; cargarPersonal(); } else alert(d.error || 'Error'); });
+}
+function grpEliminar(id, nombre) {
+  if (!confirm('¿Eliminar el grupo "' + nombre + '"? Las personas quedarán sin grupo (no se borran).')) return;
+  saFetch({ accion: 'emp-grupo-eliminar', grupoId: id }).then((d) => { if (d.ok) cargarPersonal(); else alert(d.error || 'Error'); });
+}
+function personaSet(uid, campo, valor) {
+  const cuerpo = { accion: 'emp-persona-set', personalUid: uid };
+  cuerpo[campo] = valor;
+  saFetch(cuerpo).then((d) => { if (d.ok) cargarPersonal(); else alert(d.error || 'Error'); });
 }
 function cambiarRol(personalUid, rol) {
   saFetch({ accion: 'emp-rol', personalUid, rol }).then((d) => {
