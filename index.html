@@ -794,6 +794,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="roles" id="navRoles" style="display:none"><span>🔺</span><em>Roles</em></button>
         <button class="op-nav" data-opview="recorridos" id="navRecorridos" style="display:none"><span>🗺️</span><em>Recorridos</em></button>
         <button class="op-nav" data-opview="operativos" id="navOperativos"><span>🚨</span><em>Operativos</em></button>
+        <button class="op-nav" data-opview="encurso" id="navEnCurso"><span>📡</span><em>En curso</em></button>
         <button class="op-nav" data-opview="chatmov" id="navChatMov"><span>💬</span><em>Móviles</em></button>
         <button class="op-nav" data-opview="asistencia" id="navAsistencia" style="display:none"><span>🕒</span><em>Asistencia</em></button>
         <div class="op-side-foot">
@@ -1191,11 +1192,15 @@ textarea{min-height:96px;resize:vertical}
               <p style="color:var(--gris); font-size:.76rem; margin-bottom:8px;">Define qué es cada móvil para despachar el correcto según la emergencia.</p>
               <div id="misTiposLista"><small style="color:var(--gris);">Cargando móviles…</small></div>
             </div>
+
+          
+          </section>
+          <!-- ── Vista: Operativos en curso (seguimiento) ── -->
+          <section class="op-view" id="op-view-encurso">
             <div class="card">
               <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>📡 Operativos en curso y reportes de terreno</span><button onclick="misionListar()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
               <div id="misLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
             </div>
-          
           </section>
           <!-- ── Vista: Asistencia del personal (jefe/gerente) ── -->
           <section class="op-view" id="op-view-asistencia">
@@ -3701,9 +3706,6 @@ function misionInit() {
         </div>`).join('') : '<small style="color:var(--gris);">Sin móviles registrados.</small>';
     }
   }).catch(() => {});
-  misionListar();
-  clearInterval(_misTimer);
-  _misTimer = setInterval(() => { if (document.getElementById('op-view-operativos')?.classList.contains('active')) misionListar(); }, 8000);
 }
 function movilTipoSet(uid, tipo) {
   saFetch({ accion: 'movil-tipo', movilUid: uid, tipo }).then((d) => { if (d.ok) misionInit(); else alert(d.error || 'Error'); });
@@ -3749,6 +3751,14 @@ function misionListar() {
     cont.innerHTML = d.misiones.map((m) => {
       const est = MISION_ESTADOS[m.estado] || ['📨', m.estado];
       const cerrada = m.estado === 'cerrada' || m.estado === 'resuelto';
+      const PASOS = [['despachado','📨','Despachado'],['en_camino','🚗','En camino'],['en_sitio','📍','En el sitio'],['resuelto','✅','Resuelto']];
+      let pIdx = PASOS.findIndex((p) => p[0] === m.estado); if (m.estado === 'cerrada') pIdx = 3; if (pIdx < 0) pIdx = 0;
+      const linea = '<div style="display:flex; align-items:flex-start; margin:12px 0 10px;">' + PASOS.map((p, i) => `
+        <div style="flex:1; text-align:center; min-width:0;">
+          <div style="width:30px; height:30px; border-radius:50%; margin:0 auto 4px; display:flex; align-items:center; justify-content:center; font-size:.85rem; background:${i <= pIdx ? (i === 3 ? 'rgba(34,170,90,.22)' : 'var(--violeta-suave)') : 'var(--fondo)'}; border:2px solid ${i <= pIdx ? (i === 3 ? '#22aa5a' : '#9d8fff') : 'var(--linea)'};">${i <= pIdx ? p[1] : ''}</div>
+          <div style="font-size:.62rem; font-weight:${i === pIdx ? '800' : '500'}; color:${i <= pIdx ? (i === pIdx ? (i === 3 ? '#22aa5a' : '#9d8fff') : 'var(--tinta)') : 'var(--gris)'};">${p[2]}</div>
+          ${i === pIdx ? `<div style="font-size:.6rem; color:var(--gris); font-weight:700;">${hora(m.estadoEn || m.creadaEn)}</div>` : ''}
+        </div>${i < 3 ? `<div style="flex:.5; height:3px; border-radius:99px; margin-top:14px; background:${i < pIdx ? '#9d8fff' : 'var(--linea)'};"></div>` : ''}`).join('') + '</div>';
       const reps = (m.reportes || []).map((r) => `
         <div style="background:var(--fondo); border:1px solid var(--linea); border-radius:12px; padding:9px 12px; margin-top:7px;">
           <div style="font-size:.68rem; color:var(--gris); margin-bottom:3px;">📡 Reporte de terreno · ${hora(r.creadaEn)}</div>
@@ -3762,6 +3772,7 @@ function misionListar() {
           <span style="font-size:.62rem; font-weight:700; padding:3px 10px; border-radius:99px; background:var(--violeta-suave); color:#9d8fff;">${est[0]} ${est[1].toUpperCase()}</span>
         </div>
         <div style="font-size:.76rem; color:var(--gris); margin:3px 0;">🚐 ${m.movilNombre.replace(/</g,'&lt;')} · ${TIPOS_MOVIL[m.tipo] || m.tipo}${m.direccion ? ' · 📍 ' + m.direccion.replace(/</g,'&lt;') : ''} · ${hora(m.creadaEn)}</div>
+        ${linea}
         ${m.descripcion ? `<div style="font-size:.82rem; background:var(--violeta-suave); color:#c9c0ff; border-radius:10px; padding:8px 12px; margin:6px 0;">🎯 ${m.descripcion.replace(/</g,'&lt;')}</div>` : ''}
         ${reps || '<div style="font-size:.76rem; color:var(--gris); margin-top:6px;">Aún sin reportes de terreno.</div>'}
         ${!cerrada ? `<button onclick="misionCerrar('${m.id}')" style="margin-top:10px; padding:8px 16px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.74rem; cursor:pointer;">🔒 Cerrar operativo</button>` : ''}
@@ -5063,7 +5074,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', operativos:'Operativos y despachos', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', operativos:'Operativos y despachos', encurso:'Operativos en curso', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -5076,7 +5087,8 @@ const opDescripciones = {
   credenciales: 'Bitácora de todas las cuentas de personal creadas (correo, cargo, autor y fecha). Las claves no se guardan por seguridad.',
   roles: 'Define en pirámide qué ve y hace cada cargo de tu empresa. Solo el jefe.',
   recorridos: 'Manda a cada móvil su ruta del día. Solo el gerente o el jefe.',
-  operativos: 'Despacha móviles con un objetivo claro y sigue sus reportes de terreno con fotos, en vivo.',
+  operativos: 'Despacha móviles con un objetivo claro para cada emergencia.',
+  encurso: 'Seguimiento en vivo: en qué estado va cada operativo, con sus reportes de terreno y fotos.',
   chatmov: 'Mensajes y fotos con cada móvil de reacción, en ambos sentidos.',
   asistencia: 'Punto de trabajo, horario y marcaje por GPS de cada trabajador. Jefe y gerente.'
 };
@@ -6059,6 +6071,7 @@ function opGo(v){
   if (v==='personal') cargarPersonal();
   if (v==='recorridos') recInit();
   if (v==='operativos') misionInit();
+  if (v==='encurso') { misionListar(); clearInterval(_misTimer); _misTimer = setInterval(() => { if (document.getElementById('op-view-encurso')?.classList.contains('active')) misionListar(); }, 8000); }
   if (v==='chatmov') chatMovInit();
   if (v==='asistencia') asistPanelInit();
   if (v==='credenciales') cargarCredencialesModulo();
