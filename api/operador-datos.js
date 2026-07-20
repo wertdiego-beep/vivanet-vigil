@@ -1121,8 +1121,12 @@ export default async function handler(req, res) {
         direccion: dd.fields?.direccion?.stringValue || '',
         estado: dd.fields?.estado?.stringValue || 'despachado',
         creadaEn: dd.fields?.creadaEn?.timestampValue || null,
-        estadoEn: dd.fields?.estadoEn?.timestampValue || null
-      })).sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 15);
+        estadoEn: dd.fields?.estadoEn?.timestampValue || null,
+        creadaPor: dd.fields?.creadaPor?.stringValue || '',
+        resultado: dd.fields?.resultado?.stringValue || '',
+        cerradaPor: dd.fields?.cerradaPor?.stringValue || '',
+        cerradaEn: dd.fields?.cerradaEn?.timestampValue || null
+      })).sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, req.body.registro ? 40 : 15);
       // Reportes de terreno de cada misión (texto + fotos).
       for (const m of misiones) {
         try {
@@ -1139,9 +1143,11 @@ export default async function handler(req, res) {
     if (accion === 'mision-cerrar') {
       const mid = (req.body.misionId || '').trim();
       if (!/^[A-Za-z0-9]+$/.test(mid)) { res.status(400).json({ error: 'Operativo no válido' }); return; }
-      await fetch(`${base0}/empresas/${empresaOperador}/misiones/${mid}?updateMask.fieldPaths=estado&updateMask.fieldPaths=estadoEn`, {
+      const resultado = String(req.body.resultado || '').trim().slice(0, 600);
+      const ahoraC = new Date().toISOString();
+      await fetch(`${base0}/empresas/${empresaOperador}/misiones/${mid}?updateMask.fieldPaths=estado&updateMask.fieldPaths=estadoEn&updateMask.fieldPaths=resultado&updateMask.fieldPaths=cerradaPor&updateMask.fieldPaths=cerradaEn`, {
         method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { estado: { stringValue: 'cerrada' }, estadoEn: { timestampValue: new Date().toISOString() } } })
+        body: JSON.stringify({ fields: { estado: { stringValue: 'cerrada' }, estadoEn: { timestampValue: ahoraC }, resultado: { stringValue: resultado }, cerradaPor: { stringValue: perfilOp.fields?.nombre?.stringValue || '' }, cerradaEn: { timestampValue: ahoraC } } })
       });
       res.status(200).json({ ok: true });
       return;
