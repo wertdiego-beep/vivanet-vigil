@@ -590,7 +590,7 @@ export default async function handler(req, res) {
         const est = ['en_camino', 'en_sitio', 'resuelto'].includes(req.body.estado) ? req.body.estado : '';
         if (!/^[A-Za-z0-9]+$/.test(mid) || !est) { res.status(400).json({ error: 'Datos no válidos' }); return; }
         const docM = await fetch(`${base0}/empresas/${empMovil}/misiones/${mid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-        if ((docM.fields?.movilUid?.stringValue || '') !== uid) { res.status(403).json({ error: 'Esa misión no es tuya.' }); return; }
+        if ((docM.fields?.movilUid?.stringValue || '') !== uid) { res.status(403).json({ error: 'Ese operativo no es tuyo.' }); return; }
         await fetch(`${base0}/empresas/${empMovil}/misiones/${mid}?updateMask.fieldPaths=estado&updateMask.fieldPaths=estadoEn`, {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: { estado: { stringValue: est }, estadoEn: { timestampValue: new Date().toISOString() } } })
@@ -601,9 +601,9 @@ export default async function handler(req, res) {
       if (accion === 'movil-mision-reporte') {
         // Reporte de situación desde terreno: texto + foto. Se pueden enviar varios.
         const mid = (req.body.misionId || '').trim();
-        if (!/^[A-Za-z0-9]+$/.test(mid)) { res.status(400).json({ error: 'Misión no válida' }); return; }
+        if (!/^[A-Za-z0-9]+$/.test(mid)) { res.status(400).json({ error: 'Operativo no válido' }); return; }
         const docM = await fetch(`${base0}/empresas/${empMovil}/misiones/${mid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-        if ((docM.fields?.movilUid?.stringValue || '') !== uid) { res.status(403).json({ error: 'Esa misión no es tuya.' }); return; }
+        if ((docM.fields?.movilUid?.stringValue || '') !== uid) { res.status(403).json({ error: 'Ese operativo no es tuyo.' }); return; }
         const texto = String(req.body.texto || '').trim().slice(0, 800);
         const foto = req.body.foto ? String(req.body.foto).slice(0, 900000) : null;
         if (!texto && !foto) { res.status(400).json({ error: 'Envía al menos un texto o una foto.' }); return; }
@@ -1087,7 +1087,7 @@ export default async function handler(req, res) {
       const mUid = (req.body.movilUid || '').trim();
       const titulo = String(req.body.titulo || '').trim().slice(0, 120);
       const descripcion = String(req.body.descripcion || '').trim().slice(0, 600);
-      if (!/^[A-Za-z0-9]+$/.test(mUid) || !titulo) { res.status(400).json({ error: 'Faltan el móvil o el objetivo de la misión.' }); return; }
+      if (!/^[A-Za-z0-9]+$/.test(mUid) || !titulo) { res.status(400).json({ error: 'Faltan el móvil o el objetivo del operativo.' }); return; }
       const docMv = await fetch(`${base0}/usuarios/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       if (!esSA && (docMv.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Ese móvil es de otra empresa.' }); return; }
       const fields = {
@@ -1138,7 +1138,7 @@ export default async function handler(req, res) {
     }
     if (accion === 'mision-cerrar') {
       const mid = (req.body.misionId || '').trim();
-      if (!/^[A-Za-z0-9]+$/.test(mid)) { res.status(400).json({ error: 'Misión no válida' }); return; }
+      if (!/^[A-Za-z0-9]+$/.test(mid)) { res.status(400).json({ error: 'Operativo no válido' }); return; }
       await fetch(`${base0}/empresas/${empresaOperador}/misiones/${mid}?updateMask.fieldPaths=estado&updateMask.fieldPaths=estadoEn`, {
         method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { estado: { stringValue: 'cerrada' }, estadoEn: { timestampValue: new Date().toISOString() } } })
