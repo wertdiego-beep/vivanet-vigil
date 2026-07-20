@@ -1549,6 +1549,8 @@ function entrarASOS360() {
     } else {
       verificarPerfilYEntrar(user.uid);
     }
+    // Candado de asistencia: si tiene punto asignado y no ha marcado hoy, la app se bloquea.
+    setTimeout(asistLockInit, 800);
   }).catch((err) => {
     console.error('Error verificando rol de técnico:', err);
     verificarPerfilYEntrar(user.uid);
@@ -4921,6 +4923,51 @@ function cargarPanelMovil() {
   asistInit('asistMovil');
 }
 /* ── 🕒 ASISTENCIA del trabajador (marca por proximidad GPS) ── */
+async function asistLockInit() {
+  try {
+    const d = await saFetch({ accion: 'asist-mi-config' });
+    if (!d || !d.ok) return;                       // sin rol, o función cortada: no aplica
+    if (d.config.lat == null) return;              // sin punto asignado: no aplica
+    if (d.hoy && d.hoy.entradaHora) return;        // ya marcó hoy: app libre
+    asistLockShow(d.config);
+  } catch (e) {}
+}
+function asistLockShow(c) {
+  let o = document.getElementById('asistLockOverlay');
+  if (!o) { o = document.createElement('div'); o.id = 'asistLockOverlay'; document.body.appendChild(o); }
+  o.style.cssText = 'position:fixed;inset:0;z-index:9000;background:var(--fondo);display:flex;align-items:center;justify-content:center;padding:22px;';
+  o.innerHTML = `
+    <div style="max-width:420px; width:100%; text-align:center;">
+      <div style="font-size:3rem;">🕒</div>
+      <h2 style="font-family:'Chakra Petch',sans-serif; margin:10px 0 6px;">Marca tu asistencia para entrar</h2>
+      <p style="color:var(--gris); font-size:.88rem; line-height:1.5; margin-bottom:6px;">Tu jornada empieza al marcar la entrada. La app se habilita cuando estés en tu lugar de trabajo.</p>
+      <div style="background:var(--blanco); border:1px solid var(--linea); border-radius:14px; padding:14px; margin:14px 0; font-size:.86rem;">
+        <b>📍 ${(c.lugar || 'Tu punto de trabajo').replace(/</g,'&lt;')}</b><br>
+        <span style="color:var(--gris);">Horario: ${c.entrada || '—'} a ${c.salida || '—'} · debes estar a menos de 200 m</span>
+      </div>
+      <button onclick="asistLockMarcar()" id="asistLockBtn" style="width:100%; padding:17px; border-radius:14px; border:none; background:#16a34a; color:#fff; font-weight:700; font-size:1.05rem; cursor:pointer;">📍 MARCAR ENTRADA</button>
+      <div id="asistLockInfo" style="margin-top:10px; font-size:.8rem; color:var(--gris);"></div>
+      <button onclick="cerrarSesion()" style="margin-top:16px; background:none; border:none; color:var(--gris); font-size:.78rem; cursor:pointer; text-decoration:underline;">Cerrar sesión</button>
+    </div>`;
+}
+function asistLockMarcar() {
+  const info = document.getElementById('asistLockInfo');
+  const btn = document.getElementById('asistLockBtn');
+  if (!navigator.geolocation) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Tu teléfono no tiene GPS disponible.'; } return; }
+  if (btn) { btn.disabled = true; btn.textContent = '📡 Obteniendo ubicación…'; }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    saFetch({ accion: 'asist-marcar', tipo: 'entrada', lat: pos.coords.latitude, lng: pos.coords.longitude }).then((d) => {
+      if (d.ok) {
+        const o = document.getElementById('asistLockOverlay');
+        if (o) { o.innerHTML = `<div style="text-align:center;"><div style="font-size:3.4rem;">✅</div><h2 style="font-family:'Chakra Petch',sans-serif;">¡Entrada marcada a las ${d.hora}!</h2><p style="color:var(--gris);">Bienvenido/a. Habilitando tus funciones…</p></div>`; setTimeout(() => o.remove(), 1600); }
+        try { asistInit('asistMovil'); asistInit('asistTecnico'); } catch (e) {}
+      } else {
+        if (btn) { btn.disabled = false; btn.textContent = '📍 MARCAR ENTRADA'; }
+        if (info) { info.style.color = 'var(--rojo)'; info.textContent = d.error || 'No se pudo marcar.'; }
+      }
+    }).catch(() => { if (btn) { btn.disabled = false; btn.textContent = '📍 MARCAR ENTRADA'; } if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
+  }, () => { if (btn) { btn.disabled = false; btn.textContent = '📍 MARCAR ENTRADA'; } if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Activa la ubicación de tu teléfono para marcar.'; } }, { enableHighAccuracy: true, timeout: 15000 });
+}
 function asistInit(contId) {
   const cont = document.getElementById(contId); if (!cont) return;
   saFetch({ accion: 'asist-mi-config' }).then((d) => {
