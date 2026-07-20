@@ -1239,6 +1239,7 @@ textarea{min-height:96px;resize:vertical}
         <div style="height:8px; background:var(--violeta-suave); border-radius:99px; overflow:hidden; margin:8px 0 14px;">
           <div id="movilProgresoBar" style="height:100%; width:0%; background:linear-gradient(90deg,#16a34a,#4ade80); border-radius:99px; transition:width .4s;"></div>
         </div>
+        <div id="movilGeoEstado" style="font-size:.72rem; color:var(--gris); margin:-6px 0 10px;">📡 Activando GPS… las paradas se marcarán solas al pasar por cada punto.</div>
         <div id="movilRecorrido"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
       </div>
       <input type="file" id="movilFotoInput" accept="image/*" capture="environment" style="display:none;">
@@ -4688,6 +4689,42 @@ const MOVIL_ESTADOS = { despachado:'Despachado', en_camino:'Voy en camino', en_s
 function cargarPanelMovil() {
   saFetch({ accion: 'movil-despachos' }).then(renderMovilDespachos).catch(() => {});
   saFetch({ accion: 'movil-recorrido' }).then(renderMovilRecorrido).catch(() => {});
+  movilGeoStart();
+}
+/* ── 📡 Auto-marcado de paradas por GPS ── */
+let movilGeoId = null; const movilGeoMarcando = new Set();
+const MOVIL_GEO_RADIO_M = 120; // a menos de 120 m del punto, se marca sola
+function movilDistM(aLat, aLng, bLat, bLng) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (bLat - aLat) * rad, dLng = (bLng - aLng) * rad;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function movilGeoStart() {
+  if (movilGeoId != null || !navigator.geolocation) return;
+  movilGeoId = navigator.geolocation.watchPosition(movilGeoCheck, () => {
+    const el = document.getElementById('movilGeoEstado');
+    if (el) el.innerHTML = '⚠️ Sin GPS: activa la ubicación para el marcado automático. Mientras, usa el ✓.';
+  }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+}
+function movilGeoCheck(pos) {
+  const { latitude, longitude } = pos.coords;
+  const el = document.getElementById('movilGeoEstado');
+  if (el) el.innerHTML = '📡 <b style="color:var(--verde);">GPS activo</b> · las paradas se marcan solas al pasar por cada punto.';
+  (_movilRuta || []).forEach((p, i) => {
+    if (!p || p.estado === 'visitada' || !p.lat || !p.lng || movilGeoMarcando.has(i)) return;
+    if (movilDistM(latitude, longitude, p.lat, p.lng) <= MOVIL_GEO_RADIO_M) {
+      movilGeoMarcando.add(i);
+      saFetch({ accion: 'movil-parada', idx: i, estado: 'visitada', nota: 'Marcada automáticamente por GPS' }).then((d) => {
+        movilGeoMarcando.delete(i);
+        if (d.ok) {
+          p.estado = 'visitada';
+          if (navigator.vibrate) navigator.vibrate([180, 80, 180]);
+          renderMovilRecorrido({ ok: true, paradas: _movilRuta });
+        }
+      }).catch(() => movilGeoMarcando.delete(i));
+    }
+  });
 }
 function movilNav(ubic, direccion) {
   let url;
