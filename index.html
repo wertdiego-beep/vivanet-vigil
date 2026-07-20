@@ -1172,7 +1172,11 @@ textarea{min-height:96px;resize:vertical}
               <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Elige a la persona, toca en el mapa su lugar de trabajo y define su horario. Solo podrá marcar asistencia estando a menos de 200 m de ese punto.</p>
               <select id="asistPersonaSel" onchange="asistCargarPersona()" style="margin-bottom:10px;"><option value="">— Elige a la persona —</option></select>
               <div id="asistMapa" style="height:260px; border-radius:12px; overflow:hidden; border:1px solid var(--linea); margin-bottom:10px;"></div>
-              <input type="text" id="asistLugar" placeholder="Nombre del lugar (ej: Portería Balmaceda 450)" style="margin-bottom:8px;">
+              <div style="display:flex; gap:7px; margin-bottom:8px;">
+                <input type="text" id="asistLugar" placeholder="Escribe la calle y Enter (ej: Balmaceda 450)" style="margin:0; flex:1;" onkeydown="if(event.key==='Enter')asistBuscarLugar()">
+                <button class="btn-full" style="width:auto; margin:0; padding:9px 16px;" onclick="asistBuscarLugar()">🔍 Buscar</button>
+              </div>
+              <div id="asistLugarInfo" style="font-size:.74rem; color:var(--gris); margin:-2px 0 8px;"></div>
               <div style="display:flex; gap:10px; margin-bottom:10px;">
                 <div style="flex:1;"><label style="font-size:.72rem; color:var(--gris);">Hora de entrada</label><input type="time" id="asistEnt" value="09:00"></div>
                 <div style="flex:1;"><label style="font-size:.72rem; color:var(--gris);">Hora de salida</label><input type="time" id="asistSal" value="18:00"></div>
@@ -3538,6 +3542,32 @@ function asistPanelListar() {
       </div>`;
     }).join('');
   }).catch(() => {});
+}
+async function asistBuscarLugar() {
+  const q = (document.getElementById('asistLugar').value || '').trim();
+  const info = document.getElementById('asistLugarInfo');
+  if (!q) { if (info) info.textContent = 'Escribe una calle primero.'; return; }
+  if (info) { info.style.color = 'var(--gris)'; info.textContent = '🔍 Buscando "' + q + '"…'; }
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&viewbox=${MAPA_VIEWBOX}&bounded=1&q=${encodeURIComponent(q + ', ' + MAPA_CIUDAD_CONTEXTO)}`;
+    let resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+    let data = await resp.json();
+    if (!data || !data[0]) {
+      // segundo intento sin la caja acotada (por si es de otra comuna)
+      const url2 = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&q=${encodeURIComponent(q + ', Chile')}`;
+      resp = await fetch(url2, { headers: { 'Accept-Language': 'es' } });
+      data = await resp.json();
+    }
+    if (!data || !data[0]) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = '✗ No se encontró "' + q + '". Escríbela más completa (ej: Av. Francisco de Aguirre 350).'; } return; }
+    const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+    asistCoords = { lat, lng };
+    if (asistMarker) asistMapaL.removeLayer(asistMarker);
+    asistMarker = L.marker([lat, lng]).addTo(asistMapaL);
+    asistMapaL.setView([lat, lng], 17);
+    const nombreCorto = (data[0].display_name || q).split(',').slice(0, 3).join(',');
+    asistMarker.bindPopup('📍 ' + nombreCorto).openPopup();
+    if (info) { info.style.color = '#00C776'; info.innerHTML = '✅ Encontrado: <b>' + nombreCorto.replace(/</g,'&lt;') + '</b>. El pin quedó puesto; muévelo tocando el mapa si necesitas afinar.'; }
+  } catch (e) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error buscando la dirección.'; } }
 }
 function asistCargarPersona() {
   const uid = document.getElementById('asistPersonaSel').value;
