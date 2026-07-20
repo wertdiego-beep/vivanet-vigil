@@ -4714,7 +4714,8 @@ function movilDocumentar(clienteUid, alertaId) {
   _movilFotoCtx = { tipo: 'despacho', clienteUid, alertaId, nota };
   const inp = document.getElementById('movilFotoInput'); inp.value = ''; inp.click();
 }
-let _movilRuta = [], _movilPaso = 0;
+let _movilRuta = [], _movilPaso = 0, _movilChunk = 0;
+const MOVIL_MAX_STOPS = 10;
 function renderMovilRecorrido(d) {
   const cont = document.getElementById('movilRecorrido'); if (!cont) return;
   if (!d || !d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + ((d && d.error) || 'Error') + '</strong></div></div>'; return; }
@@ -4736,7 +4737,7 @@ function renderMovilRecorrido(d) {
 }
 function movilIniciarRecorrido() {
   if (!_movilRuta || _movilRuta.length < 2) return;
-  _movilPaso = 0;
+  _movilPaso = 0; _movilChunk = 0;
   document.getElementById('movilNavOverlay').style.display = 'block';
   movilRenderPaso();
 }
@@ -4748,13 +4749,37 @@ function movilDestUrl(p, app) {
   return null;
 }
 function movilAbrirDest(app) { const p = _movilRuta[_movilPaso + 1]; const u = movilDestUrl(p, app); if (u) window.open(u, '_blank'); else alert('Ese punto no tiene ubicación para navegar.'); }
+function movilPuntoStr(p) { if (!p) return ''; if (p.lat && p.lng) return p.lat + ',' + p.lng; return encodeURIComponent(p.direccion || ''); }
+function movilNavegarTodo() {
+  const total = _movilRuta.length; if (total < 2) return;
+  const fin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total);
+  const seg = _movilRuta.slice(_movilChunk, fin);
+  const origin = movilPuntoStr(seg[0]);
+  const destination = movilPuntoStr(seg[seg.length - 1]);
+  const mid = seg.slice(1, -1).map(movilPuntoStr).filter(Boolean).join('|');
+  let url = 'https://www.google.com/maps/dir/?api=1&origin=' + origin + '&destination=' + destination + '&travelmode=driving';
+  if (mid) url += '&waypoints=' + mid;
+  window.open(url, '_blank');
+}
+function movilChunkSig() { const total = _movilRuta.length; const fin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total); if (fin < total) { _movilChunk = fin - 1; movilRenderPaso(); } }
+function movilChunkReset() { _movilChunk = 0; movilRenderPaso(); }
 function movilPaso(d) { _movilPaso = Math.max(0, Math.min(_movilRuta.length - 2, _movilPaso + d)); movilRenderPaso(); }
 function movilRenderPaso() {
   const body = document.getElementById('movilNavBody'); if (!body) return;
   const total = _movilRuta.length, i = _movilPaso;
   const desde = _movilRuta[i] || {}, hacia = _movilRuta[i + 1] || {};
   const esUltimo = i >= total - 2;
-  body.innerHTML = `
+  const chunkFin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total);
+  const hayMas = chunkFin < total;
+  const todoBlock = `
+    <div style="background:linear-gradient(135deg,#16a34a,#0e7a37); border-radius:16px; padding:16px; margin-bottom:16px; text-align:center;">
+      <div style="color:#fff; font-weight:700; font-size:.98rem;">🚀 Navegar todo el recorrido con paradas</div>
+      <div style="color:#dcfce7; font-size:.74rem; margin:5px 0 10px; line-height:1.4;">${hayMas ? `Google Maps abre los puntos ${_movilChunk + 1} a ${chunkFin} como paradas seguidas: va ${_movilChunk + 1}→${_movilChunk + 2}→… sin que tengas que volver. Al llegar al ${chunkFin}, vuelve y toca "Continuar".` : `Google Maps abre los ${total} puntos como paradas seguidas: recorre del 1 al ${total} de corrido, sin volver a la app entre punto y punto.`}</div>
+      <button onclick="movilNavegarTodo()" style="width:100%; padding:14px; border-radius:10px; border:none; background:#fff; color:#0e7a37; font-weight:700; font-size:1rem; cursor:pointer;">🧭 Abrir en Google Maps con paradas</button>
+      ${hayMas ? `<button onclick="movilChunkSig()" style="width:100%; margin-top:8px; padding:11px; border-radius:10px; border:1px solid #fff; background:transparent; color:#fff; font-weight:700; cursor:pointer;">Continuar siguiente tramo (${chunkFin}→…) ▶</button>` : (_movilChunk > 0 ? `<button onclick="movilChunkReset()" style="width:100%; margin-top:8px; padding:11px; border-radius:10px; border:1px solid #fff; background:transparent; color:#fff; font-weight:700; cursor:pointer;">↺ Volver al inicio del recorrido</button>` : '')}
+    </div>
+    <div style="text-align:center; color:var(--gris); font-size:.72rem; margin-bottom:12px;">— o navega tramo por tramo (también Waze) —</div>`;
+  body.innerHTML = todoBlock + `
     <div style="text-align:center; color:var(--gris); font-size:.8rem; margin-bottom:8px;">Tramo ${i + 1} de ${total - 1}</div>
     <div style="background:var(--blanco); border:1px solid var(--linea); border-radius:16px; padding:18px; text-align:center;">
       <div style="font-size:.75rem; color:var(--gris);">Punto ${i + 1} · Desde</div>
