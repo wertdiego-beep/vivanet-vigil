@@ -4754,11 +4754,11 @@ function movilNavegarTodo() {
   const total = _movilRuta.length; if (total < 2) return;
   const fin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total);
   const seg = _movilRuta.slice(_movilChunk, fin);
-  const origin = movilPuntoStr(seg[0]);
-  const destination = movilPuntoStr(seg[seg.length - 1]);
-  const mid = seg.slice(1, -1).map(movilPuntoStr).filter(Boolean).join('|');
-  let url = 'https://www.google.com/maps/dir/?api=1&origin=' + origin + '&destination=' + destination + '&travelmode=driving';
-  if (mid) url += '&waypoints=' + mid;
+  // Formato de RUTA con las paradas separadas por "/": este sí abre todas las
+  // paradas en la app de Google Maps (el formato ?api=1&waypoints solo funciona en la web).
+  const puntos = seg.map(movilPuntoStr).filter(Boolean);
+  if (puntos.length < 2) return;
+  const url = 'https://www.google.com/maps/dir/' + puntos.join('/') + '/data=!4m2!4m1!3e0';
   window.open(url, '_blank');
 }
 function movilChunkSig() { const total = _movilRuta.length; const fin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total); if (fin < total) { _movilChunk = fin - 1; movilRenderPaso(); } }
