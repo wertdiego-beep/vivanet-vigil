@@ -113,6 +113,7 @@ async function listarClientes(accessToken) {
         tipoMovil: f.tipoMovil?.stringValue || '',
         especialidad: f.especialidad?.stringValue || '',
         grupoId: f.grupoId?.stringValue || '',
+        cargoMunicipal: f.cargoMunicipal?.stringValue || '',
         // Multitenant: usuarios sin empresa pertenecen a la empresa original.
         empresaId: f.empresaId?.stringValue || 'sos360-la-serena'
       };
@@ -1444,7 +1445,7 @@ export default async function handler(req, res) {
       // Personal de la empresa del operador: integrantes con rolEmpresa.
       const clientesTodos = await listarClientes(accessToken);
       const personal = clientesTodos.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa)
-        .map((c) => ({ uid: c.uid, nombre: c.nombre || c.local || 'Sin nombre', telefono: c.telefono || '', rol: c.rolEmpresa, esOperador: !!c.operadorDe, especialidad: c.especialidad || '', grupoId: c.grupoId || '' }));
+        .map((c) => ({ uid: c.uid, nombre: c.nombre || c.local || 'Sin nombre', telefono: c.telefono || '', rol: c.rolEmpresa, esOperador: !!c.operadorDe, especialidad: c.especialidad || '', grupoId: c.grupoId || '', cargoMunicipal: c.cargoMunicipal || '' }));
       // Correos de esas cuentas.
       try {
         const lk = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`, {
@@ -1454,22 +1455,32 @@ export default async function handler(req, res) {
         (lk.users || []).forEach((u) => { const p = personal.find((x) => x.uid === u.localId); if (p) p.email = u.email || ''; });
       } catch (e) {}
       // Especialidades y grupos que definió el jefe de la empresa.
-      let especialidades = [], grupos = [];
+      let especialidades = [], grupos = [], cargosMun = [];
       try {
         const empDocP = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
         especialidades = (empDocP.fields?.especialidades?.arrayValue?.values || []).map((x) => x.stringValue);
+        cargosMun = (empDocP.fields?.cargosMun?.arrayValue?.values || []).map((x) => x.stringValue);
         grupos = (empDocP.fields?.grupos?.arrayValue?.values || []).map((g) => { const gf = g.mapValue?.fields || {}; return { id: gf.id?.stringValue || '', nombre: gf.nombre?.stringValue || '', color: gf.color?.stringValue || '#9d8fff', lider: gf.lider?.stringValue || '' }; });
       } catch (e) {}
-      res.status(200).json({ ok: true, personal, empresa: empresaOperador, especialidades, grupos });
+      res.status(200).json({ ok: true, personal, empresa: empresaOperador, especialidades, grupos, cargosMun });
       return;
     }
-    if (accion === 'emp-especialidades-set' || accion === 'emp-grupo-crear' || accion === 'emp-grupo-eliminar' || accion === 'emp-persona-set') {
+    if (accion === 'emp-especialidades-set' || accion === 'emp-cargos-set' || accion === 'emp-grupo-crear' || accion === 'emp-grupo-eliminar' || accion === 'emp-persona-set') {
       // Configuración de especialidades y grupos: solo jefe/gerente.
       const miRolE = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolE !== 'jefe' && miRolE !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente gestiona el equipo.' }); return; }
       const rutaEmpE = `${base0}/empresas/${empresaOperador}`;
       const empDocE = await fetch(rutaEmpE, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
 
+      if (accion === 'emp-cargos-set') {
+        const listaC = (Array.isArray(req.body.cargos) ? req.body.cargos : []).map((x) => String(x).trim().slice(0, 60)).filter(Boolean).slice(0, 60);
+        await fetch(`${rutaEmpE}?updateMask.fieldPaths=cargosMun`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { cargosMun: { arrayValue: { values: listaC.map((x) => ({ stringValue: x })) } } } })
+        });
+        res.status(200).json({ ok: true, cargos: listaC });
+        return;
+      }
       if (accion === 'emp-especialidades-set') {
         const lista = (Array.isArray(req.body.especialidades) ? req.body.especialidades : []).map((x) => String(x).trim().slice(0, 40)).filter(Boolean).slice(0, 40);
         await fetch(`${rutaEmpE}?updateMask.fieldPaths=especialidades`, {
@@ -1512,6 +1523,7 @@ export default async function handler(req, res) {
         const campos = {}, masks = [];
         if (req.body.especialidad != null) { campos.especialidad = { stringValue: String(req.body.especialidad).slice(0, 40) }; masks.push('especialidad'); }
         if (req.body.grupoId != null) { campos.grupoId = { stringValue: String(req.body.grupoId).slice(0, 30) }; masks.push('grupoId'); }
+        if (req.body.cargoMunicipal != null) { campos.cargoMunicipal = { stringValue: String(req.body.cargoMunicipal).slice(0, 60) }; masks.push('cargoMunicipal'); }
         if (!masks.length) { res.status(400).json({ error: 'Nada que actualizar' }); return; }
         await fetch(`${base0}/usuarios/${destinoP}?` + masks.map((m) => `updateMask.fieldPaths=${m}`).join('&'), {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
