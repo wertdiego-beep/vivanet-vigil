@@ -4794,6 +4794,7 @@ function movilNavegarTodo() {
   }
 }
 function movilChunkSig() { const total = _movilRuta.length; const fin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total); if (fin < total) { _movilChunk = fin - 1; movilRenderPaso(); } }
+function movilLetra(i) { return String.fromCharCode(65 + i); }
 function movilRenderPaso() {
   const body = document.getElementById('movilNavBody'); if (!body) return;
   const total = _movilRuta.length;
@@ -4802,11 +4803,12 @@ function movilRenderPaso() {
   const seg = _movilRuta.slice(_movilChunk, chunkFin);
   const lista = seg.map((p, i) => {
     const n = _movilChunk + i + 1;
+    const letra = movilLetra(i); // misma letra que muestra Google Maps (A, B, C…)
     const esIni = i === 0, esFin = i === seg.length - 1;
     const bg = esIni ? '#16a34a' : (esFin ? '#e5344b' : 'var(--violeta-suave)');
     const fg = (esIni || esFin) ? '#fff' : '#9d8fff';
     return `<div style="display:flex; align-items:center; gap:10px; padding:7px 0;">
-      <span style="width:28px; height:28px; border-radius:50%; background:${bg}; color:${fg}; display:grid; place-items:center; font-weight:700; font-size:.78rem; flex-shrink:0;">${n}</span>
+      <span style="width:28px; height:28px; border-radius:50%; background:${bg}; color:${fg}; display:grid; place-items:center; font-weight:700; font-size:.78rem; flex-shrink:0;">${letra}</span>
       <span style="font-size:.86rem;">${(p.nombre || 'Punto ' + n).replace(/</g,'&lt;')}</span>
       ${esIni ? '<span style="font-size:.6rem; color:#16a34a; font-weight:700;">PARTES AQUÍ</span>' : ''}
       ${esFin ? '<span style="font-size:.6rem; color:#e5344b; font-weight:700;">TERMINAS AQUÍ</span>' : ''}
@@ -4818,9 +4820,9 @@ function movilRenderPaso() {
       ${lista}
     </div>
     <button onclick="movilNavegarTodo()" style="width:100%; padding:18px; border-radius:14px; border:none; background:linear-gradient(135deg,#16a34a,#22c55e); color:#fff; font-weight:700; font-size:1.1rem; cursor:pointer;">🧭 ABRIR RUTA EN GOOGLE MAPS</button>
-    <p style="text-align:center; font-size:.78rem; color:var(--gris); margin:10px 0 0; line-height:1.5;">Se abre Google Maps con todos los puntos cargados.<br>Solo toca <b>Iniciar</b> allá y sigue la voz.</p>
+    <p style="text-align:center; font-size:.78rem; color:var(--gris); margin:10px 0 0; line-height:1.5;">Las letras (A, B, C…) son las mismas que verás en Google Maps.<br>Solo toca <b>Iniciar</b> allá y sigue la voz.</p>
     ${hayMas ? `<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--linea); text-align:center;">
-      <p style="font-size:.78rem; color:var(--gris); margin:0 0 8px;">Cuando llegues al punto ${chunkFin}, vuelve a esta pantalla y toca:</p>
+      <p style="font-size:.78rem; color:var(--gris); margin:0 0 8px;">Cuando llegues al punto ${movilLetra(seg.length - 1)} (el rojo), vuelve a esta pantalla y toca:</p>
       <button onclick="movilChunkSig()" style="width:100%; padding:13px; border-radius:12px; border:1px solid var(--violeta); background:var(--violeta-suave); color:#9d8fff; font-weight:700; cursor:pointer;">Cargar los puntos que faltan ▶</button>
     </div>` : ''}`;
 }
