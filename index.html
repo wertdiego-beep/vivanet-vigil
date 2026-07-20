@@ -1762,7 +1762,11 @@ async function cargarPanelOperador() {
     if (nro) nro.style.display = (!data.esSuperadmin && data.rolEmpresa === 'jefe') ? '' : 'none';
     const nas = document.getElementById('navAsistencia');
     const asistOn = !data.funciones || data.funciones.asistencia !== false;
-    if (nas) nas.style.display = (data.esSuperadmin || ((data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') && asistOn)) ? '' : 'none';
+    // La asistencia es operación interna de cada empresa: el superadmin NO la ve (solo la habilita/corta).
+    if (nas) nas.style.display = (!data.esSuperadmin && (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') && asistOn) ? '' : 'none';
+    // El chat con móviles tampoco es del nivel superior.
+    const ncm = document.getElementById('navChatMov');
+    if (ncm) ncm.style.display = data.esSuperadmin ? 'none' : '';
     const nre = document.getElementById('navRecorridos');
     // Recorridos: lo manda el gerente de seguridad (o el jefe).
     if (nre) nre.style.display = (!data.esSuperadmin && (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente')) ? '' : 'none';
