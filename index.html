@@ -1233,6 +1233,13 @@ textarea{min-height:96px;resize:vertical}
       </div>
       <input type="file" id="movilFotoInput" accept="image/*" capture="environment" style="display:none;">
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
+      <div id="movilNavOverlay" style="display:none; position:fixed; inset:0; z-index:6000; background:var(--fondo); padding:18px; overflow:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <strong style="font-size:1.05rem;">🧭 Navegación del recorrido</strong>
+          <button onclick="movilCerrarNav()" style="background:none;border:none;color:var(--gris);font-size:1.4rem;cursor:pointer;">✕</button>
+        </div>
+        <div id="movilNavBody"></div>
+      </div>
     </div>
     <!-- ══ DETALLE DE CLIENTE (panel operador) ══ -->
     <div class="screen-scroll" id="s-operador-cliente">
@@ -4707,11 +4714,14 @@ function movilDocumentar(clienteUid, alertaId) {
   _movilFotoCtx = { tipo: 'despacho', clienteUid, alertaId, nota };
   const inp = document.getElementById('movilFotoInput'); inp.value = ''; inp.click();
 }
+let _movilRuta = [], _movilPaso = 0;
 function renderMovilRecorrido(d) {
   const cont = document.getElementById('movilRecorrido'); if (!cont) return;
   if (!d || !d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + ((d && d.error) || 'Error') + '</strong></div></div>'; return; }
   if (!d.paradas.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin recorrido para hoy.</strong><small>La central arma tu ruta del día.</small></div></div>'; return; }
-  cont.innerHTML = d.paradas.map((p, i) => `
+  _movilRuta = d.paradas;
+  const btnNav = d.paradas.length >= 2 ? `<button onclick="movilIniciarRecorrido()" style="width:100%; margin-bottom:12px; padding:13px; border-radius:12px; border:none; background:var(--violeta); color:#fff; font-weight:700; font-size:.95rem; cursor:pointer;">🧭 Iniciar recorrido (navegación paso a paso)</button>` : '';
+  cont.innerHTML = btnNav + d.paradas.map((p, i) => `
     <div style="border-bottom:1px solid var(--linea); padding:11px 0;">
       <div style="display:flex; align-items:center; gap:8px;">
         <span style="width:26px; height:26px; border-radius:50%; background:${p.estado === 'visitada' ? 'var(--verde-suave)' : 'var(--violeta-suave)'}; color:${p.estado === 'visitada' ? 'var(--verde)' : '#9d8fff'}; display:grid; place-items:center; font-weight:700; font-size:.8rem;">${i + 1}</span>
@@ -4723,6 +4733,44 @@ function renderMovilRecorrido(d) {
         ${p.estado !== 'visitada' ? `<button onclick="movilVisitarParada(${i})" style="padding:7px 12px; border-radius:99px; border:none; background:var(--verde); color:#fff; font-weight:700; cursor:pointer; font-size:.74rem;">✓ Marcar visitada</button>` : ''}
       </div>
     </div>`).join('');
+}
+function movilIniciarRecorrido() {
+  if (!_movilRuta || _movilRuta.length < 2) return;
+  _movilPaso = 0;
+  document.getElementById('movilNavOverlay').style.display = 'block';
+  movilRenderPaso();
+}
+function movilCerrarNav() { const o = document.getElementById('movilNavOverlay'); if (o) o.style.display = 'none'; }
+function movilDestUrl(p, app) {
+  if (!p) return null;
+  if (p.lat && p.lng) return app === 'waze' ? `https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes` : `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
+  if (p.direccion) return app === 'waze' ? `https://waze.com/ul?q=${encodeURIComponent(p.direccion)}&navigate=yes` : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.direccion)}&travelmode=driving`;
+  return null;
+}
+function movilAbrirDest(app) { const p = _movilRuta[_movilPaso + 1]; const u = movilDestUrl(p, app); if (u) window.open(u, '_blank'); else alert('Ese punto no tiene ubicación para navegar.'); }
+function movilPaso(d) { _movilPaso = Math.max(0, Math.min(_movilRuta.length - 2, _movilPaso + d)); movilRenderPaso(); }
+function movilRenderPaso() {
+  const body = document.getElementById('movilNavBody'); if (!body) return;
+  const total = _movilRuta.length, i = _movilPaso;
+  const desde = _movilRuta[i] || {}, hacia = _movilRuta[i + 1] || {};
+  const esUltimo = i >= total - 2;
+  body.innerHTML = `
+    <div style="text-align:center; color:var(--gris); font-size:.8rem; margin-bottom:8px;">Tramo ${i + 1} de ${total - 1}</div>
+    <div style="background:var(--blanco); border:1px solid var(--linea); border-radius:16px; padding:18px; text-align:center;">
+      <div style="font-size:.75rem; color:var(--gris);">Punto ${i + 1} · Desde</div>
+      <div style="font-weight:700; margin-bottom:6px;">${(desde.nombre || 'Punto ' + (i + 1)).replace(/</g,'&lt;')}</div>
+      <div style="font-size:1.5rem;">⬇️</div>
+      <div style="font-size:.75rem; color:var(--gris); margin-top:6px;">Punto ${i + 2} · Hacia</div>
+      <div style="font-weight:700; color:var(--violeta); font-size:1.1rem;">${(hacia.nombre || 'Punto ' + (i + 2)).replace(/</g,'&lt;')}</div>
+      <div style="font-size:.78rem; color:var(--gris); margin-top:2px;">${(hacia.direccion || '').replace(/</g,'&lt;')}</div>
+    </div>
+    <button onclick="movilAbrirDest('gmaps')" style="width:100%; margin-top:14px; padding:15px; border-radius:12px; border:none; background:var(--violeta); color:#fff; font-weight:700; font-size:1rem; cursor:pointer;">🧭 Navegar al Punto ${i + 2} (Google Maps)</button>
+    <button onclick="movilAbrirDest('waze')" style="width:100%; margin-top:8px; padding:12px; border-radius:12px; border:1px solid #33ccff; background:rgba(51,204,255,.14); color:#33ccff; font-weight:700; cursor:pointer;">Abrir en Waze</button>
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <button onclick="movilPaso(-1)" ${i === 0 ? 'disabled' : ''} style="flex:1; padding:12px; border-radius:12px; border:1px solid var(--linea); background:transparent; color:var(--tinta); cursor:pointer; ${i === 0 ? 'opacity:.4;' : ''}">◀ Anterior</button>
+      <button onclick="movilPaso(1)" ${esUltimo ? 'disabled' : ''} style="flex:1; padding:12px; border-radius:12px; border:1px solid var(--linea); background:transparent; color:var(--tinta); cursor:pointer; ${esUltimo ? 'opacity:.4;' : ''}">Siguiente ▶</button>
+    </div>
+    <div style="text-align:center; margin-top:14px; font-size:.75rem; color:var(--gris);">Vas ${i + 1} de ${total - 1} tramos${esUltimo ? ' · último' : ''}</div>`;
 }
 function movilVisitarParada(idx) {
   const nota = prompt('Nota de la parada (opcional):') || '';
