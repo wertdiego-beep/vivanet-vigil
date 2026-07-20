@@ -1267,6 +1267,7 @@ export default async function handler(req, res) {
           electrodependiente: ff.electrodependiente?.booleanValue === true,
           categoria: gv(ff.categoria), prioridad: gv(ff.prioridad) || 'media', descripcion: gv(ff.descripcion),
           lat: ff.lat ? parseFloat(ff.lat.doubleValue) : null, lng: ff.lng ? parseFloat(ff.lng.doubleValue) : null,
+          asignadoUid: gv(ff.asignadoUid), asignadoNombre: gv(ff.asignadoNombre), asignadoRol: gv(ff.asignadoRol), area: gv(ff.area),
           necesidades: (ff.necesidades?.arrayValue?.values || []).map((x) => x.stringValue),
           gestiones: (ff.gestiones?.arrayValue?.values || []).map((g) => { const gf = g.mapValue?.fields || {}; return { estado: gv(gf.estado), texto: gv(gf.texto), por: gv(gf.por), creadaEn: gf.creadaEn?.timestampValue || null }; })
         };
@@ -1274,10 +1275,37 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true, tickets });
       return;
     }
+    if (accion === 'ticket-asignar') {
+      // Asignar el ticket clasificado al especialista del área.
+      const tidA = (req.body.ticketId || '').trim();
+      const espUid = (req.body.asignadoUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(tidA) || !/^[A-Za-z0-9]+$/.test(espUid)) { res.status(400).json({ error: 'Ticket o especialista no válido' }); return; }
+      const areaA = String(req.body.area || '').trim().slice(0, 40);
+      const docEsp = await fetch(`${base0}/usuarios/${espUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!esSA && (docEsp.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Esa persona es de otra empresa.' }); return; }
+      const nomEsp = docEsp.fields?.nombre?.stringValue || 'Especialista';
+      const rolEsp = docEsp.fields?.rolEmpresa?.stringValue || '';
+      const rutaTA = `${base0}/empresas/${empresaOperador}/tickets/${tidA}`;
+      const docTA = await fetch(rutaTA, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!docTA.fields) { res.status(404).json({ error: 'Ticket no encontrado' }); return; }
+      const gestA = docTA.fields?.gestiones?.arrayValue?.values || [];
+      gestA.push({ mapValue: { fields: {
+        estado: { stringValue: 'asignado' },
+        texto: { stringValue: ('Asignado a ' + nomEsp + (areaA ? ' — área ' + areaA : '')).slice(0, 300) },
+        por: { stringValue: perfilOp.fields?.nombre?.stringValue || '' },
+        creadaEn: { timestampValue: new Date().toISOString() }
+      } } });
+      await fetch(`${rutaTA}?updateMask.fieldPaths=estado&updateMask.fieldPaths=gestiones&updateMask.fieldPaths=asignadoUid&updateMask.fieldPaths=asignadoNombre&updateMask.fieldPaths=asignadoRol&updateMask.fieldPaths=area`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { estado: { stringValue: 'asignado' }, gestiones: { arrayValue: { values: gestA.slice(-30) } }, asignadoUid: { stringValue: espUid }, asignadoNombre: { stringValue: nomEsp }, asignadoRol: { stringValue: rolEsp }, area: { stringValue: areaA } } })
+      });
+      res.status(200).json({ ok: true, asignadoNombre: nomEsp });
+      return;
+    }
     if (accion === 'ticket-estado') {
       const tid = (req.body.ticketId || '').trim();
       const estadoT = String(req.body.estado || '').trim();
-      if (!/^[A-Za-z0-9]+$/.test(tid) || !['ingresado', 'en_gestion', 'derivado', 'resuelto', 'cerrado'].includes(estadoT)) { res.status(400).json({ error: 'Ticket o estado no válido' }); return; }
+      if (!/^[A-Za-z0-9]+$/.test(tid) || !['ingresado', 'asignado', 'en_gestion', 'derivado', 'resuelto', 'cerrado'].includes(estadoT)) { res.status(400).json({ error: 'Ticket o estado no válido' }); return; }
       const rutaT = `${base0}/empresas/${empresaOperador}/tickets/${tid}`;
       const docT = await fetch(rutaT, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       if (!docT.fields) { res.status(404).json({ error: 'Ticket no encontrado' }); return; }
