@@ -3320,12 +3320,12 @@ function recPuntosSector(centro, bbox, n) {
   let s, no, w, e;
   if (bbox) { s = bbox[0]; no = bbox[1]; w = bbox[2]; e = bbox[3]; }
   else { const d = 0.006; s = centro.lat - d; no = centro.lat + d; w = centro.lng - d; e = centro.lng + d; }
-  // Recortar cajas gigantes (algunos bbox de OSM abarcan comunas enteras) a ~2.2 km.
-  const maxLat = 0.02, maxLng = 0.023;
+  // Recortar el área del sector a ~1.4 km para que el patrullaje NO invada sectores vecinos.
+  const maxLat = 0.013, maxLng = 0.015;
   if (no - s > maxLat) { const c = (no + s) / 2; s = c - maxLat / 2; no = c + maxLat / 2; }
   if (e - w > maxLng) { const c = (e + w) / 2; w = c - maxLng / 2; e = c + maxLng / 2; }
   // Margen interior 12%.
-  const iLat = (no - s) * 0.12, iLng = (e - w) * 0.12;
+  const iLat = (no - s) * 0.18, iLng = (e - w) * 0.18;
   s += iLat; no -= iLat; w += iLng; e -= iLng;
   const pts = [];
   for (let r = 0; r < n; r++) {
@@ -3365,7 +3365,11 @@ async function recSectoresAuto() {
     ordenSec.push(restan.splice(mejor, 1)[0]);
   }
   // 3) Por cada sector, generar el patrullaje en serpentina que barre su área.
-  const n = marcados.length <= 2 ? 3 : 2; // 3x3=9 puntos si son pocos; 2x2=4 si son varios.
+  // Puntos densos (juntos) para que el ruteo por calles se confine a cada sector.
+  const nSec = ordenSec.length;
+  let n = 5;
+  while (n > 3 && n * n * nSec > 24) n--; // 5x5 para 1 sector, 4x4/3x3 según cantidad, tope ~24 puntos
+  if (nSec >= 4) n = 3;
   let totalPuntos = 0;
   ordenSec.forEach((sec) => {
     const pts = recPuntosSector(sec.centro, sec.bbox, n);
