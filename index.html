@@ -1743,7 +1743,8 @@ async function cargarPanelOperador() {
     // Roles lo gestiona el jefe de cada empresa, NO el nivel superior.
     if (nro) nro.style.display = (!data.esSuperadmin && data.rolEmpresa === 'jefe') ? '' : 'none';
     const nas = document.getElementById('navAsistencia');
-    if (nas) nas.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
+    const asistOn = !data.funciones || data.funciones.asistencia !== false;
+    if (nas) nas.style.display = (data.esSuperadmin || ((data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') && asistOn)) ? '' : 'none';
     const nre = document.getElementById('navRecorridos');
     // Recorridos: lo manda el gerente de seguridad (o el jefe).
     if (nre) nre.style.display = (!data.esSuperadmin && (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente')) ? '' : 'none';
@@ -5236,6 +5237,7 @@ function saAsignarOperador() {
 const FUNCIONES_DEF = [
   { g: 'Central / operador', k: 'difusion',   n: '📣 Mensajes masivos', d: 'Los operadores pueden enviar avisos push a todos sus clientes (espec. 27 y 40).' },
   { g: 'Central / operador', k: 'respuestas', n: '💬 Respuestas predeterminadas', d: 'Botones con textos listos al cerrar una alerta (espec. 41).' },
+  { g: 'Central / operador', k: 'asistencia', n: '🕒 Asistencia del personal', d: 'Punto de trabajo, horario y marcaje por proximidad GPS. El jefe/gerente lo gestiona; el trabajador marca desde su app.', on: true },
   { g: 'App del cliente',    k: 'reportes',   n: '📷 Reportar incidentes', d: 'El cliente reporta con foto y categoría; tu panel los gestiona (espec. 15/20/31/38).' },
   { g: 'App del cliente',    k: 'chat',       n: '💭 Chat con la central', d: 'Chat escrito entre el cliente y tu central (espec. 22).' },
   { g: 'App del cliente',    k: 'comunidad',  n: '🏘 Mi comuna', d: 'Los vecinos ven y comentan los reportes de su comuna (espec. 23/26).' },
