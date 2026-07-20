@@ -4754,12 +4754,20 @@ function movilNavegarTodo() {
   const total = _movilRuta.length; if (total < 2) return;
   const fin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total);
   const seg = _movilRuta.slice(_movilChunk, fin);
-  // Formato de RUTA con las paradas separadas por "/": este sí abre todas las
-  // paradas en la app de Google Maps (el formato ?api=1&waypoints solo funciona en la web).
   const puntos = seg.map(movilPuntoStr).filter(Boolean);
   if (puntos.length < 2) return;
-  const url = 'https://www.google.com/maps/dir/' + puntos.join('/');
-  window.open(url, '_blank');
+  const web = 'https://www.google.com/maps/dir/' + puntos.join('/');
+  const esIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (esIOS) {
+    // iPhone: abrir la APP de Google Maps directo con destinos encadenados
+    // (saddr = punto 1, daddr = 2+to:3+to:4…). Así las paradas NO se pierden.
+    const scheme = 'comgooglemaps://?saddr=' + puntos[0] + '&daddr=' + puntos.slice(1).join('+to:') + '&directionsmode=driving';
+    const t = setTimeout(() => { window.open(web, '_blank'); }, 2500); // respaldo: web si la app no está
+    window.addEventListener('pagehide', () => clearTimeout(t), { once: true });
+    window.location.href = scheme;
+  } else {
+    window.open(web, '_blank');
+  }
 }
 function movilChunkSig() { const total = _movilRuta.length; const fin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total); if (fin < total) { _movilChunk = fin - 1; movilRenderPaso(); } }
 function movilChunkReset() { _movilChunk = 0; movilRenderPaso(); }
