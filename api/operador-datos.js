@@ -636,6 +636,69 @@ export default async function handler(req, res) {
       }
     }
 
+    // ── ASISTENCIA del personal (cualquier rol de empresa; no requiere ser operador) ──
+    if (accion === 'asist-mi-config' || accion === 'asist-marcar') {
+      const rolA = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!rolA) { res.status(403).json({ error: 'No tienes un cargo en una empresa.' }); return; }
+      const empA = perfilOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
+      // Fecha y hora locales de Chile (America/Santiago).
+      const pf = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+      const gp = (t) => (pf.find((x) => x.type === t) || {}).value;
+      const fechaCl = `${gp('year')}-${gp('month')}-${gp('day')}`;
+      const horaCl = `${gp('hour')}:${gp('minute')}`;
+      const cfg = {
+        lat: perfilOp.fields?.asistLat ? parseFloat(perfilOp.fields.asistLat.doubleValue ?? perfilOp.fields.asistLat.integerValue) : null,
+        lng: perfilOp.fields?.asistLng ? parseFloat(perfilOp.fields.asistLng.doubleValue ?? perfilOp.fields.asistLng.integerValue) : null,
+        lugar: perfilOp.fields?.asistLugar?.stringValue || '',
+        entrada: perfilOp.fields?.asistEntrada?.stringValue || '',
+        salida: perfilOp.fields?.asistSalida?.stringValue || ''
+      };
+      const regRuta = `${base0}/empresas/${empA}/asistencia/${uid}_${fechaCl}`;
+      if (accion === 'asist-mi-config') {
+        const reg = await fetch(regRuta, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        res.status(200).json({ ok: true, config: cfg, hoy: {
+          fecha: fechaCl,
+          entradaHora: reg.fields?.entradaHora?.stringValue || null,
+          atrasoMin: reg.fields?.atrasoMin ? parseInt(reg.fields.atrasoMin.integerValue) : null,
+          salidaHora: reg.fields?.salidaHora?.stringValue || null,
+          jornadaOk: reg.fields?.jornadaOk?.booleanValue ?? null
+        } });
+        return;
+      }
+      // asist-marcar
+      if (cfg.lat == null || cfg.lng == null) { res.status(400).json({ error: 'Tu jefe aún no te asigna un punto de trabajo.' }); return; }
+      const la = Number(req.body.lat), lo = Number(req.body.lng);
+      if (isNaN(la) || isNaN(lo)) { res.status(400).json({ error: 'Sin ubicación GPS.' }); return; }
+      const R = 6371000, rad = Math.PI / 180;
+      const dLat = (cfg.lat - la) * rad, dLng = (cfg.lng - lo) * rad;
+      const hx = Math.sin(dLat / 2) ** 2 + Math.cos(la * rad) * Math.cos(cfg.lat * rad) * Math.sin(dLng / 2) ** 2;
+      const dist = Math.round(2 * R * Math.asin(Math.sqrt(hx)));
+      if (dist > 200) { res.status(400).json({ error: `Estás a ${dist} m de tu punto de trabajo. Debes estar a menos de 200 m para marcar.` }); return; }
+      const aMin = (h) => { const [hh, mm] = String(h || '0:0').split(':').map(Number); return hh * 60 + (mm || 0); };
+      const tipo = req.body.tipo === 'salida' ? 'salida' : 'entrada';
+      const fields = { uid: { stringValue: uid }, nombre: { stringValue: perfilOp.fields?.nombre?.stringValue || '' }, fecha: { stringValue: fechaCl } };
+      let masks = ['uid', 'nombre', 'fecha'];
+      if (tipo === 'entrada') {
+        const atraso = cfg.entrada ? Math.max(0, aMin(horaCl) - aMin(cfg.entrada)) : 0;
+        fields.entradaHora = { stringValue: horaCl };
+        fields.entradaEn = { timestampValue: new Date().toISOString() };
+        fields.atrasoMin = { integerValue: String(atraso) };
+        masks = masks.concat(['entradaHora', 'entradaEn', 'atrasoMin']);
+      } else {
+        const jornadaOk = cfg.salida ? (aMin(horaCl) >= aMin(cfg.salida)) : true;
+        fields.salidaHora = { stringValue: horaCl };
+        fields.salidaEn = { timestampValue: new Date().toISOString() };
+        fields.jornadaOk = { booleanValue: jornadaOk };
+        masks = masks.concat(['salidaHora', 'salidaEn', 'jornadaOk']);
+      }
+      await fetch(regRuta + '?' + masks.map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+      res.status(200).json({ ok: true, tipo, hora: horaCl, dist });
+      return;
+    }
+
     if (!esOp) {
       res.status(403).json({ error: 'No autorizado' });
       return;
@@ -837,6 +900,59 @@ export default async function handler(req, res) {
       const moviles = clientes.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa === 'movil')
         .map((c) => ({ uid: c.uid, nombre: c.nombre || c.local || 'Móvil', telefono: c.telefono || '' }));
       res.status(200).json({ ok: true, moviles });
+      return;
+    }
+    if (accion === 'asist-config-set') {
+      const miRolAs = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRolAs !== 'jefe' && miRolAs !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente asigna puntos de trabajo.' }); return; }
+      const destino = (req.body.personalUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(destino)) { res.status(400).json({ error: 'Persona no válida' }); return; }
+      const docD = await fetch(`${base0}/usuarios/${destino}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!esSA && (docD.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Esa persona es de otra empresa.' }); return; }
+      const fields = {
+        asistLat: { doubleValue: Number(req.body.lat) }, asistLng: { doubleValue: Number(req.body.lng) },
+        asistLugar: { stringValue: String(req.body.lugar || '').slice(0, 120) },
+        asistEntrada: { stringValue: String(req.body.entrada || '') }, asistSalida: { stringValue: String(req.body.salida || '') }
+      };
+      await fetch(`${base0}/usuarios/${destino}?` + Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
+    if (accion === 'asist-listar') {
+      const miRolAs = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRolAs !== 'jefe' && miRolAs !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente ve la asistencia.' }); return; }
+      const pf2 = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const fecha = /^\d{4}-\d{2}-\d{2}$/.test(req.body.fecha || '') ? req.body.fecha : pf2;
+      const [todos, regs] = await Promise.all([
+        listarClientes(accessToken),
+        fetch(`${base0}/empresas/${empresaOperador}/asistencia?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
+      ]);
+      const regPor = {};
+      (regs.documents || []).forEach((dd) => {
+        if (dd.fields?.fecha?.stringValue !== fecha) return;
+        regPor[dd.fields?.uid?.stringValue || ''] = {
+          entradaHora: dd.fields?.entradaHora?.stringValue || null,
+          atrasoMin: dd.fields?.atrasoMin ? parseInt(dd.fields.atrasoMin.integerValue) : null,
+          salidaHora: dd.fields?.salidaHora?.stringValue || null,
+          jornadaOk: dd.fields?.jornadaOk?.booleanValue ?? null
+        };
+      });
+      const docsAll = await fetch(`${base0}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const cfgPor = {};
+      (docsAll.documents || []).forEach((dd) => {
+        const id2 = dd.name.split('/').pop();
+        cfgPor[id2] = {
+          lat: dd.fields?.asistLat ? parseFloat(dd.fields.asistLat.doubleValue ?? dd.fields.asistLat.integerValue) : null,
+          lng: dd.fields?.asistLng ? parseFloat(dd.fields.asistLng.doubleValue ?? dd.fields.asistLng.integerValue) : null,
+          lugar: dd.fields?.asistLugar?.stringValue || '', entrada: dd.fields?.asistEntrada?.stringValue || '', salida: dd.fields?.asistSalida?.stringValue || ''
+        };
+      });
+      const personal = todos.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa)
+        .map((c) => ({ uid: c.uid, nombre: c.nombre || 'Sin nombre', rol: c.rolEmpresa, config: cfgPor[c.uid] || {}, registro: regPor[c.uid] || null }));
+      res.status(200).json({ ok: true, fecha, personal });
       return;
     }
     if (accion === 'chat-movil-listar' || accion === 'chat-movil-enviar') {
