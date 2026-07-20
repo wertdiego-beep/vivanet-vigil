@@ -796,6 +796,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="operativos" id="navOperativos"><span>🚨</span><em>Operativos</em></button>
         <button class="op-nav" data-opview="encurso" id="navEnCurso"><span>📡</span><em>En curso</em></button>
         <button class="op-nav" data-opview="regop" id="navRegOp"><span>📜</span><em>Registro</em></button>
+        <button class="op-nav" data-opview="informes" id="navInformes"><span>📊</span><em>Informes</em></button>
         <button class="op-nav" data-opview="chatmov" id="navChatMov"><span>💬</span><em>Móviles</em></button>
         <button class="op-nav" data-opview="asistencia" id="navAsistencia" style="display:none"><span>🕒</span><em>Asistencia</em></button>
         <div class="op-side-foot">
@@ -1215,6 +1216,20 @@ textarea{min-height:96px;resize:vertical}
               </div>
               <p style="color:var(--gris); font-size:.76rem; margin-bottom:10px;">Bitácora completa: quién despachó cada operativo, cuándo, con qué objetivo y cómo se cumplió.</p>
               <div id="regOpLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+            </div>
+          </section>
+          <!-- ── Vista: Informes (central de información del día) ── -->
+          <section class="op-view" id="op-view-informes">
+            <div class="card">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;"><span>📊 Informe operativo del día</span>
+                <span style="display:flex; gap:8px; align-items:center;">
+                  <input type="date" id="infFecha" onchange="informeCargar()" style="width:auto; margin:0; padding:7px 10px; font-size:.8rem;">
+                  <button onclick="document.getElementById('infFecha').value=''; informeCargar();" style="width:auto; padding:6px 12px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">Hoy</button>
+                </span>
+              </div>
+              <p style="color:var(--gris); font-size:.76rem; margin-bottom:10px;">Toda la información importante del día en un solo lugar, ordenada por hora: operativos, alarmas SOS, reportes e incidentes, y asistencia.</p>
+              <div id="infResumen" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;"></div>
+              <div id="infCuerpo"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
             </div>
           </section>
           <!-- ── Vista: Asistencia del personal (jefe/gerente) ── -->
@@ -3795,6 +3810,61 @@ function misionListar() {
     }).join('');
   }).catch(() => {});
 }
+function informeCargar() {
+  const cont = document.getElementById('infCuerpo'); const resu = document.getElementById('infResumen');
+  if (!cont) return;
+  cont.innerHTML = '<div class="evento"><div><strong>Cargando el informe…</strong></div></div>'; if (resu) resu.innerHTML = '';
+  const fecha = document.getElementById('infFecha')?.value || '';
+  saFetch({ accion: 'informe-dia', fecha }).then((d) => {
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    const esc = (x) => String(x || '').replace(/</g, '&lt;');
+    const hh = (iso) => iso ? new Date(iso).toLocaleTimeString('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit' }) : '—';
+    const chip = (emoji, n, txt, color) => `<span style="display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:99px; background:${color}22; border:1px solid ${color}55; font-size:.78rem; font-weight:700; color:${color};">${emoji} ${n} ${txt}</span>`;
+    if (resu) resu.innerHTML = chip('🚨', d.operativos.length, 'operativo' + (d.operativos.length === 1 ? '' : 's'), '#e5344b')
+      + chip('🆘', d.sos.length, 'alarma' + (d.sos.length === 1 ? '' : 's') + ' SOS', '#ff9f43')
+      + chip('📢', d.reportes.length, 'reporte' + (d.reportes.length === 1 ? '' : 's'), '#9d8fff')
+      + chip('🕒', d.asistencia.length, 'asistencia' + (d.asistencia.length === 1 ? '' : 's'), '#22aa5a');
+    const fila = (hora, titulo, cuerpo) => `
+      <div style="display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--linea);">
+        <div style="min-width:52px; text-align:right; font-size:.78rem; font-weight:800; color:#9d8fff; padding-top:2px;">${hora}</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:.85rem; font-weight:700;">${titulo}</div>
+          ${cuerpo ? `<div style="font-size:.78rem; color:var(--gris); margin-top:3px; line-height:1.55;">${cuerpo}</div>` : ''}
+        </div>
+      </div>`;
+    const secc = (titulo, filas, vacio) => `
+      <div style="margin-bottom:18px;">
+        <div style="font-size:.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--gris); border-bottom:2px solid var(--linea); padding-bottom:6px; margin-bottom:2px;">${titulo}</div>
+        ${filas || `<div style="font-size:.76rem; color:var(--gris); padding:10px 0;">${vacio}</div>`}
+      </div>`;
+    // 1) Operativos
+    const fOps = d.operativos.map((m) => {
+      const cerr = m.estado === 'cerrada';
+      let cuerpo = `${m.movilNombre ? '🚐 ' + esc(m.movilNombre) + ' · ' : ''}${TIPOS_MOVIL[m.tipo] || esc(m.tipo)}${m.direccion ? ' · 📍 ' + esc(m.direccion) : ''} · Despachado por <strong>${esc(m.creadaPor) || '—'}</strong>`;
+      if (m.descripcion) cuerpo += `<br>🎯 ${esc(m.descripcion)}`;
+      (m.reportes || []).forEach((r) => { cuerpo += `<br>📡 <em>${hh(r.creadaEn)}</em> — ${esc(r.texto) || '(foto)'}${r.foto ? ` <a href="#" onclick="event.preventDefault(); window.open('${r.foto}')" style="color:#9d8fff;">[ver foto]</a>` : ''}`; });
+      if (cerr) cuerpo += `<br>✅ <strong>Cumplimiento:</strong> ${esc(m.resultado) || 'sin detalle'} <span style="font-size:.68rem;">(cerró ${esc(m.cerradaPor) || '—'})</span>`;
+      return fila(hh(m.creadaEn), `${(TIPOS_MOVIL[m.tipo] || '🚔').split(' ')[0]} ${esc(m.titulo)} ${cerr ? '· <span style=\'color:#22aa5a;\'>CERRADO</span>' : '· <span style=\'color:#9d8fff;\'>' + esc((MISION_ESTADOS[m.estado] || ['', m.estado])[1]).toUpperCase() + '</span>'}`, cuerpo);
+    }).join('');
+    // 2) Alarmas SOS
+    const fSos = d.sos.map((a) => {
+      let cuerpo = `Estado: <strong>${esc(a.estado) || '—'}</strong>${a.atendidaPor ? ' · Atendida por ' + esc(a.atendidaPor) : ''}${a.movilNombre ? ' · Móvil: ' + esc(a.movilNombre) + (a.movilEstado ? ' (' + esc(a.movilEstado) + ')' : '') : ''}`;
+      if (a.resultado) cuerpo += `<br>Resultado: ${esc(a.resultado)}`;
+      if (a.nota) cuerpo += `<br>📝 ${esc(a.nota)}`;
+      return fila(hh(a.creadaEn), `🆘 SOS de ${esc(a.cliente)}`, cuerpo);
+    }).join('');
+    // 3) Reportes e incidentes
+    const fRep = d.reportes.map((r) => fila(hh(r.creadaEn), `${esc(r.icono)} ${esc(r.categoria)} — ${esc(r.cliente)}`,
+      `${esc(r.texto)}${r.foto ? ` <a href="#" onclick="event.preventDefault(); window.open('${r.foto}')" style="color:#9d8fff;">[ver foto]</a>` : ''} · <em>${r.estado === 'revisado' ? '✅ revisado' : '⏳ pendiente'}</em>`)).join('');
+    // 4) Asistencia
+    const fAsi = d.asistencia.map((p) => fila(p.entradaHora || '—', `🕒 ${esc(p.nombre)}`,
+      `Entrada: <strong>${p.entradaHora || '—'}</strong>${p.atrasoMin > 0 ? ` · <span style="color:#e5344b;">Atraso ${p.atrasoMin} min</span>` : (p.entradaHora ? ' · ✅ a la hora' : '')} · Salida: <strong>${p.salidaHora || '—'}</strong>${p.jornadaOk === true ? ' · ✅ jornada completa' : (p.jornadaOk === false ? ' · ⚠️ jornada incompleta' : '')}`)).join('');
+    cont.innerHTML = secc('🚨 Operativos del día', fOps, 'Sin operativos despachados este día.')
+      + secc('🆘 Alarmas SOS', fSos, 'Sin alarmas SOS este día.')
+      + secc('📢 Reportes e incidentes', fRep, 'Sin reportes de clientes ni incidentes de recorrido.')
+      + secc('🕒 Asistencia del personal', fAsi, 'Sin marcajes de asistencia este día.');
+  }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
+}
 function regOpListar() {
   const cont = document.getElementById('regOpLista'); if (!cont) return;
   saFetch({ accion: 'mision-listar', registro: true }).then((d) => {
@@ -5137,7 +5207,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', operativos:'Operativos y despachos', encurso:'Operativos en curso', regop:'Registro de operativos', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', operativos:'Operativos y despachos', encurso:'Operativos en curso', regop:'Registro de operativos', informes:'Informe operativo del día', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -5153,6 +5223,7 @@ const opDescripciones = {
   operativos: 'Despacha móviles con un objetivo claro para cada emergencia.',
   encurso: 'Seguimiento en vivo: en qué estado va cada operativo, con sus reportes de terreno y fotos.',
   regop: 'Bitácora: quién despachó cada operativo, día y hora, objetivo y cómo se cumplió.',
+  informes: 'Toda la información importante del día, ordenada y en un solo lugar.',
   chatmov: 'Mensajes y fotos con cada móvil de reacción, en ambos sentidos.',
   asistencia: 'Punto de trabajo, horario y marcaje por GPS de cada trabajador. Jefe y gerente.'
 };
@@ -6139,6 +6210,7 @@ function opGo(v){
   if (v==='recorridos') recInit();
   if (v==='operativos') misionInit();
   if (v==='regop') regOpListar();
+  if (v==='informes') informeCargar();
   if (v==='encurso') { misionListar(); clearInterval(_misTimer); _misTimer = setInterval(() => { if (document.getElementById('op-view-encurso')?.classList.contains('active')) misionListar(); }, 8000); }
   if (v==='chatmov') chatMovInit();
   if (v==='asistencia') asistPanelInit();
