@@ -793,6 +793,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="credenciales" id="navCredenciales" style="display:none"><span>🔒</span><em>Credenciales</em></button>
         <button class="op-nav" data-opview="roles" id="navRoles" style="display:none"><span>🔺</span><em>Roles</em></button>
         <button class="op-nav" data-opview="recorridos" id="navRecorridos" style="display:none"><span>🗺️</span><em>Recorridos</em></button>
+        <button class="op-nav" data-opview="misiones" id="navMisiones"><span>🚨</span><em>Misiones</em></button>
         <button class="op-nav" data-opview="chatmov" id="navChatMov"><span>💬</span><em>Móviles</em></button>
         <button class="op-nav" data-opview="asistencia" id="navAsistencia" style="display:none"><span>🕒</span><em>Asistencia</em></button>
         <div class="op-side-foot">
@@ -1165,6 +1166,36 @@ textarea{min-height:96px;resize:vertical}
               </div>
             </div>
           </section>
+          <!-- ── Vista: Misiones (despacho de móviles con objetivo) ── -->
+          <section class="op-view" id="op-view-misiones">
+            <div class="card">
+              <div class="card-title">🚨 Despachar móvil en misión</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Llega un aviso (ej: de la municipalidad) → eliges el móvil según su tipo, defines el objetivo y lo despachas. El móvil recibe la misión al instante y reporta desde terreno con fotos.</p>
+              <label style="font-size:.72rem; color:var(--gris);">Móvil (con su tipo)</label>
+              <select id="misMovilSel" style="margin:4px 0 8px;"><option value="">— Elige el móvil —</option></select>
+              <label style="font-size:.72rem; color:var(--gris);">Objetivo de la misión</label>
+              <input type="text" id="misTitulo" placeholder="Ej: Entregar medicamentos a adulto mayor aislado" maxlength="120" style="margin:4px 0 8px;">
+              <label style="font-size:.72rem; color:var(--gris);">Descripción / instrucciones</label>
+              <textarea id="misDesc" placeholder="Ej: Sector anegado por lluvia. Familia González, 2 adultos mayores. Llevar insulina y verificar estado de la vivienda. Reportar con fotos." maxlength="600" style="min-height:70px; margin:4px 0 8px;"></textarea>
+              <label style="font-size:.72rem; color:var(--gris);">Dirección del lugar</label>
+              <div style="display:flex; gap:7px; margin:4px 0 4px;">
+                <input type="text" id="misDir" placeholder="Ej: Los Aromos 1250, La Serena" style="margin:0; flex:1;" onkeydown="if(event.key==='Enter')misBuscarDir()">
+                <button class="btn-full" style="width:auto; margin:0; padding:9px 14px;" onclick="misBuscarDir()">📍 Ubicar</button>
+              </div>
+              <div id="misDirInfo" style="font-size:.72rem; color:var(--gris); margin-bottom:10px;"></div>
+              <button class="btn-full" style="margin:0; background:var(--rojo); font-size:1rem; padding:14px;" onclick="misionDespachar()">🚨 DESPACHAR MÓVIL</button>
+              <div class="error-msg" id="misInfo"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">🚐 Tipos de móvil</div>
+              <p style="color:var(--gris); font-size:.76rem; margin-bottom:8px;">Define qué es cada móvil para despachar el correcto según la emergencia.</p>
+              <div id="misTiposLista"><small style="color:var(--gris);">Cargando móviles…</small></div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>📡 Misiones en curso y reportes de terreno</span><button onclick="misionListar()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
+              <div id="misLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+            </div>
+          </section>
           <!-- ── Vista: Asistencia del personal (jefe/gerente) ── -->
           <section class="op-view" id="op-view-asistencia">
             <div class="card">
@@ -1299,6 +1330,7 @@ textarea{min-height:96px;resize:vertical}
           <button onclick="cargarPanelMovil()" style="width:44px; height:44px; border-radius:50%; border:none; background:rgba(255,255,255,.18); color:#fff; font-size:1.2rem; cursor:pointer;">↻</button>
         </div>
       </div>
+      <div id="movilMisiones" style="margin-bottom:0;"></div>
       <div id="movilDespachosWrap" style="margin-bottom:14px;">
         <div id="movilDespachos"></div>
       </div>
@@ -3645,6 +3677,101 @@ function asistGuardarCfg() {
     if (d.ok) asistPanelListar();
   }).catch(() => { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; });
 }
+/* ── 🚨 MISIONES (despacho profesional con objetivo y reportes de terreno) ── */
+const TIPOS_MOVIL = { salud: '🚑 Salud / medicamentos', reparaciones: '🔧 Reparaciones', rescate: '⛑ Rescate', patrullaje: '🚔 Patrullaje', ayuda: '📦 Ayuda / abastecimiento' };
+const MISION_ESTADOS = { despachado: ['📨', 'Despachado'], en_camino: ['🚗', 'En camino'], en_sitio: ['📍', 'En el sitio'], resuelto: ['✅', 'Resuelto'], cerrada: ['🔒', 'Cerrada'] };
+let _misCoords = null, _misTimer = null;
+function misionInit() {
+  _misCoords = null;
+  saFetch({ accion: 'moviles-empresa' }).then((d) => {
+    const sel = document.getElementById('misMovilSel');
+    if (sel) {
+      if (d.ok && d.moviles.length) sel.innerHTML = '<option value="">— Elige el móvil —</option>' + d.moviles.map((m) => `<option value="${m.uid}">${(TIPOS_MOVIL[m.tipo] || '🚔').split(' ')[0]} ${m.nombre} · ${(TIPOS_MOVIL[m.tipo] || 'Patrullaje').replace(/^\S+ /, '')}</option>`).join('');
+      else sel.innerHTML = '<option value="">— No hay móviles registrados —</option>';
+    }
+    const tl = document.getElementById('misTiposLista');
+    if (tl && d.ok) {
+      tl.innerHTML = d.moviles.length ? d.moviles.map((m) => `
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--linea);">
+          <strong style="flex:1; font-size:.86rem;">🚐 ${m.nombre.replace(/</g,'&lt;')}</strong>
+          <select onchange="movilTipoSet('${m.uid}', this.value)" style="width:auto; margin:0; padding:7px 10px; font-size:.8rem;">
+            ${Object.keys(TIPOS_MOVIL).map((k) => `<option value="${k}" ${m.tipo === k ? 'selected' : ''}>${TIPOS_MOVIL[k]}</option>`).join('')}
+          </select>
+        </div>`).join('') : '<small style="color:var(--gris);">Sin móviles registrados.</small>';
+    }
+  }).catch(() => {});
+  misionListar();
+  clearInterval(_misTimer);
+  _misTimer = setInterval(() => { if (document.getElementById('op-view-misiones')?.classList.contains('active')) misionListar(); }, 8000);
+}
+function movilTipoSet(uid, tipo) {
+  saFetch({ accion: 'movil-tipo', movilUid: uid, tipo }).then((d) => { if (d.ok) misionInit(); else alert(d.error || 'Error'); });
+}
+async function misBuscarDir() {
+  const q = (document.getElementById('misDir').value || '').trim();
+  const info = document.getElementById('misDirInfo');
+  if (!q) return;
+  if (info) { info.style.color = 'var(--gris)'; info.textContent = '🔍 Ubicando…'; }
+  try {
+    let resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&viewbox=${MAPA_VIEWBOX}&bounded=1&q=${encodeURIComponent(q + ', ' + MAPA_CIUDAD_CONTEXTO)}`, { headers: { 'Accept-Language': 'es' } });
+    let data = await resp.json();
+    if (!data || !data[0]) { resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&q=${encodeURIComponent(q + ', Chile')}`, { headers: { 'Accept-Language': 'es' } }); data = await resp.json(); }
+    if (data && data[0]) { _misCoords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }; if (info) { info.style.color = '#00C776'; info.textContent = '✅ Ubicada: ' + (data[0].display_name || q).split(',').slice(0, 3).join(','); } }
+    else { _misCoords = null; if (info) { info.style.color = '#e0a020'; info.textContent = '⚠ No se ubicó en el mapa; la misión saldrá igual con la dirección escrita.'; } }
+  } catch (e) { _misCoords = null; }
+}
+function misionDespachar() {
+  const info = document.getElementById('misInfo');
+  const movilUid = document.getElementById('misMovilSel').value;
+  const titulo = document.getElementById('misTitulo').value.trim();
+  if (!movilUid) { info.style.color = 'var(--rojo)'; info.textContent = 'Elige el móvil.'; return; }
+  if (!titulo) { info.style.color = 'var(--rojo)'; info.textContent = 'Escribe el objetivo de la misión.'; return; }
+  saFetch({ accion: 'mision-crear', movilUid, titulo,
+    descripcion: document.getElementById('misDesc').value.trim(),
+    direccion: document.getElementById('misDir').value.trim(),
+    lat: _misCoords ? _misCoords.lat : null, lng: _misCoords ? _misCoords.lng : null
+  }).then((d) => {
+    if (d.ok) {
+      info.style.color = '#00C776'; info.textContent = '🚨 Misión despachada. El móvil la verá al instante en su app.';
+      document.getElementById('misTitulo').value = ''; document.getElementById('misDesc').value = ''; document.getElementById('misDir').value = '';
+      document.getElementById('misDirInfo').textContent = ''; _misCoords = null;
+      misionListar();
+    } else { info.style.color = 'var(--rojo)'; info.textContent = d.error || 'No se pudo despachar.'; }
+  }).catch(() => { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; });
+}
+function misionListar() {
+  saFetch({ accion: 'mision-listar' }).then((d) => {
+    const cont = document.getElementById('misLista'); if (!cont) return;
+    if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    if (!d.misiones.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin misiones aún.</strong><small>Cuando despaches un móvil, aparecerá aquí con sus reportes de terreno.</small></div></div>'; return; }
+    const hora = (iso) => iso ? new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '';
+    cont.innerHTML = d.misiones.map((m) => {
+      const est = MISION_ESTADOS[m.estado] || ['📨', m.estado];
+      const cerrada = m.estado === 'cerrada' || m.estado === 'resuelto';
+      const reps = (m.reportes || []).map((r) => `
+        <div style="background:var(--fondo); border:1px solid var(--linea); border-radius:12px; padding:9px 12px; margin-top:7px;">
+          <div style="font-size:.68rem; color:var(--gris); margin-bottom:3px;">📡 Reporte de terreno · ${hora(r.creadaEn)}</div>
+          ${r.texto ? `<div style="font-size:.83rem;">${r.texto.replace(/</g,'&lt;')}</div>` : ''}
+          ${r.foto ? `<img src="${r.foto}" style="max-width:280px; width:100%; border-radius:10px; margin-top:6px; cursor:pointer;" onclick="window.open(this.src)">` : ''}
+        </div>`).join('');
+      return `
+      <div style="border:1px solid ${cerrada ? 'var(--linea)' : 'rgba(229,52,75,.45)'}; border-radius:16px; padding:14px; margin-bottom:12px; ${cerrada ? 'opacity:.6;' : ''}">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <strong style="font-size:.95rem;">${(TIPOS_MOVIL[m.tipo] || '🚔').split(' ')[0]} ${m.titulo.replace(/</g,'&lt;')}</strong>
+          <span style="font-size:.62rem; font-weight:700; padding:3px 10px; border-radius:99px; background:var(--violeta-suave); color:#9d8fff;">${est[0]} ${est[1].toUpperCase()}</span>
+        </div>
+        <div style="font-size:.76rem; color:var(--gris); margin:3px 0;">🚐 ${m.movilNombre.replace(/</g,'&lt;')} · ${TIPOS_MOVIL[m.tipo] || m.tipo}${m.direccion ? ' · 📍 ' + m.direccion.replace(/</g,'&lt;') : ''} · ${hora(m.creadaEn)}</div>
+        ${m.descripcion ? `<div style="font-size:.82rem; background:var(--violeta-suave); color:#c9c0ff; border-radius:10px; padding:8px 12px; margin:6px 0;">🎯 ${m.descripcion.replace(/</g,'&lt;')}</div>` : ''}
+        ${reps || '<div style="font-size:.76rem; color:var(--gris); margin-top:6px;">Aún sin reportes de terreno.</div>'}
+        ${!cerrada ? `<button onclick="misionCerrar('${m.id}')" style="margin-top:10px; padding:8px 16px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--gris); font-size:.74rem; cursor:pointer;">🔒 Cerrar misión</button>` : ''}
+      </div>`;
+    }).join('');
+  }).catch(() => {});
+}
+function misionCerrar(id) {
+  if (!confirm('¿Cerrar esta misión? El móvil dejará de verla como activa.')) return;
+  saFetch({ accion: 'mision-cerrar', misionId: id }).then((d) => { if (d.ok) misionListar(); else alert(d.error || 'Error'); });
+}
 let _chatMovUid = null, _chatMovTimer = null;
 function chatMovInit() {
   const sel = document.getElementById('chatMovSel');
@@ -4935,7 +5062,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal', misiones:'Misiones y despachos' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -4949,7 +5076,8 @@ const opDescripciones = {
   roles: 'Define en pirámide qué ve y hace cada cargo de tu empresa. Solo el jefe.',
   recorridos: 'Manda a cada móvil su ruta del día. Solo el gerente o el jefe.',
   chatmov: 'Mensajes y fotos con cada móvil de reacción, en ambos sentidos.',
-  asistencia: 'Punto de trabajo, horario y marcaje por GPS de cada trabajador. Jefe y gerente.'
+  asistencia: 'Punto de trabajo, horario y marcaje por GPS de cada trabajador. Jefe y gerente.',
+  misiones: 'Despacha móviles con un objetivo claro y sigue sus reportes de terreno con fotos, en vivo.'
 };
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
@@ -4968,6 +5096,41 @@ function cargarPanelMovil() {
   movilGeoStart();
   movilCargarContactos();
   asistInit('asistMovil');
+  saFetch({ accion: 'movil-misiones' }).then(renderMovilMisiones).catch(() => {});
+}
+function renderMovilMisiones(d) {
+  const cont = document.getElementById('movilMisiones'); if (!cont) return;
+  if (!d || !d.ok || !d.misiones || !d.misiones.length) { cont.innerHTML = ''; return; }
+  const TIPOS = { salud: '🚑 Salud / medicamentos', reparaciones: '🔧 Reparaciones', rescate: '⛑ Rescate', patrullaje: '🚔 Patrullaje', ayuda: '📦 Ayuda / abastecimiento' };
+  const PASOS = [['despachado', 'Despachado'], ['en_camino', 'En camino'], ['en_sitio', 'En el sitio']];
+  cont.innerHTML = d.misiones.map((m) => {
+    const idx = PASOS.findIndex((p) => p[0] === m.estado);
+    const pasos = PASOS.map((p, i) => `<div style=\"flex:1; text-align:center;\"><div style=\"height:5px; border-radius:99px; background:${i <= idx ? '#fff' : 'rgba(255,255,255,.25)'}; margin-bottom:5px;\"></div><span style=\"font-size:.62rem; color:${i <= idx ? '#fff' : 'rgba(255,255,255,.55)'}; font-weight:${i === idx ? '700' : '400'};\">${p[1]}</span></div>`).join('<div style=\"width:8px;\"></div>');
+    return `
+    <div style=\"background:linear-gradient(135deg,#173a7a,#2456b8); border-radius:20px; padding:18px; margin-bottom:14px; color:#fff;\">
+      <div style=\"font-size:.68rem; font-weight:700; letter-spacing:.1em; opacity:.85;\">🎯 MISIÓN ASIGNADA · ${(TIPOS[m.tipo] || '🚔 Patrullaje').toUpperCase()}</div>
+      <div style=\"font-size:1.18rem; font-weight:700; margin:5px 0 3px;\">${(m.titulo || '').replace(/</g,'&lt;')}</div>
+      ${m.direccion ? `<div style=\"font-size:.82rem; opacity:.9;\">📍 ${m.direccion.replace(/</g,'&lt;')}</div>` : ''}
+      ${m.descripcion ? `<div style=\"background:rgba(0,0,0,.25); border-radius:12px; padding:10px 12px; font-size:.85rem; margin-top:8px; line-height:1.45;\">${m.descripcion.replace(/</g,'&lt;')}</div>` : ''}
+      <div style=\"display:flex; margin:14px 0 12px;\">${pasos}</div>
+      <button onclick='movilNav(${JSON.stringify(m.lat && m.lng ? { lat: m.lat, lng: m.lng } : null)}, ${JSON.stringify(m.direccion || "")})' style=\"width:100%; padding:15px; border-radius:14px; border:none; background:#fff; color:#173a7a; font-weight:700; font-size:1.02rem; cursor:pointer;\">🧭 IR AL LUGAR</button>
+      <div style=\"display:flex; gap:8px; margin-top:8px;\">
+        ${idx < 1 ? `<button onclick=\"movilMisionEstado('${m.id}','en_camino')\" style=\"flex:1; padding:12px; border-radius:12px; border:1.5px solid rgba(255,255,255,.6); background:transparent; color:#fff; font-weight:700; cursor:pointer;\">🚗 Voy en camino</button>` : ''}
+        ${idx < 2 ? `<button onclick=\"movilMisionEstado('${m.id}','en_sitio')\" style=\"flex:1; padding:12px; border-radius:12px; border:1.5px solid rgba(255,255,255,.6); background:transparent; color:#fff; font-weight:700; cursor:pointer;\">📍 Llegué</button>` : ''}
+      </div>
+      <button onclick=\"movilMisionReporte('${m.id}')\" style=\"width:100%; margin-top:8px; padding:14px; border-radius:12px; border:none; background:#e0a020; color:#241a00; font-weight:700; font-size:.95rem; cursor:pointer;\">📷 ENVIAR REPORTE DE SITUACIÓN</button>
+      <button onclick=\"movilMisionEstado('${m.id}','resuelto')\" style=\"width:100%; margin-top:8px; padding:12px; border-radius:12px; border:none; background:#16a34a; color:#fff; font-weight:700; cursor:pointer;\">✅ MISIÓN CUMPLIDA</button>
+    </div>`;
+  }).join('');
+}
+function movilMisionEstado(misionId, estado) {
+  saFetch({ accion: 'movil-mision-estado', misionId, estado }).then((d) => { if (d.ok) cargarPanelMovil(); else alert(d.error || 'Error'); });
+}
+function movilMisionReporte(misionId) {
+  const texto = prompt('Describe la situación en el lugar:') || '';
+  const conFoto = confirm('¿Adjuntar una foto del lugar? Aceptar = sí, Cancelar = enviar solo el texto');
+  if (conFoto) { _movilFotoCtx = { tipo: 'mision', misionId, texto }; const inp = document.getElementById('movilFotoInput'); inp.value = ''; inp.click(); }
+  else if (texto.trim()) saFetch({ accion: 'movil-mision-reporte', misionId, texto }).then((d) => { alert(d.ok ? '✅ Reporte enviado a la central.' : (d.error || 'Error')); });
 }
 /* ── 🕒 ASISTENCIA del trabajador (marca por proximidad GPS) ── */
 async function asistLockInit() {
@@ -5307,7 +5470,8 @@ function movilVisitarParada(idx) {
     const file = this.files[0]; if (!file || !_movilFotoCtx) return;
     const ctx = _movilFotoCtx; _movilFotoCtx = null;
     comprimirImagen(file, (b64) => {
-      if (ctx.tipo === 'incidente') saFetch({ accion: 'movil-incidente', texto: ctx.texto, foto: b64 }).then((d) => { alert(d.ok ? '✅ Incidente con foto enviado a la central.' : (d.error || 'Error')); });
+      if (ctx.tipo === 'mision') saFetch({ accion: 'movil-mision-reporte', misionId: ctx.misionId, texto: ctx.texto, foto: b64 }).then((d) => { alert(d.ok ? '✅ Reporte con foto enviado a la central.' : (d.error || 'Error')); });
+      else if (ctx.tipo === 'incidente') saFetch({ accion: 'movil-incidente', texto: ctx.texto, foto: b64 }).then((d) => { alert(d.ok ? '✅ Incidente con foto enviado a la central.' : (d.error || 'Error')); });
       else if (ctx.tipo === 'despacho') saFetch({ accion: 'movil-reporte', clienteUid: ctx.clienteUid, alertaId: ctx.alertaId, nota: ctx.nota, foto: b64 }).then((d) => { if (d.ok) { alert('Documentado y enviado a la central.'); cargarPanelMovil(); } else alert(d.error || 'Error'); });
       else saFetch({ accion: 'movil-parada', idx: ctx.idx, estado: 'visitada', nota: ctx.nota, foto: b64 }).then((d) => { if (d.ok) cargarPanelMovil(); else alert(d.error || 'Error'); });
     });
@@ -5894,6 +6058,7 @@ function opGo(v){
   if (v==='personal') cargarPersonal();
   if (v==='recorridos') recInit();
   if (v==='chatmov') chatMovInit();
+  if (v==='misiones') misionInit();
   if (v==='asistencia') asistPanelInit();
   if (v==='credenciales') cargarCredencialesModulo();
   if (v==='roles') cargarRolesPermisos();
