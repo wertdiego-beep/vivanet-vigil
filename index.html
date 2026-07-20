@@ -6032,7 +6032,25 @@ function renderRolesPermisos() {
       <strong style="font-size:.86rem; display:block; margin-bottom:8px;">${rol.n}</strong>
       <div style="display:flex; gap:7px; flex-wrap:wrap;">${btns}</div>
     </div>`;
-  }).join('') + '<div style="margin-top:10px; font-size:.72rem; color:var(--gris); line-height:1.6;">🚨 Atender · 👥 Clientes · 🕘 Historial · 🔧 Técnico · 📄 Exportar · 📐 Zonas · 🔒 Credenciales · 🚐 Móviles · 🕒 Asistencia · 🚨 Operativos · 📡 En curso · 📜 Registro. El monitoreo en vivo del mapa nunca se corta.</div>';
+  }).join('') + `
+    <div style="margin-top:14px; border:1px solid var(--linea); border-radius:14px; padding:12px 16px;">
+      <div style="font-size:.72rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--gris); margin-bottom:8px;">📖 Qué hace cada función</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:7px 18px; font-size:.76rem; line-height:1.5;">
+        <div><strong>🚨 Atender</strong> — <span style="color:var(--gris);">recibir, atender y cerrar las alarmas SOS de los clientes.</span></div>
+        <div><strong>👥 Clientes</strong> — <span style="color:var(--gris);">ver la lista de clientes protegidos y abrir sus fichas.</span></div>
+        <div><strong>🕘 Historial</strong> — <span style="color:var(--gris);">historial de todas las alarmas y el reporte del día.</span></div>
+        <div><strong>🔧 Técnico</strong> — <span style="color:var(--gris);">visitas técnicas agendadas y código del equipo técnico.</span></div>
+        <div><strong>📄 Exportar</strong> — <span style="color:var(--gris);">descargar historiales y reportes en Excel.</span></div>
+        <div><strong>📐 Zonas</strong> — <span style="color:var(--gris);">marcar zonas en el mapa y ver las zonas calientes.</span></div>
+        <div><strong>🔒 Credenciales</strong> — <span style="color:var(--gris);">registro de cuentas y claves del personal de la empresa.</span></div>
+        <div><strong>🚐 Móviles</strong> — <span style="color:var(--gris);">mandar recorridos a los móviles y chatear con ellos.</span></div>
+        <div><strong>🕒 Asistencia</strong> — <span style="color:var(--gris);">punto de trabajo, horario y marcaje por GPS del personal.</span></div>
+        <div><strong>🚨 Operativos</strong> — <span style="color:var(--gris);">despachar móviles a emergencias con objetivo y descripción.</span></div>
+        <div><strong>📡 En curso</strong> — <span style="color:var(--gris);">seguir el estado de cada operativo, sus reportes, y cerrarlo.</span></div>
+        <div><strong>📜 Registro</strong> — <span style="color:var(--gris);">bitácora de operativos: quién despachó, cuándo y cómo se cumplió.</span></div>
+      </div>
+      <div style="font-size:.7rem; color:var(--gris); margin-top:9px;">Verde = el cargo la tiene · gris = cortada. El monitoreo en vivo del mapa nunca se corta.</div>
+    </div>`;
 }
 function toggleRolPermiso(rol, key) {
   if (!_rolesPermisos[rol]) _rolesPermisos[rol] = {};
