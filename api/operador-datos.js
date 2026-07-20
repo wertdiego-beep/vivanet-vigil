@@ -656,7 +656,8 @@ export default async function handler(req, res) {
         lng: perfilOp.fields?.asistLng ? parseFloat(perfilOp.fields.asistLng.doubleValue ?? perfilOp.fields.asistLng.integerValue) : null,
         lugar: perfilOp.fields?.asistLugar?.stringValue || '',
         entrada: perfilOp.fields?.asistEntrada?.stringValue || '',
-        salida: perfilOp.fields?.asistSalida?.stringValue || ''
+        salida: perfilOp.fields?.asistSalida?.stringValue || '',
+        bloqueo: perfilOp.fields?.asistBloqueo?.booleanValue !== false
       };
       const regRuta = `${base0}/empresas/${empA}/asistencia/${uid}_${fechaCl}`;
       if (accion === 'asist-mi-config') {
@@ -925,7 +926,8 @@ export default async function handler(req, res) {
       const fields = {
         asistLat: { doubleValue: Number(req.body.lat) }, asistLng: { doubleValue: Number(req.body.lng) },
         asistLugar: { stringValue: String(req.body.lugar || '').slice(0, 120) },
-        asistEntrada: { stringValue: String(req.body.entrada || '') }, asistSalida: { stringValue: String(req.body.salida || '') }
+        asistEntrada: { stringValue: String(req.body.entrada || '') }, asistSalida: { stringValue: String(req.body.salida || '') },
+        asistBloqueo: { booleanValue: req.body.bloqueo !== false }
       };
       await fetch(`${base0}/usuarios/${destino}?` + Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
         method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -968,7 +970,8 @@ export default async function handler(req, res) {
         cfgPor[id2] = {
           lat: dd.fields?.asistLat ? parseFloat(dd.fields.asistLat.doubleValue ?? dd.fields.asistLat.integerValue) : null,
           lng: dd.fields?.asistLng ? parseFloat(dd.fields.asistLng.doubleValue ?? dd.fields.asistLng.integerValue) : null,
-          lugar: dd.fields?.asistLugar?.stringValue || '', entrada: dd.fields?.asistEntrada?.stringValue || '', salida: dd.fields?.asistSalida?.stringValue || ''
+          lugar: dd.fields?.asistLugar?.stringValue || '', entrada: dd.fields?.asistEntrada?.stringValue || '', salida: dd.fields?.asistSalida?.stringValue || '',
+          bloqueo: dd.fields?.asistBloqueo?.booleanValue !== false
         };
       });
       const personal = todos.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa)
