@@ -1219,16 +1219,26 @@ textarea{min-height:96px;resize:vertical}
     </div>
     <!-- ══ PANEL MÓVIL DE REACCIÓN (rolEmpresa === 'movil') ══ -->
     <div class="screen-scroll" id="s-movil">
-      <div class="card">
-        <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>🚐 Móvil de reacción</span><button onclick="cargarPanelMovil()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
-        <p style="color:var(--gris); font-size:.78rem;">Tu recorrido del día y los incidentes que te despacha la central.</p>
+      <div style="background:linear-gradient(135deg,#5b4bdb,#7c6cff); border-radius:20px; padding:20px 18px; margin-bottom:14px; color:#fff;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:1.25rem;">🚐 Móvil de reacción</div>
+            <div id="movilResumen" style="font-size:.8rem; opacity:.85; margin-top:3px;">Cargando tu jornada…</div>
+          </div>
+          <button onclick="cargarPanelMovil()" style="width:44px; height:44px; border-radius:50%; border:none; background:rgba(255,255,255,.18); color:#fff; font-size:1.2rem; cursor:pointer;">↻</button>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-title">🚨 Mis despachos</div>
-        <div id="movilDespachos"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+      <div id="movilDespachosWrap" style="margin-bottom:14px;">
+        <div id="movilDespachos"></div>
       </div>
-      <div class="card">
-        <div class="card-title">🗺 Mi recorrido de hoy</div>
+      <div class="card" style="border-radius:20px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+          <strong style="font-size:1rem;">🗺 Recorrido de hoy</strong>
+          <span id="movilProgresoTxt" style="font-size:.74rem; color:var(--gris);"></span>
+        </div>
+        <div style="height:8px; background:var(--violeta-suave); border-radius:99px; overflow:hidden; margin:8px 0 14px;">
+          <div id="movilProgresoBar" style="height:100%; width:0%; background:linear-gradient(90deg,#16a34a,#4ade80); border-radius:99px; transition:width .4s;"></div>
+        </div>
         <div id="movilRecorrido"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
       </div>
       <input type="file" id="movilFotoInput" accept="image/*" capture="environment" style="display:none;">
@@ -4688,23 +4698,41 @@ function movilNav(ubic, direccion) {
 }
 function renderMovilDespachos(d) {
   const cont = document.getElementById('movilDespachos'); if (!cont) return;
-  if (!d || !d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + ((d && d.error) || 'Error') + '</strong></div></div>'; return; }
-  if (!d.despachos.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin despachos activos.</strong><small>Cuando la central te asigne un incidente, aparecerá aquí.</small></div></div>'; return; }
-  cont.innerHTML = d.despachos.map((x) => `
-    <div style="border:1px solid rgba(229,52,75,.4); border-radius:14px; padding:13px; margin-bottom:12px;">
-      <strong style="font-size:.95rem;">🚨 ${(x.cliente || '').replace(/</g,'&lt;')}</strong>
-      <div style="font-size:.8rem; color:var(--gris); margin:4px 0;">${(x.direccion || 'Sin dirección').replace(/</g,'&lt;')}${x.telefono ? ' · ' + x.telefono : ''}</div>
-      ${x.notaCentral ? `<div style="font-size:.8rem; background:var(--violeta-suave); color:#9d8fff; padding:6px 10px; border-radius:10px; margin:6px 0;">📌 ${x.notaCentral.replace(/</g,'&lt;')}</div>` : ''}
-      <div style="font-size:.74rem; color:var(--verde); margin:4px 0;">Estado: <b>${MOVIL_ESTADOS[x.movilEstado] || x.movilEstado}</b></div>
-      <div style="display:flex; gap:7px; flex-wrap:wrap; margin-top:8px;">
-        <button onclick='movilNav(${JSON.stringify(x.ubicacion)}, ${JSON.stringify(x.direccion || "")})' style="flex:1; min-width:120px; padding:9px; border-radius:10px; border:none; background:var(--violeta); color:#fff; font-weight:700; cursor:pointer;">🧭 Ir al sitio</button>
-        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','en_camino')" style="padding:9px 12px; border-radius:10px; border:1px solid var(--linea); background:transparent; color:var(--tinta); cursor:pointer;">🚗 Voy</button>
-        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','en_sitio')" style="padding:9px 12px; border-radius:10px; border:1px solid var(--linea); background:transparent; color:var(--tinta); cursor:pointer;">📍 En sitio</button>
-        <button onclick="movilDocumentar('${x.clienteUid}','${x.alertaId}')" style="padding:9px 12px; border-radius:10px; border:1px solid var(--violeta); background:var(--violeta-suave); color:#9d8fff; cursor:pointer;">📷 Documentar</button>
-        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','resuelto')" style="padding:9px 12px; border-radius:10px; border:none; background:var(--verde); color:#fff; font-weight:700; cursor:pointer;">✅ Resuelto</button>
-        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','falsa')" style="padding:9px 12px; border-radius:10px; border:1px solid var(--linea); background:transparent; color:var(--gris); cursor:pointer;">Falsa</button>
+  const wrap = document.getElementById('movilDespachosWrap');
+  if (!d || !d.ok || !d.despachos || !d.despachos.length) { cont.innerHTML = ''; if (wrap) wrap.style.display = 'none'; movilResumen(0); return; }
+  if (wrap) wrap.style.display = 'block';
+  movilResumen(d.despachos.length);
+  const PASOS = [['despachado','Despachado'],['en_camino','En camino'],['en_sitio','En el sitio']];
+  cont.innerHTML = d.despachos.map((x) => {
+    const idx = PASOS.findIndex((p) => p[0] === x.movilEstado);
+    const pasos = PASOS.map((p, i) => `<div style="flex:1; text-align:center;"><div style="height:5px; border-radius:99px; background:${i <= idx ? '#fff' : 'rgba(255,255,255,.25)'}; margin-bottom:5px;"></div><span style="font-size:.62rem; color:${i <= idx ? '#fff' : 'rgba(255,255,255,.55)'}; font-weight:${i === idx ? '700' : '400'};">${p[1]}</span></div>`).join('<div style="width:8px;"></div>');
+    return `
+    <div style="background:linear-gradient(135deg,#c62839,#e5344b); border-radius:20px; padding:18px; margin-bottom:10px; color:#fff;">
+      <div style="font-size:.68rem; font-weight:700; letter-spacing:.1em; opacity:.85;">🚨 EMERGENCIA ASIGNADA</div>
+      <div style="font-size:1.2rem; font-weight:700; margin:4px 0 2px;">${(x.cliente || 'Cliente').replace(/</g,'&lt;')}</div>
+      <div style="font-size:.82rem; opacity:.9;">${(x.direccion || 'Sin dirección').replace(/</g,'&lt;')}</div>
+      ${x.notaCentral ? `<div style="background:rgba(0,0,0,.22); border-radius:12px; padding:8px 12px; font-size:.78rem; margin-top:8px;">📌 ${x.notaCentral.replace(/</g,'&lt;')}</div>` : ''}
+      <div style="display:flex; margin:14px 0 12px;">${pasos}</div>
+      <button onclick='movilNav(${JSON.stringify(x.ubicacion)}, ${JSON.stringify(x.direccion || "")})' style="width:100%; padding:15px; border-radius:14px; border:none; background:#fff; color:#c62839; font-weight:700; font-size:1.02rem; cursor:pointer;">🧭 IR AL SITIO</button>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        ${idx < 1 ? `<button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','en_camino')" style="flex:1; padding:12px; border-radius:12px; border:1.5px solid rgba(255,255,255,.6); background:transparent; color:#fff; font-weight:700; cursor:pointer;">🚗 Voy en camino</button>` : ''}
+        ${idx < 2 ? `<button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','en_sitio')" style="flex:1; padding:12px; border-radius:12px; border:1.5px solid rgba(255,255,255,.6); background:transparent; color:#fff; font-weight:700; cursor:pointer;">📍 Llegué</button>` : ''}
       </div>
-    </div>`).join('');
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button onclick="movilDocumentar('${x.clienteUid}','${x.alertaId}')" style="flex:1; padding:12px; border-radius:12px; border:none; background:rgba(0,0,0,.25); color:#fff; font-weight:700; cursor:pointer;">📷 Documentar</button>
+        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','resuelto')" style="flex:1; padding:12px; border-radius:12px; border:none; background:#16a34a; color:#fff; font-weight:700; cursor:pointer;">✅ Resuelto</button>
+        <button onclick="movilSetEstado('${x.clienteUid}','${x.alertaId}','falsa')" style="padding:12px 14px; border-radius:12px; border:none; background:rgba(0,0,0,.25); color:#fff; cursor:pointer;">Falsa</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function movilResumen(nDesp) {
+  const el = document.getElementById('movilResumen'); if (!el) return;
+  const total = _movilRuta.length, hechas = _movilRuta.filter((p) => p.estado === 'visitada').length;
+  const partes = [];
+  if (nDesp > 0) partes.push('🚨 ' + nDesp + ' emergencia' + (nDesp === 1 ? '' : 's') + ' activa' + (nDesp === 1 ? '' : 's'));
+  if (total > 0) partes.push(hechas + ' de ' + total + ' paradas listas');
+  el.textContent = partes.length ? partes.join(' · ') : 'Sin tareas por ahora. Todo tranquilo.';
 }
 function movilSetEstado(clienteUid, alertaId, estado) {
   saFetch({ accion: 'movil-estado', clienteUid, alertaId, movilEstado: estado }).then((d) => { if (d.ok) cargarPanelMovil(); else alert(d.error || 'Error'); });
@@ -4719,21 +4747,26 @@ const MOVIL_MAX_STOPS = 10;
 function renderMovilRecorrido(d) {
   const cont = document.getElementById('movilRecorrido'); if (!cont) return;
   if (!d || !d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + ((d && d.error) || 'Error') + '</strong></div></div>'; return; }
-  if (!d.paradas.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin recorrido para hoy.</strong><small>La central arma tu ruta del día.</small></div></div>'; return; }
-  _movilRuta = d.paradas;
-  const btnNav = d.paradas.length >= 2 ? `<button onclick="movilIniciarRecorrido()" style="width:100%; margin-bottom:12px; padding:13px; border-radius:12px; border:none; background:var(--violeta); color:#fff; font-weight:700; font-size:.95rem; cursor:pointer;">🧭 Iniciar recorrido (navegación paso a paso)</button>` : '';
-  cont.innerHTML = btnNav + d.paradas.map((p, i) => `
-    <div style="border-bottom:1px solid var(--linea); padding:11px 0;">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="width:26px; height:26px; border-radius:50%; background:${p.estado === 'visitada' ? 'var(--verde-suave)' : 'var(--violeta-suave)'}; color:${p.estado === 'visitada' ? 'var(--verde)' : '#9d8fff'}; display:grid; place-items:center; font-weight:700; font-size:.8rem;">${i + 1}</span>
-        <strong style="flex:1; font-size:.88rem;">${(p.nombre || '').replace(/</g,'&lt;')} ${p.estado === 'visitada' ? '<span style="font-size:.62rem; color:var(--verde);">✓ visitada</span>' : ''}</strong>
+  _movilRuta = d.paradas || [];
+  const total = _movilRuta.length, hechas = _movilRuta.filter((p) => p.estado === 'visitada').length;
+  const bar = document.getElementById('movilProgresoBar'); if (bar) bar.style.width = total ? Math.round(hechas / total * 100) + '%' : '0%';
+  const ptxt = document.getElementById('movilProgresoTxt'); if (ptxt) ptxt.textContent = total ? hechas + ' / ' + total + ' visitadas' : '';
+  movilResumen(document.querySelectorAll('#movilDespachos > div').length);
+  if (!total) { cont.innerHTML = '<div class="evento"><div><strong>Sin recorrido para hoy.</strong><small>La central arma tu ruta del día.</small></div></div>'; return; }
+  const btnNav = total >= 2 ? `<button onclick="movilIniciarRecorrido()" style="width:100%; margin-bottom:14px; padding:16px; border-radius:14px; border:none; background:linear-gradient(135deg,#5b4bdb,#7c6cff); color:#fff; font-weight:700; font-size:1.02rem; cursor:pointer;">🧭 INICIAR RECORRIDO</button>` : '';
+  cont.innerHTML = btnNav + _movilRuta.map((p, i) => {
+    const ok = p.estado === 'visitada';
+    return `
+    <div style="display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--linea); ${ok ? 'opacity:.55;' : ''}">
+      <div style="width:34px; height:34px; border-radius:50%; flex-shrink:0; background:${ok ? '#16a34a' : 'var(--violeta-suave)'}; color:${ok ? '#fff' : '#9d8fff'}; display:grid; place-items:center; font-weight:700;">${ok ? '✓' : i + 1}</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; font-size:.9rem; ${ok ? 'text-decoration:line-through;' : ''}">${(p.nombre || 'Punto ' + (i + 1)).replace(/</g,'&lt;')}</div>
+        ${p.direccion ? `<div style="font-size:.72rem; color:var(--gris); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.direccion.replace(/</g,'&lt;')}</div>` : ''}
       </div>
-      <div style="font-size:.78rem; color:var(--gris); margin:3px 0 6px 34px;">${(p.direccion || 'Sin dirección').replace(/</g,'&lt;')}</div>
-      <div style="display:flex; gap:7px; flex-wrap:wrap; margin-left:34px;">
-        <button onclick='movilNav(${JSON.stringify(p.lat && p.lng ? { lat: p.lat, lng: p.lng } : null)}, ${JSON.stringify(p.direccion || "")})' style="padding:7px 12px; border-radius:99px; border:1px solid var(--linea); background:transparent; color:var(--violeta); cursor:pointer; font-size:.74rem;">🧭 Ir</button>
-        ${p.estado !== 'visitada' ? `<button onclick="movilVisitarParada(${i})" style="padding:7px 12px; border-radius:99px; border:none; background:var(--verde); color:#fff; font-weight:700; cursor:pointer; font-size:.74rem;">✓ Marcar visitada</button>` : ''}
-      </div>
-    </div>`).join('');
+      ${!ok ? `<button onclick='movilNav(${JSON.stringify(p.lat && p.lng ? { lat: p.lat, lng: p.lng } : null)}, ${JSON.stringify(p.direccion || "")})' title="Navegar" style="width:42px; height:42px; border-radius:12px; border:1px solid var(--linea); background:transparent; color:var(--violeta); font-size:1.05rem; cursor:pointer;">🧭</button>
+      <button onclick="movilVisitarParada(${i})" title="Marcar visitada" style="width:42px; height:42px; border-radius:12px; border:none; background:#16a34a; color:#fff; font-size:1.05rem; cursor:pointer;">✓</button>` : ''}
+    </div>`;
+  }).join('');
 }
 function movilIniciarRecorrido() {
   if (!_movilRuta || _movilRuta.length < 2) return;
