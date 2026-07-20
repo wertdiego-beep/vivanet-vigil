@@ -1348,7 +1348,7 @@ textarea{min-height:96px;resize:vertical}
               <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;"><span>🎫 Tickets ciudadanos</span>
                 <span style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                   <select id="tkfEstado" onchange="ticketsListar()" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
-                    <option value="">Todos los estados</option><option value="ingresado">📥 Ingresados</option><option value="asignado">👤 Asignados</option><option value="en_gestion">🔧 En gestión</option><option value="derivado">📤 Derivados</option><option value="resuelto">✅ Resueltos</option><option value="cerrado">🔒 Cerrados</option>
+                    <option value="">Todos los estados</option><option value="ingresado">📥 Ingresados</option><option value="asignado">👤 Asignados</option><option value="__mios">🙋 Asignados a mí</option><option value="en_gestion">🔧 En gestión</option><option value="derivado">📤 Derivados</option><option value="resuelto">✅ Resueltos</option><option value="cerrado">🔒 Cerrados</option>
                   </select>
                   <input type="date" id="tkfFecha" onchange="ticketsListar()" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
                   <button onclick="document.getElementById('tkfFecha').value=''; document.getElementById('tkfEstado').value=''; ticketsListar();" style="width:auto; padding:6px 12px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">Todos</button>
@@ -1948,6 +1948,7 @@ async function cargarPanelOperador() {
     if (data.esSuperadmin) { const n = document.getElementById('navPlataforma'); if (n) n.style.display = ''; }
     _saSoyMaestra = data.esMaestra === true;
     _miRolEmpresa = data.rolEmpresa || '';
+    window._miUidPanel = data.miUid || '';
     // Chip de perfil: quién soy y con qué rol.
     (function(){
       const chip = document.getElementById('opPerfilChip'); if (!chip) return;
@@ -4056,13 +4057,34 @@ function ticketsListar() {
     const fEst = document.getElementById('tkfEstado')?.value || '';
     const fFec = document.getElementById('tkfFecha')?.value || '';
     let lista = d.tickets || [];
-    if (fEst) lista = lista.filter((t) => t.estado === fEst);
+    if (fEst === '__mios') lista = lista.filter((t) => t.asignadoUid && t.asignadoUid === window._miUidPanel);
+    else if (fEst) lista = lista.filter((t) => t.estado === fEst);
     if (fFec) lista = lista.filter((t) => fchile(t.creadaEn) === fFec);
     if (!lista.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin tickets' + (fEst || fFec ? ' con ese filtro.' : ' aún.') + '</strong><small>Los llamados que tomes en 📞 Llamados aparecerán aquí.</small></div></div>'; return; }
     cont.innerHTML = lista.map((t) => {
       const est = TK_ESTADOS[t.estado] || TK_ESTADOS.ingresado;
       const pr = TK_PRIO[t.prioridad] || TK_PRIO.media;
       const gest = (t.gestiones || []).map((gg) => `<div style="font-size:.72rem; color:var(--gris); padding:3px 0;">${(TK_ESTADOS[gg.estado] || ['·'])[0]} <em>${fh(gg.creadaEn)}</em> · ${esc(gg.por)}${gg.texto ? ' — ' + esc(gg.texto) : ''}</div>`).join('');
+      const puedoGestionar = (window._miRolEmpresa === 'jefe' || window._miRolEmpresa === 'gerente' || window._esSApanel === true || (t.asignadoUid && t.asignadoUid === window._miUidPanel));
+      const TAR_EST = { pendiente: ['⚪', 'Pendiente', 'var(--gris)'], en_progreso: ['🔵', 'En progreso', '#38bdf8'], lista: ['✅', 'Lista', '#22aa5a'] };
+      const tareas = t.tareas || [];
+      const totLista = tareas.filter((x) => x.estado === 'lista').length;
+      const tareasHtml = (tareas.length || (puedoGestionar && t.asignadoNombre)) ? `
+        <div style="border:1px solid var(--linea); border-radius:12px; padding:10px 12px; margin-top:10px;">
+          <div style="font-size:.74rem; font-weight:800; color:#c084fc; margin-bottom:6px;">🧩 Tareas del ticket ${tareas.length ? `<span style="color:var(--gris); font-weight:600;">(${totLista}/${tareas.length} listas)</span>` : ''}</div>
+          ${tareas.map((tr) => { const te = TAR_EST[tr.estado] || TAR_EST.pendiente; const puedoTarea = puedoGestionar || (tr.asignadoUid && tr.asignadoUid === window._miUidPanel); return `
+            <div style="display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--linea);">
+              <span style="font-size:.9rem;">${te[0]}</span>
+              <div style="flex:1; min-width:0;"><div style="font-size:.8rem; ${tr.estado === 'lista' ? 'text-decoration:line-through; color:var(--gris);' : ''}">${esc(tr.texto)}</div><div style="font-size:.66rem; color:var(--gris);">${tr.asignadoNombre ? '👷 ' + esc(tr.asignadoNombre) : 'sin encargado'}</div></div>
+              ${puedoTarea && t.estado !== 'cerrado' ? `<select onchange="tkTareaEstado('${t.id}','${tr.id}',this.value)" style="width:auto; margin:0; padding:5px 8px; font-size:.72rem;">${Object.keys(TAR_EST).map((k) => `<option value="${k}" ${tr.estado === k ? 'selected' : ''}>${TAR_EST[k][1]}</option>`).join('')}</select>` : `<span style="font-size:.66rem; font-weight:700; color:${te[2]};">${te[1]}</span>`}
+            </div>`; }).join('')}
+          ${puedoGestionar && t.estado !== 'cerrado' ? `
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; align-items:center;">
+            <input id="tkTt-${t.id}" placeholder="Nueva tarea (qué hay que hacer)…" style="flex:1; min-width:150px; margin:0; padding:7px 10px; font-size:.76rem;">
+            <select id="tkTu-${t.id}" style="width:auto; margin:0; padding:7px 10px; font-size:.76rem;"><option value="">👷 Encargado…</option>${personal.map((p) => `<option value="${p.uid}">${esc(p.nombre)}${p.especialidad ? ' · ' + esc(p.especialidad) : ''}</option>`).join('')}</select>
+            <button onclick="tkTareaCrear('${t.id}')" style="width:auto; padding:7px 14px; border-radius:99px; border:none; background:#c084fc; color:#1a1030; font-weight:700; font-size:.74rem; cursor:pointer;">+ Tarea</button>
+          </div>` : ''}
+        </div>` : '';
       return `
       <div style="border:1px solid ${t.prioridad === 'alta' && t.estado !== 'cerrado' && t.estado !== 'resuelto' ? 'rgba(229,52,75,.5)' : 'var(--linea)'}; border-radius:14px; padding:14px 16px; margin-bottom:12px; ${t.estado === 'cerrado' ? 'opacity:.55;' : ''}">
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -4083,6 +4105,7 @@ function ticketsListar() {
         </div>
         <div style="font-size:.82rem; background:var(--violeta-suave); color:#c9c0ff; border-radius:10px; padding:8px 12px; margin:6px 0;">📝 ${esc(t.descripcion)}</div>
         ${(t.necesidades || []).length ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin:6px 0;">${t.necesidades.map((n) => `<span style="font-size:.68rem; padding:4px 10px; border-radius:99px; background:var(--fondo); border:1px solid var(--linea);">${esc(n)}</span>`).join('')}</div>` : ''}
+        ${tareasHtml}
         ${gest ? `<div style="border-top:1px dashed var(--linea); margin-top:8px; padding-top:6px;">${gest}</div>` : ''}
         ${t.estado !== 'cerrado' && t.estado !== 'resuelto' ? `
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center; padding:9px 12px; background:var(--fondo); border:1px dashed var(--linea); border-radius:12px;">
@@ -4108,6 +4131,15 @@ function ticketsListar() {
       </div>`;
     }).join('');
   }).catch(() => {});
+}
+function tkTareaCrear(id) {
+  const texto = (document.getElementById('tkTt-' + id)?.value || '').trim();
+  const asignadoUid = document.getElementById('tkTu-' + id)?.value || '';
+  if (!texto) { alert('Escribe qué hay que hacer.'); return; }
+  saFetch({ accion: 'ticket-tarea-crear', ticketId: id, texto, asignadoUid }).then((d) => { if (d.ok) ticketsListar(); else alert(d.error || 'Error'); });
+}
+function tkTareaEstado(id, tareaId, estado) {
+  saFetch({ accion: 'ticket-tarea-estado', ticketId: id, tareaId, estado }).then((d) => { if (d.ok) ticketsListar(); else alert(d.error || 'Error'); });
 }
 function tkAsignar(id) {
   const uid = document.getElementById('tkA-' + id)?.value;
