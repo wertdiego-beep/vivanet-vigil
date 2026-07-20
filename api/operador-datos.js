@@ -1214,6 +1214,87 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true });
       return;
     }
+    if (accion === 'ticket-crear') {
+      // Toma de información de un llamado ciudadano → genera un ticket con folio.
+      const b = req.body;
+      const nombreT = String(b.nombre || '').trim().slice(0, 120);
+      const categoriaT = String(b.categoria || '').trim().slice(0, 60);
+      const descripcionT = String(b.descripcion || '').trim().slice(0, 1500);
+      if (!nombreT || !categoriaT || !descripcionT) { res.status(400).json({ error: 'Faltan el nombre, la categoría o la descripción del problema.' }); return; }
+      const empDocT = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const seqT = parseInt(empDocT.fields?.ticketSeq?.integerValue || '0', 10) + 1;
+      await fetch(`${base0}/empresas/${empresaOperador}?updateMask.fieldPaths=ticketSeq`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { ticketSeq: { integerValue: String(seqT) } } })
+      });
+      const folioT = 'TK-' + String(seqT).padStart(4, '0');
+      const str = (v, n) => ({ stringValue: String(v || '').trim().slice(0, n) });
+      const num = (v) => ({ integerValue: String(Math.max(0, parseInt(v, 10) || 0)) });
+      const fieldsT = {
+        folio: { stringValue: folioT }, estado: { stringValue: 'ingresado' },
+        creadaEn: { timestampValue: new Date().toISOString() },
+        tomadoPor: { stringValue: perfilOp.fields?.nombre?.stringValue || '' },
+        medio: str(b.medio, 30),
+        nombre: { stringValue: nombreT }, rut: str(b.rut, 15), telefono: str(b.telefono, 20), edad: num(b.edad),
+        calle: str(b.calle, 160), sector: str(b.sector, 80), comuna: str(b.comuna, 60), referencia: str(b.referencia, 200),
+        personas: num(b.personas), adultosMayores: num(b.adultosMayores), ninos: num(b.ninos), discapacidad: num(b.discapacidad),
+        electrodependiente: { booleanValue: b.electrodependiente === true },
+        categoria: { stringValue: categoriaT }, prioridad: str(b.prioridad || 'media', 10),
+        descripcion: { stringValue: descripcionT },
+        necesidades: { arrayValue: { values: (Array.isArray(b.necesidades) ? b.necesidades.slice(0, 12) : []).map((x) => ({ stringValue: String(x).slice(0, 40) })) } },
+        gestiones: { arrayValue: { values: [] } }
+      };
+      if (b.lat != null && !isNaN(Number(b.lat))) { fieldsT.lat = { doubleValue: Number(b.lat) }; fieldsT.lng = { doubleValue: Number(b.lng) }; }
+      await fetch(`${base0}/empresas/${empresaOperador}/tickets`, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: fieldsT })
+      });
+      res.status(200).json({ ok: true, folio: folioT });
+      return;
+    }
+    if (accion === 'ticket-listar') {
+      const docsT = await fetch(`${base0}/empresas/${empresaOperador}/tickets?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const gv = (x) => x?.stringValue ?? '';
+      const gi = (x) => x ? parseInt(x.integerValue || '0', 10) : 0;
+      const tickets = (docsT.documents || []).map((dd) => {
+        const ff = dd.fields || {};
+        return {
+          id: dd.name.split('/').pop(), folio: gv(ff.folio), estado: gv(ff.estado) || 'ingresado',
+          creadaEn: ff.creadaEn?.timestampValue || null, tomadoPor: gv(ff.tomadoPor), medio: gv(ff.medio),
+          nombre: gv(ff.nombre), rut: gv(ff.rut), telefono: gv(ff.telefono), edad: gi(ff.edad),
+          calle: gv(ff.calle), sector: gv(ff.sector), comuna: gv(ff.comuna), referencia: gv(ff.referencia),
+          personas: gi(ff.personas), adultosMayores: gi(ff.adultosMayores), ninos: gi(ff.ninos), discapacidad: gi(ff.discapacidad),
+          electrodependiente: ff.electrodependiente?.booleanValue === true,
+          categoria: gv(ff.categoria), prioridad: gv(ff.prioridad) || 'media', descripcion: gv(ff.descripcion),
+          lat: ff.lat ? parseFloat(ff.lat.doubleValue) : null, lng: ff.lng ? parseFloat(ff.lng.doubleValue) : null,
+          necesidades: (ff.necesidades?.arrayValue?.values || []).map((x) => x.stringValue),
+          gestiones: (ff.gestiones?.arrayValue?.values || []).map((g) => { const gf = g.mapValue?.fields || {}; return { estado: gv(gf.estado), texto: gv(gf.texto), por: gv(gf.por), creadaEn: gf.creadaEn?.timestampValue || null }; })
+        };
+      }).sort((a, b2) => new Date(b2.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 80);
+      res.status(200).json({ ok: true, tickets });
+      return;
+    }
+    if (accion === 'ticket-estado') {
+      const tid = (req.body.ticketId || '').trim();
+      const estadoT = String(req.body.estado || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(tid) || !['ingresado', 'en_gestion', 'derivado', 'resuelto', 'cerrado'].includes(estadoT)) { res.status(400).json({ error: 'Ticket o estado no válido' }); return; }
+      const rutaT = `${base0}/empresas/${empresaOperador}/tickets/${tid}`;
+      const docT = await fetch(rutaT, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!docT.fields) { res.status(404).json({ error: 'Ticket no encontrado' }); return; }
+      const gestPrev = docT.fields?.gestiones?.arrayValue?.values || [];
+      gestPrev.push({ mapValue: { fields: {
+        estado: { stringValue: estadoT },
+        texto: { stringValue: String(req.body.nota || '').trim().slice(0, 500) },
+        por: { stringValue: perfilOp.fields?.nombre?.stringValue || '' },
+        creadaEn: { timestampValue: new Date().toISOString() }
+      } } });
+      await fetch(`${rutaT}?updateMask.fieldPaths=estado&updateMask.fieldPaths=gestiones`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { estado: { stringValue: estadoT }, gestiones: { arrayValue: { values: gestPrev.slice(-30) } } } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
     if (accion === 'despachar-movil') {
       const prawDM = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
       if (!esSA && prawDM.moviles?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a la gestión de móviles.' }); return; }
