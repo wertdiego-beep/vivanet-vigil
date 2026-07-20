@@ -503,7 +503,7 @@ export default async function handler(req, res) {
     }
 
     // ── Acciones del MÓVIL DE REACCIÓN (rol 'movil'; no es operador de central) ──
-    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte'];
+    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte', 'movil-incidente'];
     if (_accMovil.includes(accion)) {
       const miRolM = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolM !== 'movil') { res.status(403).json({ error: 'Solo un móvil de reacción puede usar esto.' }); return; }
@@ -561,6 +561,24 @@ export default async function handler(req, res) {
         await fetch(`${base0}/usuarios/${cUid}/alertas/${aId}?updateMask.fieldPaths=movilEstado&updateMask.fieldPaths=movilEstadoEn`, {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: { movilEstado: { stringValue: est }, movilEstadoEn: { timestampValue: new Date().toISOString() } } })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'movil-incidente') {
+        // El móvil reporta un incidente ocurrido durante su recorrido.
+        const fields = {
+          categoria: { stringValue: '🚐 Incidente en recorrido' },
+          icono: { stringValue: '🚐' },
+          texto: { stringValue: String(req.body.texto || '').slice(0, 800) },
+          estado: { stringValue: 'pendiente' },
+          anonimo: { booleanValue: false },
+          creadaEn: { timestampValue: new Date().toISOString() }
+        };
+        if (req.body.foto) fields.foto = { stringValue: String(req.body.foto).slice(0, 900000) };
+        await fetch(`${base0}/usuarios/${uid}/reportes`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields })
         });
         res.status(200).json({ ok: true });
         return;
