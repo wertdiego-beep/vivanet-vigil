@@ -4758,7 +4758,7 @@ function movilNavegarTodo() {
   // paradas en la app de Google Maps (el formato ?api=1&waypoints solo funciona en la web).
   const puntos = seg.map(movilPuntoStr).filter(Boolean);
   if (puntos.length < 2) return;
-  const url = 'https://www.google.com/maps/dir/' + puntos.join('/') + '/data=!4m2!4m1!3e0';
+  const url = 'https://www.google.com/maps/dir/' + puntos.join('/');
   window.open(url, '_blank');
 }
 function movilChunkSig() { const total = _movilRuta.length; const fin = Math.min(_movilChunk + MOVIL_MAX_STOPS, total); if (fin < total) { _movilChunk = fin - 1; movilRenderPaso(); } }
