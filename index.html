@@ -1853,6 +1853,11 @@ async function cargarPanelOperador() {
     const nre = document.getElementById('navRecorridos');
     // Recorridos: lo manda el gerente de seguridad (o el jefe).
     if (nre) nre.style.display = (!data.esSuperadmin && (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente')) ? '' : 'none';
+    // Operativos y En curso son operación de cada empresa: el superadmin solo ve los DATOS (Registro e Informes).
+    const nop = document.getElementById('navOperativos');
+    if (nop) nop.style.display = data.esSuperadmin ? 'none' : '';
+    const nec = document.getElementById('navEnCurso');
+    if (nec) nec.style.display = data.esSuperadmin ? 'none' : '';
     window._esSApanel = data.esSuperadmin === true;
     aplicarPermisosOperador(data.permisos, data.esSuperadmin);
     aplicarFuncionesApp(data.funciones);
