@@ -641,6 +641,11 @@ export default async function handler(req, res) {
       const rolA = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!rolA) { res.status(403).json({ error: 'No tienes un cargo en una empresa.' }); return; }
       const empA = perfilOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
+      // Función activable desde el panel superior: si está cortada, no hay asistencia.
+      const rutaFnA = empA === 'sos360-la-serena' ? `${base0}/plataforma/funciones` : `${base0}/empresas/${empA}`;
+      const docFnA = await fetch(rutaFnA, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const frawA = (docFnA.fields?.flags || docFnA.fields?.funciones)?.mapValue?.fields || {};
+      if (frawA.asistencia?.booleanValue === false) { res.status(403).json({ error: 'La función de asistencia no está activada para tu empresa.' }); return; }
       // Fecha y hora locales de Chile (America/Santiago).
       const pf = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
       const gp = (t) => (pf.find((x) => x.type === t) || {}).value;
@@ -905,6 +910,12 @@ export default async function handler(req, res) {
     if (accion === 'asist-config-set') {
       const miRolAs = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolAs !== 'jefe' && miRolAs !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente asigna puntos de trabajo.' }); return; }
+      if (!esSA) {
+        const rutaFnP = empresaOperador === 'sos360-la-serena' ? `${base0}/plataforma/funciones` : `${base0}/empresas/${empresaOperador}`;
+        const docFnP = await fetch(rutaFnP, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const frawP = (docFnP.fields?.flags || docFnP.fields?.funciones)?.mapValue?.fields || {};
+        if (frawP.asistencia?.booleanValue === false) { res.status(403).json({ error: 'La función de asistencia no está activada para tu empresa.' }); return; }
+      }
       const destino = (req.body.personalUid || '').trim();
       if (!/^[A-Za-z0-9]+$/.test(destino)) { res.status(400).json({ error: 'Persona no válida' }); return; }
       const docD = await fetch(`${base0}/usuarios/${destino}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
@@ -924,6 +935,12 @@ export default async function handler(req, res) {
     if (accion === 'asist-listar') {
       const miRolAs = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolAs !== 'jefe' && miRolAs !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente ve la asistencia.' }); return; }
+      if (!esSA) {
+        const rutaFnP = empresaOperador === 'sos360-la-serena' ? `${base0}/plataforma/funciones` : `${base0}/empresas/${empresaOperador}`;
+        const docFnP = await fetch(rutaFnP, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const frawP = (docFnP.fields?.flags || docFnP.fields?.funciones)?.mapValue?.fields || {};
+        if (frawP.asistencia?.booleanValue === false) { res.status(403).json({ error: 'La función de asistencia no está activada para tu empresa.' }); return; }
+      }
       const pf2 = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
       const fecha = /^\d{4}-\d{2}-\d{2}$/.test(req.body.fecha || '') ? req.body.fecha : pf2;
       const [todos, regs] = await Promise.all([
