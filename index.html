@@ -794,6 +794,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="roles" id="navRoles" style="display:none"><span>🔺</span><em>Roles</em></button>
         <button class="op-nav" data-opview="recorridos" id="navRecorridos" style="display:none"><span>🗺️</span><em>Recorridos</em></button>
         <button class="op-nav" data-opview="chatmov" id="navChatMov"><span>💬</span><em>Móviles</em></button>
+        <button class="op-nav" data-opview="asistencia" id="navAsistencia" style="display:none"><span>🕒</span><em>Asistencia</em></button>
         <div class="op-side-foot">
           <button class="op-nav" id="opPushBtn" onclick="opActivarPush()" title="Recibe una notificación en este dispositivo cuando llegue un SOS, aunque el panel esté cerrado"><span>🔔</span><em>Avisos SOS</em></button>
           <button class="op-nav" onclick="go('s-mas')"><span>👤</span><em>Mi cuenta</em></button>
@@ -1164,6 +1165,26 @@ textarea{min-height:96px;resize:vertical}
               </div>
             </div>
           </section>
+          <!-- ── Vista: Asistencia del personal (jefe/gerente) ── -->
+          <section class="op-view" id="op-view-asistencia">
+            <div class="card">
+              <div class="card-title">🕒 Asignar punto de trabajo y horario</div>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:8px;">Elige a la persona, toca en el mapa su lugar de trabajo y define su horario. Solo podrá marcar asistencia estando a menos de 200 m de ese punto.</p>
+              <select id="asistPersonaSel" onchange="asistCargarPersona()" style="margin-bottom:10px;"><option value="">— Elige a la persona —</option></select>
+              <div id="asistMapa" style="height:260px; border-radius:12px; overflow:hidden; border:1px solid var(--linea); margin-bottom:10px;"></div>
+              <input type="text" id="asistLugar" placeholder="Nombre del lugar (ej: Portería Balmaceda 450)" style="margin-bottom:8px;">
+              <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <div style="flex:1;"><label style="font-size:.72rem; color:var(--gris);">Hora de entrada</label><input type="time" id="asistEnt" value="09:00"></div>
+                <div style="flex:1;"><label style="font-size:.72rem; color:var(--gris);">Hora de salida</label><input type="time" id="asistSal" value="18:00"></div>
+              </div>
+              <button class="btn-full" style="margin:0;" onclick="asistGuardarCfg()">Guardar punto y horario</button>
+              <div class="error-msg" id="asistCfgInfo"></div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>📋 Asistencia de hoy</span><button onclick="asistPanelListar()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></div>
+              <div id="asistLista"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
+            </div>
+          </section>
           <!-- ── Vista: Plataforma (solo superadmin: nosotros) ── -->
           <section class="op-view" id="op-view-plataforma">
             <div style="margin:2px 0 16px;">
@@ -1233,6 +1254,7 @@ textarea{min-height:96px;resize:vertical}
           <div class="evento"><div><strong>Cargando visitas…</strong></div></div>
         </div>
       </div>
+      <div id="asistTecnico"></div>
       <button class="btn-out" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
     <!-- ══ PANEL MÓVIL DE REACCIÓN (rolEmpresa === 'movil') ══ -->
@@ -1260,6 +1282,7 @@ textarea{min-height:96px;resize:vertical}
         <div id="movilGeoEstado" style="font-size:.72rem; color:var(--gris); margin:-6px 0 10px;">📡 Activando GPS… las paradas se marcarán solas al pasar por cada punto.</div>
         <div id="movilRecorrido"><div class="evento"><div><strong>Cargando…</strong></div></div></div>
       </div>
+      <div id="asistMovil"></div>
       <div class="card" style="border-radius:20px;">
         <strong style="font-size:1rem; display:block; margin-bottom:10px;">📞 Contacto</strong>
         <div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--linea);">
@@ -1719,6 +1742,8 @@ async function cargarPanelOperador() {
     const nro = document.getElementById('navRoles');
     // Roles lo gestiona el jefe de cada empresa, NO el nivel superior.
     if (nro) nro.style.display = (!data.esSuperadmin && data.rolEmpresa === 'jefe') ? '' : 'none';
+    const nas = document.getElementById('navAsistencia');
+    if (nas) nas.style.display = (data.esSuperadmin || data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente') ? '' : 'none';
     const nre = document.getElementById('navRecorridos');
     // Recorridos: lo manda el gerente de seguridad (o el jefe).
     if (nre) nre.style.display = (!data.esSuperadmin && (data.rolEmpresa === 'jefe' || data.rolEmpresa === 'gerente')) ? '' : 'none';
@@ -2465,6 +2490,7 @@ function renderOperadorMapa(alertas, clientes) {
 
 // ══ PANEL TÉCNICO (rolEmpresa === 'tecnico') ══
 async function cargarPanelTecnico() {
+  asistInit('asistTecnico');
   const user = auth.currentUser;
   if (!user) return;
   try {
@@ -3460,6 +3486,73 @@ async function recSectoresAuto() {
     info.style.color = '#00C776';
     info.textContent = `✨ Patrullaje de ${ordenSec.length} sector${ordenSec.length === 1 ? '' : 'es'} (${totalPuntos} puntos)${cs ? ' + ' + cs + ' calle' + (cs === 1 ? '' : 's') + ' obligatoria' + (cs === 1 ? '' : 's') : ''}, por calles reales. ${recRuta.length ? 'Inicio en verde, fin en rojo.' : ''} Ajústalo tocando el mapa.`;
   }
+}
+/* ── 🕒 ASISTENCIA (panel jefe/gerente) ── */
+let asistMapaL = null, asistMarker = null, asistCoords = null, _asistData = null;
+function asistPanelInit() {
+  if (typeof L !== 'undefined' && !asistMapaL) {
+    asistMapaL = L.map('asistMapa').setView(MAPA_CENTRO_DEFECTO, 13);
+    L.tileLayer(urlTilesOperador('claro'), opcionesTiles()).addTo(asistMapaL);
+    asistMapaL.on('click', (e) => {
+      asistCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
+      if (asistMarker) asistMapaL.removeLayer(asistMarker);
+      asistMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(asistMapaL);
+    });
+  }
+  setTimeout(() => { try { asistMapaL.invalidateSize(); } catch (e) {} }, 250);
+  asistPanelListar();
+}
+function asistPanelListar() {
+  saFetch({ accion: 'asist-listar' }).then((d) => {
+    if (!d.ok) { const c = document.getElementById('asistLista'); if (c) c.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
+    _asistData = d;
+    const sel = document.getElementById('asistPersonaSel');
+    if (sel) { const prev = sel.value; sel.innerHTML = '<option value="">— Elige a la persona —</option>' + d.personal.map((p) => `<option value="${p.uid}">${p.nombre} (${p.rol})</option>`).join(''); if (prev) sel.value = prev; }
+    const cont = document.getElementById('asistLista'); if (!cont) return;
+    if (!d.personal.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin personal con cargo.</strong></div></div>'; return; }
+    cont.innerHTML = `<div style="font-size:.74rem; color:var(--gris); margin-bottom:6px;">Fecha: ${d.fecha}</div>` + d.personal.map((p) => {
+      const r = p.registro, tieneCfg = p.config && p.config.lat != null;
+      let estado;
+      if (!tieneCfg) estado = '<span style="color:var(--gris); font-size:.74rem;">Sin punto asignado</span>';
+      else if (!r || !r.entradaHora) estado = '<span style="color:#e5344b; font-size:.74rem; font-weight:700;">✗ No ha marcado entrada</span>';
+      else {
+        const ent = `Entrada ${r.entradaHora}` + (r.atrasoMin > 0 ? ` <b style="color:#e5344b;">(+${r.atrasoMin} min)</b>` : ' <b style="color:#16a34a;">✓</b>');
+        const sal = r.salidaHora ? ` · Salida ${r.salidaHora}` + (r.jornadaOk === false ? ' <b style="color:#e5344b;">(antes)</b>' : ' <b style="color:#16a34a;">✓</b>') : ' · sin salida';
+        estado = `<span style="font-size:.76rem;">${ent}${sal}</span>`;
+      }
+      return `<div style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--linea);">
+        <strong style="flex:1; font-size:.86rem;">${p.nombre.replace(/</g,'&lt;')} <span style="font-size:.62rem; color:#9d8fff;">${p.rol.toUpperCase()}</span></strong>
+        ${estado}
+      </div>`;
+    }).join('');
+  }).catch(() => {});
+}
+function asistCargarPersona() {
+  const uid = document.getElementById('asistPersonaSel').value;
+  const p = (_asistData && _asistData.personal || []).find((x) => x.uid === uid);
+  if (!p) return;
+  if (p.config && p.config.lat != null) {
+    asistCoords = { lat: p.config.lat, lng: p.config.lng };
+    if (asistMarker) asistMapaL.removeLayer(asistMarker);
+    asistMarker = L.marker([p.config.lat, p.config.lng]).addTo(asistMapaL);
+    asistMapaL.setView([p.config.lat, p.config.lng], 15);
+    document.getElementById('asistLugar').value = p.config.lugar || '';
+    if (p.config.entrada) document.getElementById('asistEnt').value = p.config.entrada;
+    if (p.config.salida) document.getElementById('asistSal').value = p.config.salida;
+  }
+}
+function asistGuardarCfg() {
+  const info = document.getElementById('asistCfgInfo');
+  const uid = document.getElementById('asistPersonaSel').value;
+  if (!uid) { info.style.color = 'var(--rojo)'; info.textContent = 'Elige a la persona.'; return; }
+  if (!asistCoords) { info.style.color = 'var(--rojo)'; info.textContent = 'Toca en el mapa el punto de trabajo.'; return; }
+  saFetch({ accion: 'asist-config-set', personalUid: uid, lat: asistCoords.lat, lng: asistCoords.lng,
+    lugar: document.getElementById('asistLugar').value, entrada: document.getElementById('asistEnt').value, salida: document.getElementById('asistSal').value
+  }).then((d) => {
+    info.style.color = d.ok ? '#00C776' : 'var(--rojo)';
+    info.textContent = d.ok ? '✅ Guardado. La persona ya puede marcar asistencia en ese punto.' : (d.error || 'Error');
+    if (d.ok) asistPanelListar();
+  }).catch(() => { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; });
 }
 let _chatMovUid = null, _chatMovTimer = null;
 function chatMovInit() {
@@ -4751,7 +4844,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', chatmov:'Chat con los móviles' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
@@ -4764,7 +4857,8 @@ const opDescripciones = {
   credenciales: 'Bitácora de todas las cuentas de personal creadas (correo, cargo, autor y fecha). Las claves no se guardan por seguridad.',
   roles: 'Define en pirámide qué ve y hace cada cargo de tu empresa. Solo el jefe.',
   recorridos: 'Manda a cada móvil su ruta del día. Solo el gerente o el jefe.',
-  chatmov: 'Mensajes y fotos con cada móvil de reacción, en ambos sentidos.'
+  chatmov: 'Mensajes y fotos con cada móvil de reacción, en ambos sentidos.',
+  asistencia: 'Punto de trabajo, horario y marcaje por GPS de cada trabajador. Jefe y gerente.'
 };
 /* ── PLATAFORMA (superadmin): empresas, operadores, aislamiento ── */
 function saFetch(cuerpo) {
@@ -4782,6 +4876,41 @@ function cargarPanelMovil() {
   saFetch({ accion: 'movil-recorrido' }).then(renderMovilRecorrido).catch(() => {});
   movilGeoStart();
   movilCargarContactos();
+  asistInit('asistMovil');
+}
+/* ── 🕒 ASISTENCIA del trabajador (marca por proximidad GPS) ── */
+function asistInit(contId) {
+  const cont = document.getElementById(contId); if (!cont) return;
+  saFetch({ accion: 'asist-mi-config' }).then((d) => {
+    if (!d.ok) return;
+    const c = d.config, h = d.hoy;
+    if (c.lat == null) { cont.innerHTML = ''; return; } // sin punto asignado: no mostrar
+    const entradaTxt = h.entradaHora ? `✅ Entrada ${h.entradaHora}` + (h.atrasoMin > 0 ? ` <span style="color:#e5344b; font-weight:700;">(atraso ${h.atrasoMin} min)</span>` : ' <span style="color:#16a34a; font-weight:700;">(a tiempo)</span>') : '— Sin entrada aún';
+    const salidaTxt = h.salidaHora ? `✅ Salida ${h.salidaHora}` + (h.jornadaOk === false ? ' <span style="color:#e5344b; font-weight:700;">(antes de hora)</span>' : ' <span style="color:#16a34a; font-weight:700;">(jornada completa)</span>') : '— Sin salida aún';
+    const btn = !h.entradaHora
+      ? `<button onclick="asistMarcar('entrada','${contId}')" style="width:100%; padding:15px; border-radius:13px; border:none; background:#16a34a; color:#fff; font-weight:700; font-size:1rem; cursor:pointer;">📍 MARCAR ENTRADA</button>`
+      : (!h.salidaHora ? `<button onclick="asistMarcar('salida','${contId}')" style="width:100%; padding:15px; border-radius:13px; border:none; background:#e5344b; color:#fff; font-weight:700; font-size:1rem; cursor:pointer;">📍 MARCAR SALIDA</button>` : '<div style="text-align:center; color:#16a34a; font-weight:700; padding:8px;">✔ Jornada registrada</div>');
+    cont.innerHTML = `
+    <div class="card" style="border-radius:20px;">
+      <strong style="font-size:1rem; display:block;">🕒 Mi asistencia</strong>
+      <div style="font-size:.76rem; color:var(--gris); margin:4px 0 10px;">${(c.lugar || 'Punto de trabajo').replace(/</g,'&lt;')} · Horario ${c.entrada || '—'} a ${c.salida || '—'}. Marca solo si estás en el lugar (GPS).</div>
+      <div style="font-size:.84rem; margin-bottom:4px;">${entradaTxt}</div>
+      <div style="font-size:.84rem; margin-bottom:12px;">${salidaTxt}</div>
+      ${btn}
+      <div id="${contId}Info" class="error-msg"></div>
+    </div>`;
+  }).catch(() => {});
+}
+function asistMarcar(tipo, contId) {
+  const info = document.getElementById(contId + 'Info');
+  if (!navigator.geolocation) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Tu teléfono no tiene GPS disponible.'; } return; }
+  if (info) { info.style.color = 'var(--gris)'; info.textContent = '📡 Obteniendo tu ubicación…'; }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    saFetch({ accion: 'asist-marcar', tipo, lat: pos.coords.latitude, lng: pos.coords.longitude }).then((d) => {
+      if (d.ok) { if (info) { info.style.color = '#00C776'; info.textContent = `✅ ${tipo === 'entrada' ? 'Entrada' : 'Salida'} marcada a las ${d.hora} (a ${d.dist} m del punto).`; } asistInit(contId); }
+      else if (info) { info.style.color = 'var(--rojo)'; info.textContent = d.error || 'No se pudo marcar.'; }
+    }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
+  }, () => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Activa la ubicación para marcar asistencia.'; } }, { enableHighAccuracy: true, timeout: 15000 });
 }
 let _movilChatCanal = null, _movilChatTimer = null, _movilContactos = null;
 function movilCargarContactos() {
@@ -5619,6 +5748,7 @@ function opGo(v){
   if (v==='personal') cargarPersonal();
   if (v==='recorridos') recInit();
   if (v==='chatmov') chatMovInit();
+  if (v==='asistencia') asistPanelInit();
   if (v==='credenciales') cargarCredencialesModulo();
   if (v==='roles') cargarRolesPermisos();
 }
