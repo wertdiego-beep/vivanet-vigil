@@ -1093,6 +1093,15 @@ textarea{min-height:96px;resize:vertical}
               <div style="font-size:.7rem; color:var(--gris); margin:10px 0 6px;">💡 O elige de las especialidades más comunes en una municipalidad (toca para agregar):</div>
               <div id="espSugeridas" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
 
+              <div style="font-size:.72rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#9d8fff; margin:16px 0 8px;">🏛 Cargos municipales</div>
+              <div id="cargoChips" style="display:flex; gap:7px; flex-wrap:wrap; margin-bottom:8px;"></div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <input id="cargoNuevo" placeholder="Ej: Director de Obras, Inspector…" style="flex:1; min-width:180px; margin:0;" onkeydown="if(event.key==='Enter'){event.preventDefault(); cargoAgregar();}">
+                <button onclick="cargoAgregar()" style="width:auto; padding:9px 16px; border-radius:99px; border:none; background:var(--violeta); color:#fff; font-weight:700; font-size:.78rem; cursor:pointer;">Agregar</button>
+              </div>
+              <div style="font-size:.7rem; color:var(--gris); margin:10px 0 6px;">💡 O elige de los cargos más comunes en una municipalidad (toca para agregar):</div>
+              <div id="cargoSugeridos" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+
               <div style="font-size:.72rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#9d8fff; margin:16px 0 8px;">👥 Grupos / cuadrillas</div>
               <div id="gruposLista" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;"></div>
               <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -6221,7 +6230,7 @@ function empHacerOperador(uid, esOp) {
     cargarPersonal();
   });
 }
-let _empData = { especialidades: [], grupos: [] };
+let _empData = { especialidades: [], grupos: [], cargosMun: [] };
 function cargarPersonal() {
   empCargarCodigo(false);
   const cont = document.getElementById('personalLista');
@@ -6230,7 +6239,8 @@ function cargarPersonal() {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     _empData.especialidades = d.especialidades || [];
     _empData.grupos = d.grupos || [];
-    renderEspChips(); renderEspSugeridas(); renderGruposLista();
+    _empData.cargosMun = d.cargosMun || [];
+    renderEspChips(); renderEspSugeridas(); renderCargoChips(); renderCargoSugeridos(); renderGruposLista();
     if (!d.personal.length) { cont.innerHTML = '<div class="evento"><div><strong>Aún no tienes personal con cargo.</strong><small>Cuando alguien se una con tu código de empresa, aparecerá aquí para asignarle un rol.</small></div></div>'; return; }
     const esc = (x) => String(x || '').replace(/</g, '&lt;');
     const grupoDe = (gid) => _empData.grupos.find((g) => g.id === gid);
@@ -6244,12 +6254,17 @@ function cargarPersonal() {
             <strong style="font-size:.9rem;">${esc(p.nombre)} ${p.esOperador ? '<span style="font-size:.6rem; color:var(--verde); background:var(--verde-suave); padding:2px 8px; border-radius:99px;">OPERADOR</span>' : ''}</strong>
             <div style="font-size:.72rem; color:var(--gris);">${esc(p.email) || 'sin correo'}${p.telefono ? ' · ' + esc(p.telefono) : ''}</div>
             <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:4px;">
+              ${p.cargoMunicipal ? `<span style="font-size:.62rem; padding:2px 9px; border-radius:99px; background:rgba(56,189,248,.14); color:#38bdf8; border:1px solid rgba(56,189,248,.4);">🏛 ${esc(p.cargoMunicipal)}</span>` : ''}
               ${p.especialidad ? `<span style="font-size:.62rem; padding:2px 9px; border-radius:99px; background:var(--fondo); border:1px solid var(--linea);">🏷 ${esc(p.especialidad)}</span>` : ''}
               ${g ? `<span style="font-size:.62rem; padding:2px 9px; border-radius:99px; background:${g.color}22; color:${g.color}; border:1px solid ${g.color}66;">👥 ${esc(g.nombre)}</span>` : ''}
             </div>
           </div>
           <select onchange="cambiarRol('${p.uid}', this.value)" style="width:auto; margin:0; padding:7px 10px; font-size:.8rem;">
             ${ROLES_EMP.map((r) => `<option value="${r.k}" ${p.rol === r.k ? 'selected' : ''}>${r.n}</option>`).join('')}
+          </select>
+          <select onchange="personaSet('${p.uid}','cargoMunicipal',this.value)" title="Cargo municipal" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
+            <option value="">🏛 Sin cargo</option>
+            ${_empData.cargosMun.map((cm) => `<option value="${esc(cm)}" ${p.cargoMunicipal === cm ? 'selected' : ''}>${esc(cm)}</option>`).join('')}
           </select>
           <select onchange="personaSet('${p.uid}','especialidad',this.value)" title="Especialidad" style="width:auto; margin:0; padding:7px 10px; font-size:.78rem;">
             <option value="">🏷 Sin especialidad</option>
@@ -6267,6 +6282,41 @@ function cargarPersonal() {
     }).join('');
   }).catch(() => { cont.innerHTML = '<div class="evento"><div><strong>Sin conexión.</strong></div></div>'; });
 }
+const CARGOS_MUN_SUGERIDOS = [
+  'Alcalde/sa', 'Administrador/a Municipal', 'Director/a de Seguridad Pública', 'Director/a de Obras',
+  'Director/a de Operaciones', 'Encargado/a de Emergencias', 'Coordinador/a de Protección Civil',
+  'Jefe/a de Turno', 'Supervisor/a de Terreno', 'Inspector/a Municipal', 'Fiscalizador/a',
+  'Operador/a de Central', 'Despachador/a', 'Encargado/a de Aseo y Ornato', 'Encargado/a de Alumbrado',
+  'Encargado/a de Áreas Verdes', 'Encargado/a de Tránsito', 'Encargado/a Social / DIDECO',
+  'Encargado/a de Bodega y Logística', 'Chofer Municipal', 'Guardia Municipal', 'Sereno / Vigilante',
+  'Paramédico Municipal', 'Coordinador/a de Albergues', 'Encargado/a de Comunicaciones'
+];
+function renderCargoChips() {
+  const c = document.getElementById('cargoChips'); if (!c) return;
+  const esc = (x) => String(x || '').replace(/</g, '&lt;');
+  c.innerHTML = (_empData.cargosMun || []).length ? _empData.cargosMun.map((e) => `<span style="display:inline-flex; align-items:center; gap:6px; font-size:.74rem; padding:5px 12px; border-radius:99px; background:rgba(56,189,248,.15); color:#38bdf8;">🏛 ${esc(e)} <span onclick="cargoQuitar('${esc(e).replace(/'/g,"\\'")}')" style="cursor:pointer; font-weight:700;">✕</span></span>`).join('') : '<small style="color:var(--gris);">Aún no creas cargos municipales.</small>';
+}
+function renderCargoSugeridos() {
+  const c = document.getElementById('cargoSugeridos'); if (!c) return;
+  const esc = (x) => String(x || '').replace(/</g, '&lt;');
+  const disp = CARGOS_MUN_SUGERIDOS.filter((e) => !(_empData.cargosMun || []).includes(e));
+  c.innerHTML = disp.length ? disp.map((e) => `<button onclick="cargoAgregarNombre('${esc(e).replace(/'/g,"\\'")}')" style="font-size:.72rem; padding:5px 12px; border-radius:99px; border:1px dashed var(--linea); background:transparent; color:var(--tinta); cursor:pointer;">+ ${esc(e)}</button>`).join('') : '<small style="color:var(--gris);">Ya agregaste todos los sugeridos.</small>';
+}
+function cargoGuardar(nueva) {
+  saFetch({ accion: 'emp-cargos-set', cargos: nueva }).then((d) => { if (d.ok) { _empData.cargosMun = d.cargos || nueva; renderCargoChips(); renderCargoSugeridos(); cargarPersonal(); } else alert(d.error || 'Error'); });
+}
+function cargoAgregar() {
+  const inp = document.getElementById('cargoNuevo'); const v = (inp?.value || '').trim();
+  if (!v) return;
+  if ((_empData.cargosMun || []).includes(v)) { inp.value = ''; return; }
+  inp.value = ''; cargoGuardar([...(_empData.cargosMun || []), v]);
+}
+function cargoAgregarNombre(nombre) {
+  const v = String(nombre || '').trim();
+  if (!v || (_empData.cargosMun || []).includes(v)) return;
+  cargoGuardar([...(_empData.cargosMun || []), v]);
+}
+function cargoQuitar(nombre) { cargoGuardar((_empData.cargosMun || []).filter((e) => e !== nombre)); }
 const ESP_SUGERIDAS = [
   'Electricista', 'Gásfiter / Plomero', 'Carpintero', 'Albañil / Maestro', 'Soldador', 'Pintor',
   'Operador de maquinaria', 'Chofer / Conductor', 'Rescatista', 'Rescatista acuático', 'Paramédico',
