@@ -1213,6 +1213,20 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true, total: values.length });
       return;
     }
+    if (accion === 'recorrido-cancelar') {
+      // El gerente o el jefe cancela el recorrido asignado a un móvil.
+      const miRolRC = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRolRC !== 'jefe' && miRolRC !== 'gerente') { res.status(403).json({ error: 'Solo el gerente o el jefe puede cancelar recorridos.' }); return; }
+      const prawRC = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
+      if (!esSA && prawRC.moviles?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a la gestión de móviles.' }); return; }
+      const mUidC = (req.body.movilUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(mUidC)) { res.status(400).json({ error: 'Móvil no válido' }); return; }
+      await fetch(`${base0}/empresas/${empresaOperador}/recorridos/${mUidC}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
     if (accion === 'emp-codigo') {
       // Código de equipo de la empresa del operador (para sumar personal).
       const rutaEmp = `${base0}/empresas/${empresaOperador}`;
