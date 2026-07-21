@@ -786,6 +786,8 @@ export default async function handler(req, res) {
       if (!email || !/.+@.+\..+/.test(email)) { res.status(400).json({ error: 'Correo no válido' }); return; }
       if (pass.length < 6) { res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres' }); return; }
       if (!nombre) { res.status(400).json({ error: 'Falta el nombre' }); return; }
+      // El superadmin puede crear la cuenta en cualquier empresa (la elegida en su panel).
+      const empDest = (esSA && /^[a-z0-9-]+$/.test(req.body.empresaIdDestino || '')) ? req.body.empresaIdDestino : empresaOperador;
       // Crear la cuenta en Firebase Auth.
       const su = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -795,10 +797,10 @@ export default async function handler(req, res) {
       // Guardar su ficha en la empresa del jefe.
       const fields = {
         nombre: { stringValue: nombre }, telefono: { stringValue: tel },
-        empresaId: { stringValue: empresaOperador }, rolEmpresa: { stringValue: rol },
+        empresaId: { stringValue: empDest }, rolEmpresa: { stringValue: rol },
         modo: { stringValue: 'empresa' }, creadoManual: { booleanValue: true }
       };
-      if (req.body.esOperador) fields.operadorDe = { stringValue: empresaOperador };
+      if (req.body.esOperador) fields.operadorDe = { stringValue: empDest };
       if (req.body.especialidad) fields.especialidad = { stringValue: String(req.body.especialidad).slice(0, 40) };
       await fetch(`${base0}/usuarios/${su.localId}?` + Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
         method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -812,7 +814,7 @@ export default async function handler(req, res) {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: {
             email: { stringValue: email }, nombre: { stringValue: nombre }, rol: { stringValue: rol },
-            empresaId: { stringValue: empresaOperador }, esOperador: { booleanValue: !!req.body.esOperador },
+            empresaId: { stringValue: empDest }, esOperador: { booleanValue: !!req.body.esOperador },
             claveLargo: { integerValue: String(pass.length) },
             clave: { stringValue: pass },
             creadoPorUid: { stringValue: uid }, creadoPorNombre: { stringValue: miNombreC },
