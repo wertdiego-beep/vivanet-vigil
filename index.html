@@ -346,6 +346,29 @@ textarea{min-height:96px;resize:vertical}
 </style>
 </head>
 <body>
+<script>
+/* Candado de dominio — bloquea la app si se copia a un dominio no autorizado. */
+(function(){
+  try{
+    var h = location.hostname;
+    var ok = (
+      h === 'localhost' || h === '127.0.0.1' ||
+      /vivanet-vigil.*\.vercel\.app$/.test(h) ||   // dominio de producción actual
+      /(^|\.)sos24\.cl$/.test(h) ||                  // futuros dominios propios
+      /(^|\.)vivanet\.cl$/.test(h)
+    );
+    if(!ok){
+      try{ window.stop && window.stop(); }catch(_){}
+      document.documentElement.innerHTML =
+        '<head><meta charset="utf-8"><title>Acceso no autorizado</title></head><body style="margin:0"><div style="font-family:system-ui,Arial,sans-serif;background:#0b0d14;color:#eef0f8;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px">'+
+        '<div style="font-size:3rem">\uD83D\uDD12</div>'+
+        '<h1 style="margin:14px 0 6px">Acceso no autorizado</h1>'+
+        '<p style="color:#9aa1bd;max-width:420px;line-height:1.5">Esta aplicación es propiedad exclusiva de <b>Vivanet Spa</b> y solo puede ejecutarse en sus dominios autorizados. Su reproducción o uso no autorizado está prohibido.</p>'+
+        '</div></body>';
+    }
+  }catch(e){}
+})();
+</script>
 <div class="phone">
   <div class="pill-demo">PROTOTIPO · DEMO</div>
   <div class="app-head" id="appHead" style="display:none;">
