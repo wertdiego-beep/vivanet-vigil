@@ -5959,12 +5959,12 @@ function movilVisitarParada(idx) {
 })();
 function cargarPlataforma() {
   saCargarCategorias();
-  saCargarOperadores();
   const cont = document.getElementById('saEmpresas');
   if (!cont) return;
   saFetch({ accion: 'sa-empresas' }).then((d) => {
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     window._saEmpresas = d.empresas;
+    saCargarOperadores(); // ya con la lista de empresas actualizada (incluye las nuevas sin operadores)
     const sel = document.getElementById('saFnEmpresa');
     if (sel) { const prev = sel.value; sel.innerHTML = d.empresas.map((e) => `<option value="${e.id}">${e.nombre}</option>`).join(''); if (prev) sel.value = prev; }
     const selA = document.getElementById('saAsistEmpresa');
@@ -6147,7 +6147,10 @@ function saCargarOperadores() {
     if (sel) {
       const prev = sel.value;
       const empresas = {};
-      _saOps.forEach((o) => { empresas[o.empresa] = ((window._saEmpresas || []).find((e) => e.id === o.empresa) || {}).nombre || o.empresa; });
+      // Todas las empresas (aunque aún no tengan operadores), para que las nuevas aparezcan.
+      (window._saEmpresas || []).forEach((e) => { empresas[e.id] = e.nombre || e.id; });
+      // Y cualquier empresa que aparezca en operadores por si faltara en la lista.
+      _saOps.forEach((o) => { if (!(o.empresa in empresas)) empresas[o.empresa] = ((window._saEmpresas || []).find((e) => e.id === o.empresa) || {}).nombre || o.empresa; });
       const ids = Object.keys(empresas).sort((a, b) => (empresas[a] || '').localeCompare(empresas[b] || ''));
       sel.innerHTML = '<option value="">— Elige una empresa —</option>' + ids.map((id) => `<option value="${id}">🏢 ${empresas[id]} (${_saOps.filter((o) => o.empresa === id).length})</option>`).join('');
       if (prev && empresas[prev]) sel.value = prev;
