@@ -1206,6 +1206,7 @@ export default async function handler(req, res) {
         creadaEn: { timestampValue: new Date().toISOString() },
         creadaPor: { stringValue: perfilOp.fields?.nombre?.stringValue || '' }
       };
+      if (req.body.ticketFolio) fields.ticketFolio = { stringValue: String(req.body.ticketFolio).slice(0, 20) };
       if (req.body.lat != null && !isNaN(Number(req.body.lat))) { fields.lat = { doubleValue: Number(req.body.lat) }; fields.lng = { doubleValue: Number(req.body.lng) }; }
       const crea = await fetch(`${base0}/empresas/${empresaOperador}/misiones`, {
         method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -1229,6 +1230,7 @@ export default async function handler(req, res) {
         estado: dd.fields?.estado?.stringValue || 'despachado',
         creadaEn: dd.fields?.creadaEn?.timestampValue || null,
         estadoEn: dd.fields?.estadoEn?.timestampValue || null,
+        ticketFolio: dd.fields?.ticketFolio?.stringValue || '',
         creadaPor: dd.fields?.creadaPor?.stringValue || '',
         resultado: dd.fields?.resultado?.stringValue || '',
         cerradaPor: dd.fields?.cerradaPor?.stringValue || '',
