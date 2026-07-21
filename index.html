@@ -6591,9 +6591,13 @@ function renderCredModulo() {
   cont.innerHTML = renderCredencial(list, false);
   if (cc) cc.textContent = totalEmp ? (list.length + ' de ' + totalEmp + ' cuenta' + (totalEmp === 1 ? '' : 's')) : '0 cuentas';
 }
-function cargarCredencialesModulo() {
+async function cargarCredencialesModulo() {
   const cont = document.getElementById('credModLista'); if (!cont) return;
   _credEsSA = window._esSApanel === true;
+  // Asegurar la lista completa de empresas (para que las nuevas aparezcan en el selector).
+  if (_credEsSA && !(window._saEmpresas || []).length) {
+    try { const de = await saFetch({ accion: 'sa-empresas' }); if (de.ok) window._saEmpresas = de.empresas; } catch (e) {}
+  }
   const desc = document.getElementById('credModDesc');
   if (desc) desc.innerHTML = _credEsSA
     ? 'Bitácora de <b>todas las empresas</b>: cada cuenta de personal creada, con correo, cargo, clave, empresa, autor y fecha. La clave se muestra con el botón 👁. Solo el nivel superior ve este módulo.'
@@ -6608,7 +6612,9 @@ function cargarCredencialesModulo() {
       wrap.style.display = 'block';
       const prev = sel.value;
       const empresas = {};
-      _credModulo.forEach((c) => { empresas[c.empresaId] = c.empresaNombre || c.empresaId; });
+      // Todas las empresas (aunque aún no tengan cuentas creadas), para que las nuevas aparezcan.
+      (window._saEmpresas || []).forEach((e) => { empresas[e.id] = e.nombre || e.id; });
+      _credModulo.forEach((c) => { if (!(c.empresaId in empresas)) empresas[c.empresaId] = c.empresaNombre || c.empresaId; });
       const opts = Object.keys(empresas).sort((a,b)=> (empresas[a]||'').localeCompare(empresas[b]||''));
       sel.innerHTML = '<option value="">— Elige una empresa —</option>' + opts.map((id) => `<option value="${id}">🏢 ${empresas[id]} (${_credModulo.filter(c=>c.empresaId===id).length})</option>`).join('');
       if (prev && empresas[prev]) sel.value = prev;
