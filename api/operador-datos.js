@@ -1340,6 +1340,60 @@ export default async function handler(req, res) {
         return;
       }
     }
+    if (accion === 'ticket-recomendados') {
+      // Sugiere al personal ideal para un ticket: especialidad/cargo que calza,
+      // en turno hoy, y con menos carga (menos tickets abiertos).
+      const tidR = (req.body.ticketId || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(tidR)) { res.status(400).json({ error: 'Ticket no válido' }); return; }
+      const docTR = await fetch(`${base0}/empresas/${empresaOperador}/tickets/${tidR}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!docTR.fields) { res.status(404).json({ error: 'Ticket no encontrado' }); return; }
+      const categoria = docTR.fields?.categoria?.stringValue || 'otro';
+      const KEYS = {
+        anegamiento: { kw: ['bomba','agua','gasfiter','gásfiter','plomero','rescat','emergencia','maquinaria','operador','motobomba','protección civil'], area: '🚨 Emergencias' },
+        vivienda: { kw: ['carpint','albañil','maestro','obras','techumbre','construc','ingenier','pintor'], area: '🏗 Obras / reparaciones' },
+        luz: { kw: ['electric','eléctric','alumbrado','telecom'], area: '⚡ Eléctrica' },
+        agua: { kw: ['gasfiter','gásfiter','plomero','agua','sanitar'], area: '💧 Agua' },
+        arbol: { kw: ['podad','jardin','motosierra','áreas verdes','areas verdes','maquinaria','operador'], area: '🏗 Obras / reparaciones' },
+        albergue: { kw: ['social','dideco','albergue','asisten','logística','logistica','bodega','coordinador'], area: '🛏 Social / albergue' },
+        salud: { kw: ['paramédic','paramedic','enfermer','médic','medic','salud','samu'], area: '💊 Salud' },
+        rescate: { kw: ['rescat','bombero','buzo','emergencia','protección civil','proteccion civil'], area: '🚨 Emergencias' },
+        seguridad: { kw: ['guardia','seguridad','vigilante','sereno','inspector','fiscaliz'], area: '🛡 Seguridad' },
+        animal: { kw: ['veterinar','animal'], area: '📌 Otra' },
+        otro: { kw: [], area: '📌 Otra' }
+      };
+      const cfg = KEYS[categoria] || KEYS.otro;
+      // Personal de la empresa.
+      const clientesR = await listarClientes(accessToken);
+      const personalR = clientesR.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa && c.rolEmpresa !== 'jefe' && c.rolEmpresa !== 'gerente');
+      // Tickets abiertos por persona (carga actual).
+      const ticketsR = await fetch(`${base0}/empresas/${empresaOperador}/tickets?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const cargaPor = {};
+      (ticketsR.documents || []).forEach((dd) => {
+        const est = dd.fields?.estado?.stringValue || '';
+        const au = dd.fields?.asignadoUid?.stringValue || '';
+        if (au && est !== 'cerrado' && est !== 'resuelto') cargaPor[au] = (cargaPor[au] || 0) + 1;
+      });
+      // En turno hoy (marcó asistencia).
+      const hoyR = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const asisR = await fetch(`${base0}/empresas/${empresaOperador}/asistencia?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const enTurno = {};
+      (asisR.documents || []).forEach((dd) => { if (dd.fields?.fecha?.stringValue === hoyR && dd.fields?.entradaHora?.stringValue) enTurno[dd.fields?.uid?.stringValue || ''] = true; });
+      // Puntaje.
+      const match = (txt) => cfg.kw.some((k) => (txt || '').toLowerCase().includes(k));
+      const rank = personalR.map((p) => {
+        let score = 0; const motivos = [];
+        if (match(p.especialidad)) { score += 50; motivos.push('🏷 ' + p.especialidad); }
+        if (match(p.cargoMunicipal)) { score += 35; if (!match(p.especialidad)) motivos.push('🏛 ' + p.cargoMunicipal); }
+        if (p.rolEmpresa === 'movil' || p.rolEmpresa === 'tecnico') score += 12;
+        if (enTurno[p.uid]) { score += 25; motivos.push('🟢 en turno'); } else { motivos.push('⚪ sin marcar turno'); }
+        const carga = cargaPor[p.uid] || 0;
+        score -= carga * 8;
+        motivos.push(carga + ' ticket' + (carga === 1 ? '' : 's') + ' abierto' + (carga === 1 ? '' : 's'));
+        return { uid: p.uid, nombre: p.nombre || 'Sin nombre', especialidad: p.especialidad || '', cargo: p.cargoMunicipal || '', rol: p.rolEmpresa, enTurno: !!enTurno[p.uid], carga, score, motivo: motivos.join(' · ') };
+      }).sort((a, b) => b.score - a.score).slice(0, 6);
+      res.status(200).json({ ok: true, categoria, areaSugerida: cfg.area, recomendados: rank });
+      return;
+    }
     if (accion === 'ticket-asignar') {
       // Asignar el ticket clasificado al especialista del área.
       const tidA = (req.body.ticketId || '').trim();
