@@ -6000,6 +6000,23 @@ function saToggleEmpresa(id) {
   if (!confirm('¿Cambiar el estado de esta empresa? Si se suspende, su central deja de operar.')) return;
   saFetch({ accion: 'sa-toggle-empresa', empresaIdDestino: id }).then(() => cargarPlataforma());
 }
+function saCrearOperador() {
+  const emp = document.getElementById('saOpEmpresaSel')?.value || '';
+  const info = document.getElementById('saPermInfo');
+  if (!emp) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Primero elige una empresa arriba.'; } return; }
+  const nomEmp = ((window._saEmpresas || []).find((e) => e.id === emp) || {}).nombre || emp;
+  const nombre = (prompt('Crear operador para «' + nomEmp + '»\n\nNombre de la persona:') || '').trim();
+  if (!nombre) return;
+  const email = (prompt('Correo (será su usuario para entrar):') || '').trim().toLowerCase();
+  if (!email) return;
+  const pass = (prompt('Clave (mínimo 6 caracteres):') || '').trim();
+  if (pass.length < 6) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'La clave debe tener al menos 6 caracteres.'; } return; }
+  if (info) { info.style.color = 'var(--gris)'; info.textContent = 'Creando la cuenta…'; }
+  saFetch({ accion: 'emp-crear', empresaIdDestino: emp, nombre, email, pass, rol: 'gerente', esOperador: true }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? '✅ Cuenta creada y designada como operador de ' + nomEmp + '. Correo: ' + email : (d.error || 'No se pudo crear.'); }
+    if (d.ok) saCargarOperadores();
+  }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
+}
 function saAsignarOperador() {
   const email = (prompt('Correo del operador (debe tener su cuenta creada):') || '').trim();
   if (!email) return;
@@ -6177,9 +6194,13 @@ function renderOperadores() {
           <button onclick="saTogglePermiso(${i},'${k}')" id="tg-${i}-${k}" title="${PERMISOS_NOMBRES[k].slice(3)}" style="width:40px; height:40px; border-radius:12px; font-size:1.05rem; cursor:pointer; border:1.5px solid ${o.permisos[k] !== false ? 'var(--verde)' : 'var(--linea)'}; background:${o.permisos[k] !== false ? 'var(--verde-suave)' : 'transparent'}; ${o.permisos[k] !== false ? '' : 'filter:grayscale(1); opacity:.45;'}">${PERMISOS_NOMBRES[k].slice(0, 2).trim()}</button>`).join('') + '</div>'}
         ${(_saSoyMaestra && !o.esMaestra) ? `<button onclick="saToggleSuperadmin('${o.uid}', ${o.esSuperadmin === true})" style="width:100%; padding:7px; border-radius:10px; font-size:.72rem; font-weight:700; cursor:pointer; border:1px solid ${o.esSuperadmin ? 'rgba(229,52,75,.5)' : 'var(--violeta)'}; background:${o.esSuperadmin ? 'rgba(229,52,75,.1)' : 'var(--violeta-suave)'}; color:${o.esSuperadmin ? '#ff4d5e' : '#9d8fff'};">${o.esSuperadmin ? '👑 Quitar mando máximo' : '👑 Hacer superadmin'}</button>` : ''}
       </div>`).join('') + `
+      <button onclick="saCrearOperador()" style="border:1.5px solid var(--violeta); border-radius:14px; padding:13px; text-align:center; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; min-height:100px;">
+        <div style="font-size:1.7rem;">🆕</div>
+        <strong style="display:block; font-size:.85rem; margin-top:4px;">Crear cuenta y hacer operador</strong>
+      </button>
       <button onclick="saAsignarOperador()" style="border:1.5px dashed var(--linea); border-radius:14px; padding:13px; text-align:center; background:transparent; color:var(--gris); cursor:pointer; min-height:100px;">
         <div style="font-size:1.7rem;">➕</div>
-        <strong style="display:block; font-size:.85rem; margin-top:4px;">Asignar operador</strong>
+        <strong style="display:block; font-size:.85rem; margin-top:4px;">Asignar operador existente</strong>
       </button>`;
 }
 function saTogglePermiso(i, k) {
