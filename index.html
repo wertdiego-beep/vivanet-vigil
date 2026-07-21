@@ -4054,6 +4054,7 @@ function ticketsListar() {
   const cont = document.getElementById('tkLista'); if (!cont) return;
   const pPersonal = _tkPersonal ? Promise.resolve(_tkPersonal) : saFetch({ accion: 'emp-personal' }).then((p) => { _tkPersonal = (p.ok && p.personal) ? p.personal : []; return _tkPersonal; }).catch(() => []);
   Promise.all([saFetch({ accion: 'ticket-listar' }), pPersonal]).then(([d, personal]) => {
+    window._tkLista = (d && d.tickets) ? d.tickets : [];
     if (!d.ok) { cont.innerHTML = '<div class="evento"><div><strong>' + (d.error || 'Error') + '</strong></div></div>'; return; }
     const esc = (x) => String(x || '').replace(/</g, '&lt;');
     const fh = (iso) => iso ? new Date(iso).toLocaleString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -4133,6 +4134,10 @@ function ticketsListar() {
           <select id="tkCo-${t.id}" style="width:auto; margin:0; padding:8px 10px; font-size:.78rem;"><option value="">— Persona —</option>${personal.filter((p) => p.uid !== t.asignadoUid && !(t.coasignados||[]).some((c) => c.uid === p.uid)).map((p) => `<option value="${p.uid}">${esc(p.nombre)} (${p.rol})${p.especialidad ? ' · ' + esc(p.especialidad) : ''}</option>`).join('')}</select>
           <button onclick="tkSumarPersona('${t.id}')" style="width:auto; padding:8px 16px; border-radius:99px; border:none; background:#38bdf8; color:#06263a; font-size:.76rem; font-weight:700; cursor:pointer;">+ Sumar</button>
         </div>` : ''}
+        ${(t.estado !== 'cerrado' && t.estado !== 'resuelto') ? `
+        <div style="margin-top:10px;">
+          <button onclick="tkDespacharOperativo('${t.id}')" style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(229,52,75,.5); background:rgba(229,52,75,.12); color:#ff6577; font-size:.82rem; font-weight:800; cursor:pointer;">🚨 Despachar operativo a un móvil</button>
+        </div>` : ''}
         ${t.estado !== 'cerrado' ? `
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
           <select id="tkE-${t.id}" style="width:auto; margin:0; padding:8px 10px; font-size:.78rem;">
@@ -4144,6 +4149,31 @@ function ticketsListar() {
       </div>`;
     }).join('');
   }).catch(() => {});
+}
+function tkDespacharOperativo(id) {
+  const t = (window._tkLista || []).find((x) => x.id === id);
+  if (!t) { alert('No encontré el ticket.'); return; }
+  saFetch({ accion: 'moviles-empresa' }).then((mv) => {
+    const moviles = (mv && mv.moviles) ? mv.moviles : [];
+    if (!moviles.length) { alert('No hay móviles de reacción en esta empresa. Crea uno con rol 🚐 Móvil en 👔 Personal.'); return; }
+    const TIP = { salud: '🚑', reparaciones: '🔧', rescate: '🚨', patrullaje: '🚔', ayuda: '🚐' };
+    const lista = moviles.map((m, i) => `${i + 1}. ${(TIP[m.tipo] || '🚐')} ${m.nombre} (${m.tipo})`).join('\n');
+    const n = parseInt(prompt('🚨 Despachar operativo del ticket ' + t.folio + '\n\n¿A qué móvil?\n' + lista + '\n\nEscribe el número:'), 10);
+    const mov = moviles[n - 1];
+    if (!mov) return;
+    const titulo = t.folio + ' · ' + ((typeof TK_CATS !== 'undefined' && TK_CATS[t.categoria]) || t.categoria || 'Emergencia');
+    const direccion = [t.calle, t.sector, t.comuna].filter(Boolean).join(', ');
+    const cuerpo = { accion: 'mision-crear', movilUid: mov.uid, titulo, descripcion: t.descripcion || '', direccion, ticketFolio: t.folio };
+    if (t.lat != null) { cuerpo.lat = t.lat; cuerpo.lng = t.lng; }
+    saFetch(cuerpo).then((d) => {
+      if (!d.ok) { alert(d.error || 'No se pudo despachar.'); return; }
+      // pasar el ticket a "en gestión" con nota vinculando el operativo
+      saFetch({ accion: 'ticket-estado', ticketId: id, estado: 'en_gestion', nota: '🚨 Operativo despachado a ' + mov.nombre }).then(() => {
+        alert('✅ Operativo despachado a ' + mov.nombre + '. Míralo en 📡 En curso. El ticket quedó En gestión.');
+        ticketsListar();
+      });
+    }).catch(() => alert('Error de conexión.'));
+  }).catch(() => alert('No se pudo cargar la lista de móviles.'));
 }
 function tkSumarPersona(id) {
   const uid = document.getElementById('tkCo-' + id)?.value;
