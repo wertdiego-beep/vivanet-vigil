@@ -6012,8 +6012,8 @@ function saCrearOperador() {
   const pass = (prompt('Clave (mínimo 6 caracteres):') || '').trim();
   if (pass.length < 6) { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'La clave debe tener al menos 6 caracteres.'; } return; }
   if (info) { info.style.color = 'var(--gris)'; info.textContent = 'Creando la cuenta…'; }
-  saFetch({ accion: 'emp-crear', empresaIdDestino: emp, nombre, email, pass, rol: 'gerente', esOperador: true }).then((d) => {
-    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? '✅ Cuenta creada y designada como operador de ' + nomEmp + '. Correo: ' + email : (d.error || 'No se pudo crear.'); }
+  saFetch({ accion: 'emp-crear', empresaIdDestino: emp, nombre, email, pass, rol: 'jefe', esOperador: true }).then((d) => {
+    if (info) { info.style.color = d.ok ? '#00C776' : 'var(--rojo)'; info.textContent = d.ok ? '✅ Cuenta creada y designada como operador (jefe) de ' + nomEmp + '. Correo: ' + email : (d.error || 'No se pudo crear.'); }
     if (d.ok) saCargarOperadores();
   }).catch(() => { if (info) { info.style.color = 'var(--rojo)'; info.textContent = 'Error de conexión.'; } });
 }
