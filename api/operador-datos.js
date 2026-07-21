@@ -406,7 +406,7 @@ export default async function handler(req, res) {
         }).map((d) => {
           const id = d.name.split('/').pop();
           const praw = d.fields?.permisosOp?.mapValue?.fields || {};
-          const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true };
+          const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true, llamados: true, tickets: true };
           Object.keys(praw).forEach((k) => { permisos[k] = praw[k].booleanValue !== false; });
           return {
             uid: id,
@@ -468,7 +468,7 @@ export default async function handler(req, res) {
           return;
         }
         const praw = docU.fields?.permisosOp?.mapValue?.fields || {};
-        const permisosDest = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true };
+        const permisosDest = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true, llamados: true, tickets: true };
         Object.keys(praw).forEach((k) => { permisosDest[k] = praw[k].booleanValue !== false; });
         res.status(200).json({ ok: true, permisos: permisosDest, empresa: docU.fields?.operadorDe?.stringValue || docU.fields?.empresaId?.stringValue || 'sos360-la-serena' });
         return;
@@ -921,7 +921,7 @@ export default async function handler(req, res) {
     if (accion === 'emp-roles-permisos') {
       const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRol !== 'jefe') { res.status(403).json({ error: 'Solo el jefe define los permisos por rol.' }); return; }
-      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales','moviles','asistencia','operativos','encurso','registro'];
+      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales','moviles','asistencia','operativos','encurso','registro','llamados','tickets'];
       const ROLES = ['gerente','supervisor','guardia','empleado','tecnico'];
       const empDoc = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       const rpRaw = empDoc.fields?.rolesPermisos?.mapValue?.fields || {};
@@ -933,7 +933,7 @@ export default async function handler(req, res) {
     if (accion === 'emp-roles-permisos-set') {
       const miRol = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRol !== 'jefe') { res.status(403).json({ error: 'Solo el jefe define los permisos por rol.' }); return; }
-      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales','moviles','asistencia','operativos','encurso','registro'];
+      const KEYS = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales','moviles','asistencia','operativos','encurso','registro','llamados','tickets'];
       const ROLES = ['gerente','supervisor','guardia','empleado','tecnico'];
       const rolD = (req.body.rol || '').trim();
       const key = (req.body.key || '').trim();
@@ -1220,6 +1220,7 @@ export default async function handler(req, res) {
     }
     if (accion === 'ticket-crear') {
       // Toma de información de un llamado ciudadano → genera un ticket con folio.
+      { const prTk = perfilOp.fields?.permisosOp?.mapValue?.fields || {}; if (!esSA && prTk.llamados?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a la toma de llamados.' }); return; } }
       const b = req.body;
       const nombreT = String(b.nombre || '').trim().slice(0, 120);
       const categoriaT = String(b.categoria || '').trim().slice(0, 60);
@@ -1257,6 +1258,7 @@ export default async function handler(req, res) {
       return;
     }
     if (accion === 'ticket-listar') {
+      { const prTk = perfilOp.fields?.permisosOp?.mapValue?.fields || {}; if (!esSA && prTk.tickets?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a los tickets.' }); return; } }
       const docsT = await fetch(`${base0}/empresas/${empresaOperador}/tickets?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       const gv = (x) => x?.stringValue ?? '';
       const gi = (x) => x ? parseInt(x.integerValue || '0', 10) : 0;
@@ -1281,6 +1283,7 @@ export default async function handler(req, res) {
       return;
     }
     if (accion === 'ticket-tarea-crear' || accion === 'ticket-tarea-estado') {
+      { const prTk = perfilOp.fields?.permisosOp?.mapValue?.fields || {}; if (!esSA && prTk.tickets?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a los tickets.' }); return; } }
       // El especialista asignado (o jefe/gerente) reparte el ticket en tareas concretas.
       const tidT = (req.body.ticketId || '').trim();
       if (!/^[A-Za-z0-9]+$/.test(tidT)) { res.status(400).json({ error: 'Ticket no válido' }); return; }
@@ -1341,6 +1344,7 @@ export default async function handler(req, res) {
       }
     }
     if (accion === 'ticket-recomendados') {
+      { const prTk = perfilOp.fields?.permisosOp?.mapValue?.fields || {}; if (!esSA && prTk.tickets?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a los tickets.' }); return; } }
       // Sugiere al personal ideal para un ticket: especialidad/cargo que calza,
       // en turno hoy, y con menos carga (menos tickets abiertos).
       const tidR = (req.body.ticketId || '').trim();
@@ -1395,6 +1399,7 @@ export default async function handler(req, res) {
       return;
     }
     if (accion === 'ticket-asignar') {
+      { const prTk = perfilOp.fields?.permisosOp?.mapValue?.fields || {}; if (!esSA && prTk.tickets?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a los tickets.' }); return; } }
       // Asignar el ticket clasificado al especialista del área.
       const tidA = (req.body.ticketId || '').trim();
       const espUid = (req.body.asignadoUid || '').trim();
@@ -1422,6 +1427,7 @@ export default async function handler(req, res) {
       return;
     }
     if (accion === 'ticket-estado') {
+      { const prTk = perfilOp.fields?.permisosOp?.mapValue?.fields || {}; if (!esSA && prTk.tickets?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a los tickets.' }); return; } }
       const tid = (req.body.ticketId || '').trim();
       const estadoT = String(req.body.estado || '').trim();
       if (!/^[A-Za-z0-9]+$/.test(tid) || !['ingresado', 'asignado', 'en_gestion', 'derivado', 'resuelto', 'cerrado'].includes(estadoT)) { res.status(400).json({ error: 'Ticket o estado no válido' }); return; }
@@ -1735,7 +1741,7 @@ export default async function handler(req, res) {
     // Permisos del operador: (1) plantilla por rol que define el jefe (pirámide) y
     // (2) cortes individuales de la plataforma. Se aplica el más restrictivo.
     const praw = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
-    const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true };
+    const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true, llamados: true, tickets: true };
     const miRolE = perfilOp.fields?.rolEmpresa?.stringValue || '';
     if (!esSA && miRolE && miRolE !== 'jefe') {
       try {
