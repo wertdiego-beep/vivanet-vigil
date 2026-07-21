@@ -61,7 +61,11 @@ body.modo-operador #s-operador{
   flex-direction:row;padding:0;height:100%;overflow:hidden;color:var(--tinta);
 }
 /* ── Sidebar ── */
-#s-operador .op-side{width:216px;min-width:216px;background:#11141f;border-right:1px solid var(--linea);display:flex;flex-direction:column;padding:18px 12px;gap:3px}
+#s-operador .op-side{width:216px;min-width:216px;background:#11141f;border-right:1px solid var(--linea);display:flex;flex-direction:column;padding:18px 12px;gap:3px;overflow-y:auto;overflow-x:hidden}
+#s-operador .op-side::-webkit-scrollbar{width:8px}
+#s-operador .op-side::-webkit-scrollbar-thumb{background:rgba(124,108,255,.35);border-radius:99px}
+#s-operador .op-side::-webkit-scrollbar-track{background:transparent}
+#s-operador .op-side{scrollbar-width:thin;scrollbar-color:rgba(124,108,255,.35) transparent}
 #s-operador .op-logo{display:flex;align-items:center;gap:10px;padding:2px 8px 18px}
 #s-operador .op-logo-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#7c6cff,#4b3f9f);color:#fff;display:grid;place-items:center;font-family:'Chakra Petch',sans-serif;font-weight:700;box-shadow:0 4px 14px rgba(124,108,255,.35)}
 #s-operador .op-logo-txt b{font-family:'Chakra Petch',sans-serif;letter-spacing:.06em;font-size:.95rem}
