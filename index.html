@@ -4057,7 +4057,7 @@ function ticketsListar() {
     const fEst = document.getElementById('tkfEstado')?.value || '';
     const fFec = document.getElementById('tkfFecha')?.value || '';
     let lista = d.tickets || [];
-    if (fEst === '__mios') lista = lista.filter((t) => t.asignadoUid && t.asignadoUid === window._miUidPanel);
+    if (fEst === '__mios') lista = lista.filter((t) => (t.asignadoUid && t.asignadoUid === window._miUidPanel) || (t.coasignados || []).some((c) => c.uid === window._miUidPanel));
     else if (fEst) lista = lista.filter((t) => t.estado === fEst);
     if (fFec) lista = lista.filter((t) => fchile(t.creadaEn) === fFec);
     if (!lista.length) { cont.innerHTML = '<div class="evento"><div><strong>Sin tickets' + (fEst || fFec ? ' con ese filtro.' : ' aún.') + '</strong><small>Los llamados que tomes en 📞 Llamados aparecerán aquí.</small></div></div>'; return; }
@@ -4093,7 +4093,8 @@ function ticketsListar() {
           <span style="font-size:.62rem; font-weight:800; padding:3px 10px; border-radius:99px; background:${est[2]}22; color:${est[2]}; border:1px solid ${est[2]}55;">${est[0]} ${est[1].toUpperCase()}</span>
           <span style="font-size:.66rem; font-weight:700; color:${pr[1]};">${pr[0]} ${(t.prioridad || '').toUpperCase()}</span>
           ${t.electrodependiente ? '<span style="font-size:.62rem; font-weight:800; padding:3px 10px; border-radius:99px; background:rgba(255,159,67,.15); color:#ff9f43; border:1px solid rgba(255,159,67,.4);">⚡ ELECTRODEPENDIENTE</span>' : ''}
-          ${t.asignadoNombre ? `<span style="font-size:.64rem; font-weight:700; padding:3px 10px; border-radius:99px; background:rgba(192,132,252,.14); color:#c084fc; border:1px solid rgba(192,132,252,.4);">👤 ${esc(t.asignadoNombre)}${t.area ? ' · ' + esc(t.area) : ''}</span>` : ''}
+          ${t.asignadoNombre ? `<span style="font-size:.64rem; font-weight:700; padding:3px 10px; border-radius:99px; background:rgba(192,132,252,.14); color:#c084fc; border:1px solid rgba(192,132,252,.4);">⭐ ${esc(t.asignadoNombre)}${t.area ? ' · ' + esc(t.area) : ''}</span>` : ''}
+          ${(t.coasignados || []).map((cp) => `<span style="font-size:.64rem; font-weight:600; padding:3px 10px; border-radius:99px; background:rgba(56,189,248,.12); color:#38bdf8; border:1px solid rgba(56,189,248,.35);">👷 ${esc(cp.nombre)}${(puedoGestionar && t.estado !== 'cerrado') ? ` <span onclick="tkCoasignar('${t.id}','${cp.uid}',true)" style="cursor:pointer; font-weight:800;">✕</span>` : ''}</span>`).join('')}
         </div>
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:4px 14px; margin:8px 0 4px; font-size:.76rem;">
           <div><span style="color:var(--gris);">Solicitante:</span> <strong>${esc(t.nombre)}</strong>${t.rut ? ' · ' + esc(t.rut) : ''}${t.edad ? ' · ' + t.edad + ' años' : ''}</div>
@@ -4120,7 +4121,13 @@ function ticketsListar() {
             <option value="">— Área —</option>
             ${TK_AREAS.map((a) => `<option value="${a}" ${t.area === a ? 'selected' : ''}>${a}</option>`).join('')}
           </select>
-          <button onclick="tkAsignar('${t.id}')" style="width:auto; padding:8px 16px; border-radius:99px; border:1px solid #c084fc; background:rgba(192,132,252,.12); color:#c084fc; font-size:.76rem; font-weight:700; cursor:pointer;">Asignar</button>
+          <button onclick="tkAsignar('${t.id}')" style="width:auto; padding:8px 16px; border-radius:99px; border:1px solid #c084fc; background:rgba(192,132,252,.12); color:#c084fc; font-size:.76rem; font-weight:700; cursor:pointer;">Asignar líder</button>
+        </div>` : ''}
+        ${(t.estado !== 'cerrado' && (t.asignadoUid || (t.coasignados||[]).length)) ? `
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center; padding:9px 12px; background:var(--fondo); border:1px dashed rgba(56,189,248,.4); border-radius:12px;">
+          <span style="font-size:.7rem; font-weight:800; color:#38bdf8;">➕ SUMAR A LA CUADRILLA:</span>
+          <select id="tkCo-${t.id}" style="width:auto; margin:0; padding:8px 10px; font-size:.78rem;"><option value="">— Persona —</option>${personal.filter((p) => p.uid !== t.asignadoUid && !(t.coasignados||[]).some((c) => c.uid === p.uid)).map((p) => `<option value="${p.uid}">${esc(p.nombre)} (${p.rol})${p.especialidad ? ' · ' + esc(p.especialidad) : ''}</option>`).join('')}</select>
+          <button onclick="tkSumarPersona('${t.id}')" style="width:auto; padding:8px 16px; border-radius:99px; border:none; background:#38bdf8; color:#06263a; font-size:.76rem; font-weight:700; cursor:pointer;">+ Sumar</button>
         </div>` : ''}
         ${t.estado !== 'cerrado' ? `
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
@@ -4133,6 +4140,14 @@ function ticketsListar() {
       </div>`;
     }).join('');
   }).catch(() => {});
+}
+function tkSumarPersona(id) {
+  const uid = document.getElementById('tkCo-' + id)?.value;
+  if (!uid) { alert('Elige a quién sumar.'); return; }
+  tkCoasignar(id, uid, false);
+}
+function tkCoasignar(id, uid, quitar) {
+  saFetch({ accion: 'ticket-coasignar', ticketId: id, personaUid: uid, quitar: !!quitar }).then((d) => { if (d.ok) ticketsListar(); else alert(d.error || 'Error'); });
 }
 function tkRecomendar(id, categoria) {
   const cont = document.getElementById('tkRec-' + id); if (!cont) return;
