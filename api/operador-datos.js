@@ -18,6 +18,7 @@ const esOperador = (uid) => !!uid && OPERADORES.includes(uid);
 // Nivel 1 de la plataforma: los superadmins (nosotros). Por defecto, la cuenta central.
 const SUPERADMINS = (process.env.SUPERADMIN_UIDS || CENTRAL_UID).split(',').map((s) => s.trim()).filter(Boolean);
 const FIREBASE_API_KEY = 'AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g'; // clave pública del cliente web (no es secreta)
+const FIREBASE_SERVER_API_KEY = process.env.FIREBASE_SERVER_API_KEY || FIREBASE_API_KEY; // key dedicada del servidor (server-to-server, sin restricción de referrer)
 
 function base64url(input) {
   return Buffer.from(input)
@@ -78,7 +79,7 @@ async function obtenerAccessToken() {
 // (o null si no es válido). No usamos firebase-admin: llamamos directo a la
 // API REST de Identity Toolkit con la clave pública del proyecto.
 async function verificarOperador(idToken) {
-  const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+  const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_SERVER_API_KEY}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken })
@@ -789,7 +790,7 @@ export default async function handler(req, res) {
       // El superadmin puede crear la cuenta en cualquier empresa (la elegida en su panel).
       const empDest = (esSA && /^[a-z0-9-]+$/.test(req.body.empresaIdDestino || '')) ? req.body.empresaIdDestino : empresaOperador;
       // Crear la cuenta en Firebase Auth.
-      const su = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`, {
+      const su = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_SERVER_API_KEY}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password: pass, returnSecureToken: false })
       }).then((r) => r.json());
