@@ -6106,8 +6106,8 @@ function enviarDifusion() {
   }).catch(() => { btn.disabled = false; btn.textContent = 'Enviar a todos mis clientes'; info.textContent = 'Error de conexión.'; });
 }
 
-const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas', 'credenciales', 'moviles', 'asistencia', 'operativos', 'encurso', 'registro'];
-const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas', credenciales: '🔒 Credenciales', moviles: '🚐 Móviles', asistencia: '🕒 Asistencia', operativos: '🚨 Operativos', encurso: '📡 En curso', registro: '📜 Registro' };
+const PERMISOS_KEYS = ['atender', 'clientes', 'historial', 'tecnico', 'exportar', 'zonas', 'credenciales', 'moviles', 'asistencia', 'operativos', 'encurso', 'registro', 'llamados', 'tickets'];
+const PERMISOS_NOMBRES = { atender: '🚨 Atender', clientes: '👥 Clientes', historial: '🕘 Historial', tecnico: '🔧 Técnico', exportar: '📄 Exportar', zonas: '📐 Zonas', credenciales: '🔒 Credenciales', moviles: '🚐 Móviles', asistencia: '🕒 Asistencia', operativos: '🚨 Operativos', encurso: '📡 En curso', registro: '📜 Registro', llamados: '📞 Llamados', tickets: '🎫 Tickets' };
 let _saOps = [];
 let _saSoyMaestra = false;
 function saToggleSuperadmin(destino, esSA) {
@@ -6205,6 +6205,8 @@ function aplicarPermisosOperador(p, esSA) {
   if (p.operativos === false) { const r4 = document.getElementById('navOperativos'); if (r4) r4.style.display = 'none'; }
   if (p.encurso === false) { const r5 = document.getElementById('navEnCurso'); if (r5) r5.style.display = 'none'; }
   if (p.registro === false) { const r6 = document.getElementById('navRegOp'); if (r6) r6.style.display = 'none'; }
+  if (p.llamados === false) { const r7 = document.getElementById('navLlamados'); if (r7) r7.style.display = 'none'; }
+  if (p.tickets === false) { const r8 = document.getElementById('navTickets'); if (r8) r8.style.display = 'none'; }
 }
 
 /* ── 👔 PERSONAL Y ROLES de la empresa ── */
@@ -6483,6 +6485,8 @@ function renderRolesPermisos() {
         <div><strong>🚨 Operativos</strong> — <span style="color:var(--gris);">despachar móviles a emergencias con objetivo y descripción.</span></div>
         <div><strong>📡 En curso</strong> — <span style="color:var(--gris);">seguir el estado de cada operativo, sus reportes, y cerrarlo.</span></div>
         <div><strong>📜 Registro</strong> — <span style="color:var(--gris);">bitácora de operativos: quién despachó, cuándo y cómo se cumplió.</span></div>
+        <div><strong>📞 Llamados</strong> — <span style="color:var(--gris);">toma la ficha del llamado ciudadano y genera el ticket con folio.</span></div>
+        <div><strong>🎫 Tickets</strong> — <span style="color:var(--gris);">clasifica, asigna al especialista, reparte tareas y sigue cada caso.</span></div>
       </div>
       <div style="font-size:.7rem; color:var(--gris); margin-top:9px;">Verde = el cargo la tiene · gris = cortada. El monitoreo en vivo del mapa nunca se corta.</div>
     </div>`;
