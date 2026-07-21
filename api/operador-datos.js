@@ -1272,12 +1272,73 @@ export default async function handler(req, res) {
           categoria: gv(ff.categoria), prioridad: gv(ff.prioridad) || 'media', descripcion: gv(ff.descripcion),
           lat: ff.lat ? parseFloat(ff.lat.doubleValue) : null, lng: ff.lng ? parseFloat(ff.lng.doubleValue) : null,
           asignadoUid: gv(ff.asignadoUid), asignadoNombre: gv(ff.asignadoNombre), asignadoRol: gv(ff.asignadoRol), area: gv(ff.area),
+          tareas: (ff.tareas?.arrayValue?.values || []).map((tv) => { const tf = tv.mapValue?.fields || {}; return { id: gv(tf.id), texto: gv(tf.texto), asignadoUid: gv(tf.asignadoUid), asignadoNombre: gv(tf.asignadoNombre), estado: gv(tf.estado) || 'pendiente', creadaPor: gv(tf.creadaPor), creadaEn: tf.creadaEn?.timestampValue || null }; }),
           necesidades: (ff.necesidades?.arrayValue?.values || []).map((x) => x.stringValue),
           gestiones: (ff.gestiones?.arrayValue?.values || []).map((g) => { const gf = g.mapValue?.fields || {}; return { estado: gv(gf.estado), texto: gv(gf.texto), por: gv(gf.por), creadaEn: gf.creadaEn?.timestampValue || null }; })
         };
       }).sort((a, b2) => new Date(b2.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 80);
       res.status(200).json({ ok: true, tickets });
       return;
+    }
+    if (accion === 'ticket-tarea-crear' || accion === 'ticket-tarea-estado') {
+      // El especialista asignado (o jefe/gerente) reparte el ticket en tareas concretas.
+      const tidT = (req.body.ticketId || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(tidT)) { res.status(400).json({ error: 'Ticket no válido' }); return; }
+      const rutaTT = `${base0}/empresas/${empresaOperador}/tickets/${tidT}`;
+      const docTT = await fetch(rutaTT, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!docTT.fields) { res.status(404).json({ error: 'Ticket no encontrado' }); return; }
+      const miRolT = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      const asignadoDelTicket = docTT.fields?.asignadoUid?.stringValue || '';
+      const puedeGestionar = esSA || miRolT === 'jefe' || miRolT === 'gerente' || uid === asignadoDelTicket;
+      const tareasPrev = docTT.fields?.tareas?.arrayValue?.values || [];
+
+      if (accion === 'ticket-tarea-crear') {
+        if (!puedeGestionar) { res.status(403).json({ error: 'Solo el especialista asignado o el jefe puede repartir tareas.' }); return; }
+        const textoT = String(req.body.texto || '').trim().slice(0, 400);
+        if (!textoT) { res.status(400).json({ error: 'Escribe qué hay que hacer.' }); return; }
+        if (tareasPrev.length >= 40) { res.status(400).json({ error: 'Llegaste al máximo de tareas.' }); return; }
+        let nomEnc = '', uidEnc = (req.body.asignadoUid || '').trim();
+        if (uidEnc) {
+          if (!/^[A-Za-z0-9]+$/.test(uidEnc)) { res.status(400).json({ error: 'Encargado no válido' }); return; }
+          const docE = await fetch(`${base0}/usuarios/${uidEnc}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+          nomEnc = docE.fields?.nombre?.stringValue || 'Encargado';
+        }
+        tareasPrev.push({ mapValue: { fields: {
+          id: { stringValue: 't' + Date.now().toString(36) },
+          texto: { stringValue: textoT },
+          asignadoUid: { stringValue: uidEnc }, asignadoNombre: { stringValue: nomEnc },
+          estado: { stringValue: 'pendiente' },
+          creadaPor: { stringValue: perfilOp.fields?.nombre?.stringValue || '' },
+          creadaEn: { timestampValue: new Date().toISOString() }
+        } } });
+        await fetch(`${rutaTT}?updateMask.fieldPaths=tareas`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { tareas: { arrayValue: { values: tareasPrev.slice(0, 40) } } } })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'ticket-tarea-estado') {
+        const tareaId = String(req.body.tareaId || '');
+        const estadoT = String(req.body.estado || '');
+        if (!['pendiente', 'en_progreso', 'lista'].includes(estadoT)) { res.status(400).json({ error: 'Estado no válido' }); return; }
+        let ok = false;
+        const nuevas = tareasPrev.map((tv) => {
+          const tf = tv.mapValue?.fields || {};
+          if ((tf.id?.stringValue || '') !== tareaId) return tv;
+          // Puede cambiarla quien gestiona el ticket o el propio encargado de la tarea.
+          if (!(puedeGestionar || uid === (tf.asignadoUid?.stringValue || ''))) return tv;
+          ok = true;
+          return { mapValue: { fields: { ...tf, estado: { stringValue: estadoT } } } };
+        });
+        if (!ok) { res.status(403).json({ error: 'No puedes cambiar esa tarea.' }); return; }
+        await fetch(`${rutaTT}?updateMask.fieldPaths=tareas`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { tareas: { arrayValue: { values: nuevas } } } })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
     }
     if (accion === 'ticket-asignar') {
       // Asignar el ticket clasificado al especialista del área.
