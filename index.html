@@ -788,7 +788,7 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="historial"><span>🕘</span><em>Historial</em></button>
         <button class="op-nav" data-opview="equipo"><span>🔑</span><em>Equipo técnico</em></button>
         <button class="op-nav" data-opview="reportes" id="navReportes" style="display:none"><span>📷</span><em>Reportes</em></button>
-        <button class="op-nav" data-opview="personal" id="navPersonal" style="display:none"><span>👔</span><em>Personal y roles</em></button>
+        <button class="op-nav" data-opview="personal" id="navPersonal" style="display:none"><span>👔</span><em>Personal</em></button>
         <button class="op-nav" data-opview="plataforma" id="navPlataforma" style="display:none"><span>🏢</span><em>Plataforma</em></button>
         <button class="op-nav" data-opview="credenciales" id="navCredenciales" style="display:none"><span>🔒</span><em>Credenciales</em></button>
         <button class="op-nav" data-opview="roles" id="navRoles" style="display:none"><span>🔺</span><em>Roles</em></button>
@@ -5537,7 +5537,7 @@ document.addEventListener('click', (e) => {
   if (m && m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
 });
 
-const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal y roles', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', operativos:'Operativos y despachos', encurso:'Operativos en curso', regop:'Registro de operativos', informes:'Informe operativo del día', llamados:'Atención de llamados', tickets:'Tickets ciudadanos', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
+const opTitulos = { monitoreo:'Monitoreo en vivo', clientes:'Clientes', tecnico:'Servicio técnico', historial:'Historial de tickets', equipo:'Equipo técnico', plataforma:'Administración de la plataforma', reportes:'Reportes de incidentes', personal:'Personal de la empresa', credenciales:'Registro de credenciales', roles:'Designación de roles', recorridos:'Recorridos de móviles', operativos:'Operativos y despachos', encurso:'Operativos en curso', regop:'Registro de operativos', informes:'Informe operativo del día', llamados:'Atención de llamados', tickets:'Tickets ciudadanos', chatmov:'Chat con los móviles', asistencia:'Asistencia del personal' };
 const opDescripciones = {
   monitoreo: 'Alertas SOS en vivo sobre el mapa · marca zonas, ve zonas calientes y atiende emergencias.',
   clientes: 'Todos tus clientes protegidos, con su estado de salud. Busca y abre la ficha de cada uno.',
