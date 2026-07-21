@@ -929,7 +929,48 @@ export default async function handler(req, res) {
       const rpRaw = empDoc.fields?.rolesPermisos?.mapValue?.fields || {};
       const roles = {};
       ROLES.forEach((r) => { const fr = rpRaw[r]?.mapValue?.fields || {}; const p = {}; KEYS.forEach((k) => { p[k] = fr[k]?.booleanValue !== false; }); roles[r] = p; });
-      res.status(200).json({ ok: true, roles });
+      // Roles personalizados que creó el jefe.
+      const rcRaw = empDoc.fields?.rolesCustom?.arrayValue?.values || [];
+      const rolesCustom = rcRaw.map((rv) => { const rf = rv.mapValue?.fields || {}; const p = {}; const pf = rf.permisos?.mapValue?.fields || {}; KEYS.forEach((k) => { p[k] = pf[k]?.booleanValue !== false; }); return { id: rf.id?.stringValue || '', nombre: rf.nombre?.stringValue || '', permisos: p }; });
+      res.status(200).json({ ok: true, roles, rolesCustom });
+      return;
+    }
+    if (accion === 'emp-rolcustom-crear' || accion === 'emp-rolcustom-eliminar' || accion === 'emp-rolcustom-permiso') {
+      const miRolRC = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && miRolRC !== 'jefe') { res.status(403).json({ error: 'Solo el jefe crea roles personalizados.' }); return; }
+      const KEYSRC = ['atender','clientes','historial','tecnico','exportar','zonas','credenciales','moviles','asistencia','operativos','encurso','registro','llamados','tickets'];
+      const rutaERC = `${base0}/empresas/${empresaOperador}`;
+      const docERC = await fetch(rutaERC, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      let lista = docERC.fields?.rolesCustom?.arrayValue?.values || [];
+
+      if (accion === 'emp-rolcustom-crear') {
+        const nombreRC = String(req.body.nombre || '').trim().slice(0, 50);
+        if (!nombreRC) { res.status(400).json({ error: 'Ponle un nombre al rol.' }); return; }
+        if (lista.length >= 20) { res.status(400).json({ error: 'Llegaste al máximo de roles personalizados.' }); return; }
+        const idRC = 'rc_' + Date.now().toString(36);
+        const pf = {}; KEYSRC.forEach((k) => { pf[k] = { booleanValue: true }; });
+        lista.push({ mapValue: { fields: { id: { stringValue: idRC }, nombre: { stringValue: nombreRC }, permisos: { mapValue: { fields: pf } } } } });
+      } else if (accion === 'emp-rolcustom-eliminar') {
+        const idRC = String(req.body.rolId || '');
+        lista = lista.filter((rv) => (rv.mapValue?.fields?.id?.stringValue || '') !== idRC);
+      } else if (accion === 'emp-rolcustom-permiso') {
+        const idRC = String(req.body.rolId || '');
+        const keyRC = String(req.body.key || '');
+        if (!KEYSRC.includes(keyRC)) { res.status(400).json({ error: 'Permiso no válido' }); return; }
+        const onRC = req.body.on !== false;
+        lista = lista.map((rv) => {
+          const rf = rv.mapValue?.fields || {};
+          if ((rf.id?.stringValue || '') !== idRC) return rv;
+          const pf = rf.permisos?.mapValue?.fields || {};
+          const pf2 = {}; KEYSRC.forEach((k) => { pf2[k] = { booleanValue: (k === keyRC) ? onRC : (pf[k]?.booleanValue !== false) }; });
+          return { mapValue: { fields: { id: rf.id, nombre: rf.nombre, permisos: { mapValue: { fields: pf2 } } } } };
+        });
+      }
+      await fetch(`${rutaERC}?updateMask.fieldPaths=rolesCustom`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { rolesCustom: { arrayValue: { values: lista } } } })
+      });
+      res.status(200).json({ ok: true });
       return;
     }
     if (accion === 'emp-roles-permisos-set') {
@@ -1619,7 +1660,12 @@ export default async function handler(req, res) {
         cargosMun = (empDocP.fields?.cargosMun?.arrayValue?.values || []).map((x) => x.stringValue);
         grupos = (empDocP.fields?.grupos?.arrayValue?.values || []).map((g) => { const gf = g.mapValue?.fields || {}; return { id: gf.id?.stringValue || '', nombre: gf.nombre?.stringValue || '', color: gf.color?.stringValue || '#9d8fff', lider: gf.lider?.stringValue || '' }; });
       } catch (e) {}
-      res.status(200).json({ ok: true, personal, empresa: empresaOperador, especialidades, grupos, cargosMun });
+      let rolesCustom = [];
+      try {
+        const empRC = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        rolesCustom = (empRC.fields?.rolesCustom?.arrayValue?.values || []).map((rv) => { const rf = rv.mapValue?.fields || {}; return { id: rf.id?.stringValue || '', nombre: rf.nombre?.stringValue || '' }; });
+      } catch (e) {}
+      res.status(200).json({ ok: true, personal, empresa: empresaOperador, especialidades, grupos, cargosMun, rolesCustom });
       return;
     }
     if (accion === 'emp-especialidades-set' || accion === 'emp-cargos-set' || accion === 'emp-grupo-crear' || accion === 'emp-grupo-eliminar' || accion === 'emp-persona-set') {
@@ -1696,7 +1742,7 @@ export default async function handler(req, res) {
       if (!esSA && miRol !== 'jefe' && miRol !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente puede cambiar roles.' }); return; }
       const destino = (req.body.personalUid || '').trim();
       const rol = (req.body.rol || '').trim();
-      if (!/^[A-Za-z0-9]+$/.test(destino) || !['jefe', 'gerente', 'empleado', 'tecnico', 'supervisor', 'guardia', 'movil'].includes(rol)) { res.status(400).json({ error: 'Datos no válidos' }); return; }
+      if (!/^[A-Za-z0-9]+$/.test(destino) || !(['jefe', 'gerente', 'empleado', 'tecnico', 'supervisor', 'guardia', 'movil'].includes(rol) || /^rc_[a-z0-9]+$/.test(rol))) { res.status(400).json({ error: 'Datos no válidos' }); return; }
       // Verificar que el destino sea de la misma empresa.
       const docD = await fetch(`${base0}/usuarios/${destino}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       const empD = docD.fields?.empresaId?.stringValue || 'sos360-la-serena';
@@ -1779,16 +1825,23 @@ export default async function handler(req, res) {
     const praw = perfilOp.fields?.permisosOp?.mapValue?.fields || {};
     const permisos = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true, llamados: true, tickets: true };
     const miRolE = perfilOp.fields?.rolEmpresa?.stringValue || '';
+    let rolCustomNombre = '';
     if (!esSA && miRolE && miRolE !== 'jefe') {
       try {
         const empDocP = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-        const rp = empDocP.fields?.rolesPermisos?.mapValue?.fields?.[miRolE]?.mapValue?.fields;
-        if (rp) { Object.keys(permisos).forEach((k) => { if (rp[k]?.booleanValue === false) permisos[k] = false; }); }
+        if (/^rc_/.test(miRolE)) {
+          // Rol personalizado: sus permisos son la base.
+          const rc = (empDocP.fields?.rolesCustom?.arrayValue?.values || []).map((rv) => rv.mapValue?.fields || {}).find((rf) => (rf.id?.stringValue || '') === miRolE);
+          if (rc) { rolCustomNombre = rc.nombre?.stringValue || ''; const pf = rc.permisos?.mapValue?.fields || {}; Object.keys(permisos).forEach((k) => { if (pf[k]?.booleanValue === false) permisos[k] = false; }); }
+        } else {
+          const rp = empDocP.fields?.rolesPermisos?.mapValue?.fields?.[miRolE]?.mapValue?.fields;
+          if (rp) { Object.keys(permisos).forEach((k) => { if (rp[k]?.booleanValue === false) permisos[k] = false; }); }
+        }
       } catch (e) {}
     }
     Object.keys(praw).forEach((k) => { if (praw[k].booleanValue === false) permisos[k] = false; });
 
-    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, esMaestra: uid === CUENTA_MAESTRA, miUid: uid, rolEmpresa: perfilOp.fields?.rolEmpresa?.stringValue || '', empresaId: empresaOperador, permisos, funciones });
+    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, esMaestra: uid === CUENTA_MAESTRA, miUid: uid, rolEmpresa: perfilOp.fields?.rolEmpresa?.stringValue || '', esRolCustom: /^rc_/.test(miRolE), rolCustomNombre, empresaId: empresaOperador, permisos, funciones });
   } catch (err) {
     console.error('Error en panel operador:', err);
     res.status(500).json({ error: err.message || 'Error interno del servidor' });
