@@ -1274,6 +1274,7 @@ export default async function handler(req, res) {
           categoria: gv(ff.categoria), prioridad: gv(ff.prioridad) || 'media', descripcion: gv(ff.descripcion),
           lat: ff.lat ? parseFloat(ff.lat.doubleValue) : null, lng: ff.lng ? parseFloat(ff.lng.doubleValue) : null,
           asignadoUid: gv(ff.asignadoUid), asignadoNombre: gv(ff.asignadoNombre), asignadoRol: gv(ff.asignadoRol), area: gv(ff.area),
+          coasignados: (ff.coasignados?.arrayValue?.values || []).map((cv) => { const cf = cv.mapValue?.fields || {}; return { uid: gv(cf.uid), nombre: gv(cf.nombre), rol: gv(cf.rol) }; }),
           tareas: (ff.tareas?.arrayValue?.values || []).map((tv) => { const tf = tv.mapValue?.fields || {}; return { id: gv(tf.id), texto: gv(tf.texto), asignadoUid: gv(tf.asignadoUid), asignadoNombre: gv(tf.asignadoNombre), estado: gv(tf.estado) || 'pendiente', creadaPor: gv(tf.creadaPor), creadaEn: tf.creadaEn?.timestampValue || null }; }),
           necesidades: (ff.necesidades?.arrayValue?.values || []).map((x) => x.stringValue),
           gestiones: (ff.gestiones?.arrayValue?.values || []).map((g) => { const gf = g.mapValue?.fields || {}; return { estado: gv(gf.estado), texto: gv(gf.texto), por: gv(gf.por), creadaEn: gf.creadaEn?.timestampValue || null }; })
@@ -1292,7 +1293,8 @@ export default async function handler(req, res) {
       if (!docTT.fields) { res.status(404).json({ error: 'Ticket no encontrado' }); return; }
       const miRolT = perfilOp.fields?.rolEmpresa?.stringValue || '';
       const asignadoDelTicket = docTT.fields?.asignadoUid?.stringValue || '';
-      const puedeGestionar = esSA || miRolT === 'jefe' || miRolT === 'gerente' || uid === asignadoDelTicket;
+      const coasignadosT = (docTT.fields?.coasignados?.arrayValue?.values || []).map((cv) => cv.mapValue?.fields?.uid?.stringValue || '');
+      const puedeGestionar = esSA || miRolT === 'jefe' || miRolT === 'gerente' || uid === asignadoDelTicket || coasignadosT.includes(uid);
       const tareasPrev = docTT.fields?.tareas?.arrayValue?.values || [];
 
       if (accion === 'ticket-tarea-crear') {
@@ -1396,6 +1398,38 @@ export default async function handler(req, res) {
         return { uid: p.uid, nombre: p.nombre || 'Sin nombre', especialidad: p.especialidad || '', cargo: p.cargoMunicipal || '', rol: p.rolEmpresa, enTurno: !!enTurno[p.uid], carga, score, motivo: motivos.join(' · ') };
       }).sort((a, b) => b.score - a.score).slice(0, 6);
       res.status(200).json({ ok: true, categoria, areaSugerida: cfg.area, recomendados: rank });
+      return;
+    }
+    if (accion === 'ticket-coasignar') {
+      // Suma (o quita) personas adicionales al ticket, además del líder asignado.
+      { const prTk = perfilOp.fields?.permisosOp?.mapValue?.fields || {}; if (!esSA && prTk.tickets?.booleanValue === false) { res.status(403).json({ error: 'La plataforma cortó tu acceso a los tickets.' }); return; } }
+      const tidC = (req.body.ticketId || '').trim();
+      const uidC = (req.body.personaUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(tidC) || !/^[A-Za-z0-9]+$/.test(uidC)) { res.status(400).json({ error: 'Datos no válidos' }); return; }
+      const rutaTC = `${base0}/empresas/${empresaOperador}/tickets/${tidC}`;
+      const docTC = await fetch(rutaTC, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!docTC.fields) { res.status(404).json({ error: 'Ticket no encontrado' }); return; }
+      const miRolC = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      const leadC = docTC.fields?.asignadoUid?.stringValue || '';
+      if (!(esSA || miRolC === 'jefe' || miRolC === 'gerente' || uid === leadC)) { res.status(403).json({ error: 'Solo el líder asignado o el jefe puede sumar gente.' }); return; }
+      let lista = (docTC.fields?.coasignados?.arrayValue?.values || []);
+      const yaEsta = lista.some((cv) => (cv.mapValue?.fields?.uid?.stringValue || '') === uidC);
+      const esLider = uidC === leadC;
+      if (req.body.quitar) {
+        lista = lista.filter((cv) => (cv.mapValue?.fields?.uid?.stringValue || '') !== uidC);
+      } else if (!yaEsta && !esLider) {
+        if (lista.length >= 15) { res.status(400).json({ error: 'Máximo de personas en el ticket.' }); return; }
+        const docP = await fetch(`${base0}/usuarios/${uidC}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        if (!esSA && (docP.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Esa persona es de otra empresa.' }); return; }
+        lista.push({ mapValue: { fields: { uid: { stringValue: uidC }, nombre: { stringValue: docP.fields?.nombre?.stringValue || 'Persona' }, rol: { stringValue: docP.fields?.rolEmpresa?.stringValue || '' } } } });
+      }
+      const gestC = docTC.fields?.gestiones?.arrayValue?.values || [];
+      gestC.push({ mapValue: { fields: { estado: { stringValue: docTC.fields?.estado?.stringValue || 'asignado' }, texto: { stringValue: (req.body.quitar ? 'Quitó a una persona del ticket' : 'Sumó una persona al ticket') }, por: { stringValue: perfilOp.fields?.nombre?.stringValue || '' }, creadaEn: { timestampValue: new Date().toISOString() } } } });
+      await fetch(`${rutaTC}?updateMask.fieldPaths=coasignados&updateMask.fieldPaths=gestiones`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { coasignados: { arrayValue: { values: lista } }, gestiones: { arrayValue: { values: gestC.slice(-30) } } } })
+      });
+      res.status(200).json({ ok: true });
       return;
     }
     if (accion === 'ticket-asignar') {
