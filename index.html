@@ -4069,6 +4069,20 @@ function ticketsListar() {
     cont.innerHTML = lista.map((t) => {
       const est = TK_ESTADOS[t.estado] || TK_ESTADOS.ingresado;
       const pr = TK_PRIO[t.prioridad] || TK_PRIO.media;
+      // Semáforo SLA: tiempo desde el ingreso vs. límite por prioridad.
+      const SLA_H = { alta: 2, media: 24, baja: 72 };
+      let slaBadge = '';
+      if (t.estado !== 'cerrado' && t.estado !== 'resuelto' && t.creadaEn) {
+        const limH = SLA_H[t.prioridad] || 24;
+        const transMin = Math.max(0, Math.round((Date.now() - new Date(t.creadaEn).getTime()) / 60000));
+        const limMin = limH * 60;
+        const ttxt = transMin >= 60 ? Math.floor(transMin / 60) + 'h' + (transMin % 60 ? ' ' + (transMin % 60) + 'm' : '') : transMin + 'm';
+        let col, ic, lbl;
+        if (transMin > limMin) { col = '#e5344b'; ic = '⏰'; lbl = 'VENCIDO hace ' + ttxt; }
+        else if (transMin > limMin * 0.75) { col = '#f5a623'; ic = '⌛'; lbl = 'por vencer · ' + ttxt; }
+        else { col = '#22aa5a'; ic = '⏱'; lbl = 'a tiempo · ' + ttxt; }
+        slaBadge = `<span title="Límite ${limH}h para prioridad ${t.prioridad}" style="font-size:.62rem; font-weight:800; padding:3px 10px; border-radius:99px; background:${col}22; color:${col}; border:1px solid ${col}66;">${ic} ${lbl}</span>`;
+      }
       const gest = (t.gestiones || []).map((gg) => `<div style="font-size:.72rem; color:var(--gris); padding:3px 0;">${(TK_ESTADOS[gg.estado] || ['·'])[0]} <em>${fh(gg.creadaEn)}</em> · ${esc(gg.por)}${gg.texto ? ' — ' + esc(gg.texto) : ''}</div>`).join('');
       const puedoGestionar = (window._miRolEmpresa === 'jefe' || window._miRolEmpresa === 'gerente' || window._esSApanel === true || (t.asignadoUid && t.asignadoUid === window._miUidPanel));
       const TAR_EST = { pendiente: ['⚪', 'Pendiente', 'var(--gris)'], en_progreso: ['🔵', 'En progreso', '#38bdf8'], lista: ['✅', 'Lista', '#22aa5a'] };
@@ -4098,6 +4112,7 @@ function ticketsListar() {
           <span style="font-size:.62rem; font-weight:800; padding:3px 10px; border-radius:99px; background:${est[2]}22; color:${est[2]}; border:1px solid ${est[2]}55;">${est[0]} ${est[1].toUpperCase()}</span>
           <span style="font-size:.66rem; font-weight:700; color:${pr[1]};">${pr[0]} ${(t.prioridad || '').toUpperCase()}</span>
           ${t.electrodependiente ? '<span style="font-size:.62rem; font-weight:800; padding:3px 10px; border-radius:99px; background:rgba(255,159,67,.15); color:#ff9f43; border:1px solid rgba(255,159,67,.4);">⚡ ELECTRODEPENDIENTE</span>' : ''}
+          ${slaBadge}
           ${t.asignadoNombre ? `<span style="font-size:.64rem; font-weight:700; padding:3px 10px; border-radius:99px; background:rgba(192,132,252,.14); color:#c084fc; border:1px solid rgba(192,132,252,.4);">⭐ ${esc(t.asignadoNombre)}${t.area ? ' · ' + esc(t.area) : ''}</span>` : ''}
           ${(t.coasignados || []).map((cp) => `<span style="font-size:.64rem; font-weight:600; padding:3px 10px; border-radius:99px; background:rgba(56,189,248,.12); color:#38bdf8; border:1px solid rgba(56,189,248,.35);">👷 ${esc(cp.nombre)}${(puedoGestionar && t.estado !== 'cerrado') ? ` <span onclick="tkCoasignar('${t.id}','${cp.uid}',true)" style="cursor:pointer; font-weight:800;">✕</span>` : ''}</span>`).join('')}
         </div>
