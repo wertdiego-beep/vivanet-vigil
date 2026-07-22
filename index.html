@@ -357,6 +357,14 @@ textarea{min-height:96px;resize:vertical}
       /(^|\.)sos24\.cl$/.test(h) ||                  // futuros dominios propios
       /(^|\.)vivanet\.cl$/.test(h)
     );
+    // Vercel genera direcciones extra (previews, git-main, hash por despliegue) que
+    // NO están autorizadas en la API key de Firebase: el login fallaría ahí. Se
+    // redirige al dominio oficial para que nadie quede atrapado en una URL suelta.
+    var OFICIAL = 'vivanet-vigilvivanet-vigil-az11.vercel.app';
+    if(ok && /\.vercel\.app$/.test(h) && h !== OFICIAL){
+      location.replace('https://www.sos24.cl' + location.pathname + location.search + location.hash);
+      return;
+    }
     if(!ok){
       try{ window.stop && window.stop(); }catch(_){}
       document.documentElement.innerHTML =
@@ -1661,7 +1669,7 @@ function loginUser() {
   infoEl.textContent = '';
   auth.signInWithEmailAndPassword(email, pass)
     .catch((error) => {
-      errorEl.textContent = "Error: " + traducirError(error.code);
+      errorEl.textContent = "Error: " + mensajeError(error);
     });
 }
 function registerUser() {
@@ -1673,7 +1681,7 @@ function registerUser() {
   infoEl.textContent = '';
   auth.createUserWithEmailAndPassword(email, pass)
     .catch((error) => {
-      errorEl.textContent = "Error: " + traducirError(error.code);
+      errorEl.textContent = "Error: " + mensajeError(error);
     });
 }
 function cerrarSesion() {
@@ -1691,7 +1699,16 @@ function traducirError(code) {
   if(code === 'auth/invalid-credential' || code === 'auth/wrong-password') return 'Correo o contraseña incorrectos.';
   if(code === 'auth/user-not-found') return 'No encontramos una cuenta con ese correo.';
   if(code === 'auth/too-many-requests') return 'Demasiados intentos. Espera un momento y vuelve a intentar.';
+  if(code === 'auth/network-request-failed') return 'Sin conexión estable. Revisa tu internet e intenta otra vez.';
   return 'Ocurrió un error inesperado.';
+}
+// Mensaje entendible a partir del error completo (no solo del código).
+function mensajeError(error) {
+  var det = ((error && error.message) || '') + '';
+  if (/requests-from|referer|blocked|API key not valid|PERMISSION_DENIED/i.test(det)) {
+    return 'Esta dirección no está autorizada. Entra a www.sos24.cl';
+  }
+  return traducirError(error && error.code);
 }
 // ══ RECUPERAR CONTRASEÑA ══
 function recuperarContrasena() {
@@ -1711,7 +1728,7 @@ function recuperarContrasena() {
       infoEl.textContent = 'Te enviamos un correo a ' + email + ' para restablecer tu contraseña.';
     })
     .catch((error) => {
-      errorEl.textContent = "Error: " + traducirError(error.code);
+      errorEl.textContent = "Error: " + mensajeError(error);
     });
 }
 // Observador de estado de autenticación (Se ejecuta solo cuando abres la app)
