@@ -272,6 +272,16 @@ export default async function handler(req, res) {
     const esSA = SUPERADMINS.includes(uid) || saExtra.includes(uid);
     const esOp = esOperador(uid) || !!perfilOp.fields?.operadorDe?.stringValue;
 
+    // ── Empresas visibles para el cliente final (cualquier usuario autenticado, ej. registro) ──
+    if (accion === 'empresas-visibles') {
+      const respEmp = await fetch(`${base0}/empresas?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const empresas = (respEmp.documents || [])
+        .filter((d) => d.fields?.visibleClientes?.booleanValue === true && (d.fields?.estado?.stringValue || 'activa') !== 'suspendida')
+        .map((d) => ({ id: d.name.split('/').pop(), nombre: d.fields?.nombre?.stringValue || d.name.split('/').pop() }));
+      res.status(200).json({ ok: true, empresas });
+      return;
+    }
+
     // ── Acciones de plataforma (solo superadmin: nosotros, el nivel superior) ──
     if (accion && accion.startsWith('sa-')) {
       if (!esSA) { res.status(403).json({ error: 'Solo la plataforma puede hacer esto' }); return; }
@@ -287,6 +297,7 @@ export default async function handler(req, res) {
           id: d.name.split('/').pop(),
           nombre: d.fields?.nombre?.stringValue || d.name.split('/').pop(),
           estado: d.fields?.estado?.stringValue || 'activa',
+          visible: d.fields?.visibleClientes?.booleanValue === true,
           clientes: 0
         }));
         if (!empresas.find((e) => e.id === 'sos360-la-serena')) {
@@ -306,6 +317,18 @@ export default async function handler(req, res) {
           body: JSON.stringify({ fields: { nombre: { stringValue: nombre }, estado: { stringValue: 'activa' }, creadaEn: { timestampValue: new Date().toISOString() } } })
         });
         res.status(200).json({ ok: true, id: slug });
+        return;
+      }
+      if (accion === 'sa-empresa-visible') {
+        const empId = (req.body.empresaIdDestino || '').trim();
+        if (!empId) { res.status(400).json({ error: 'Falta la empresa' }); return; }
+        const visible = req.body.visible === true;
+        await fetch(`${base}/empresas/${empId}?updateMask.fieldPaths=visibleClientes`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { visibleClientes: { booleanValue: visible } } })
+        });
+        res.status(200).json({ ok: true });
         return;
       }
       if (accion === 'sa-toggle-empresa') {
