@@ -541,6 +541,10 @@ textarea{min-height:96px;resize:vertical}
         <input type="text" id="perfilDireccion" placeholder="Ej: Balmaceda 450, La Serena">
         <label>Teléfono de contacto (opcional)</label>
         <input type="text" id="perfilTelefono" placeholder="Ej: +56912345678">
+        <div id="perfilEmpresaWrap" style="display:none;">
+          <label id="perfilEmpresaLabel">¿Qué empresa te protege?</label>
+          <select id="perfilEmpresa" style="width:100%; padding:12px; border:1px solid var(--linea); border-radius:12px; background:transparent; font-size:.95rem; color:inherit; margin-bottom:4px;"></select>
+        </div>
         <div class="error-msg" id="perfilError"></div>
         <button class="btn-full" id="guardarPerfil">Guardar y continuar</button>
       </div>
@@ -4742,7 +4746,22 @@ function seleccionarModo(modo) {
     document.getElementById('perfilDireccionLabel').textContent = 'Dirección';
     document.getElementById('perfilDireccion').placeholder = 'Ej: Balmaceda 450, La Serena';
   }
+  cargarEmpresasRegistro();
   go('s-perfil');
+}
+// Carga las empresas marcadas como visibles para que el cliente elija la que lo protege
+function cargarEmpresasRegistro() {
+  const wrap = document.getElementById('perfilEmpresaWrap');
+  const sel = document.getElementById('perfilEmpresa');
+  if (!wrap || !sel) return;
+  wrap.style.display = 'none';
+  sel.innerHTML = '';
+  if (!auth.currentUser) return;
+  saFetch({ accion: 'empresas-visibles' }).then((d) => {
+    if (!d || !d.ok || !d.empresas || !d.empresas.length) return;
+    sel.innerHTML = '<option value="">— Elige tu empresa —</option>' + d.empresas.map((e) => `<option value="${e.id}">🏢 ${e.nombre}</option>`).join('');
+    wrap.style.display = '';
+  }).catch(() => {});
 }
 
 // Ajusta las etiquetas de la tarjeta "Editar mi información" según el modo (familia/empresa)
@@ -4876,13 +4895,21 @@ document.getElementById('guardarPerfil').addEventListener('click', () => {
   if (!local) { errorEl.textContent = esFamilia ? 'Ingresa el nombre de tu familia.' : 'Ingresa el nombre de tu local.'; return; }
   if (!direccion) { errorEl.textContent = esFamilia ? 'Ingresa la dirección de tu hogar.' : 'Ingresa la dirección de tu local.'; return; }
 
-  db.collection('usuarios').doc(user.uid).set({
+  const empresaWrap = document.getElementById('perfilEmpresaWrap');
+  const empresaSel = document.getElementById('perfilEmpresa');
+  const empresaId = empresaSel ? empresaSel.value : '';
+  const empresaVisible = empresaWrap && empresaWrap.style.display !== 'none';
+  if (empresaVisible && !empresaId) { errorEl.textContent = 'Elige la empresa que te protege.'; return; }
+
+  const _perfilData = {
     nombre: nombre,
     local: local,
     direccion: direccion,
     telefono: telefono,
     modo: modoSeleccionado
-  }, { merge: true }).then(() => {
+  };
+  if (empresaId) _perfilData.empresaId = empresaId;
+  db.collection('usuarios').doc(user.uid).set(_perfilData, { merge: true }).then(() => {
     document.getElementById('userName').textContent = nombre;
     document.getElementById('accountName').textContent = nombre;
     prepararPantallaPlan();
@@ -6051,7 +6078,9 @@ function cargarPlataforma() {
           <span style="width:9px; height:9px; border-radius:50%; background:${e.estado === 'activa' ? 'var(--verde)' : 'var(--rojo)'};"></span>
           <small style="color:${e.estado === 'activa' ? 'var(--verde)' : '#ff4d5e'};">${e.estado}</small>
           ${e.id === 'sos360-la-serena' ? '<small style="color:var(--gris);">· 👑 nuestra</small>' : `<button title="${e.estado === 'activa' ? 'Suspender' : 'Reactivar'}" onclick="saToggleEmpresa('${e.id}')" style="background:none; border:none; cursor:pointer; font-size:1rem; padding:0 4px;">${e.estado === 'activa' ? '⏸' : '▶️'}</button>`}
+          <button title="${e.visible ? 'Se muestra a clientes en el registro. Clic para ocultar.' : 'Mostrar esta empresa a los clientes al registrarse'}" onclick="saToggleVisible('${e.id}', ${e.visible ? 'false' : 'true'})" style="background:none; border:none; cursor:pointer; font-size:1rem; padding:0 4px;">${e.visible ? '👁' : '🙈'}</button>
         </div>
+        <div style="margin-top:6px;"><small style="color:${e.visible ? 'var(--violeta)' : 'var(--gris)'}; font-weight:${e.visible ? '600' : '400'};">${e.visible ? '👁 Visible en registro' : 'Oculta a clientes'}</small></div>
       </div>`).join('') + `
       <button onclick="saNuevaEmpresa()" style="border:1.5px dashed var(--linea); border-radius:14px; padding:14px; text-align:center; background:transparent; color:var(--gris); cursor:pointer; min-height:120px;">
         <div style="font-size:2rem;">➕</div>
@@ -6071,6 +6100,9 @@ function saNuevaEmpresa() {
 function saToggleEmpresa(id) {
   if (!confirm('¿Cambiar el estado de esta empresa? Si se suspende, su central deja de operar.')) return;
   saFetch({ accion: 'sa-toggle-empresa', empresaIdDestino: id }).then(() => cargarPlataforma());
+}
+function saToggleVisible(id, visible) {
+  saFetch({ accion: 'sa-empresa-visible', empresaIdDestino: id, visible: visible }).then(() => cargarPlataforma());
 }
 function saCrearOperador() {
   const emp = document.getElementById('saOpEmpresaSel')?.value || '';
