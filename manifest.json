@@ -1,6 +1,6 @@
 {
-  "name": "SOS360 — Seguridad y Monitoreo",
-  "short_name": "SOS360",
+  "name": "SOS24 — Seguridad y Monitoreo",
+  "short_name": "SOS24",
   "description": "Seguridad y monitoreo 24/7 para tu local: alertas SOS, soporte técnico y asistente IA.",
   "start_url": "/",
   "scope": "/",
