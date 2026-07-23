@@ -788,7 +788,6 @@ textarea{min-height:96px;resize:vertical}
         <button class="op-nav" data-opview="clientes"><span>👥</span><em>Clientes</em></button>
         <button class="op-nav" data-opview="tecnico"><span>🛠️</span><em>Servicio técnico</em></button>
         <button class="op-nav" data-opview="historial"><span>🕘</span><em>Historial</em></button>
-        <button class="op-nav" data-opview="equipo"><span>🔑</span><em>Equipo técnico</em></button>
         <button class="op-nav" data-opview="reportes" id="navReportes" style="display:none"><span>📷</span><em>Reportes</em></button>
         <button class="op-nav" data-opview="personal" id="navPersonal" style="display:none"><span>👔</span><em>Personal</em></button>
         <button class="op-nav" data-opview="plataforma" id="navPlataforma" style="display:none"><span>🏢</span><em>Plataforma</em></button>
@@ -1038,21 +1037,11 @@ textarea{min-height:96px;resize:vertical}
 
           <!-- (difusión masiva se inserta en la vista clientes vía JS de flags) -->
           <!-- ── Vista: Equipo técnico ── -->
-          <section class="op-view" id="op-view-equipo">
-            <div class="card">
-              <div class="card-title">Vista de la central</div>
-              <div class="evento" style="border-bottom:none;">
-                <div class="ev-ic v">👁️</div>
-                <div><strong>Cuenta central</strong><small>Alertas y clientes en tiempo real</small></div>
-              </div>
-            </div>
-          </section>
-
           <!-- ── Vista: Personal y roles (jefe/gerente de la empresa) ── -->
           <section class="op-view" id="op-view-personal">
             <div class="card">
               <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;"><span>👔 Personal de tu empresa</span><span><button onclick="abrirAltaEmpleado()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta); color:#fff; cursor:pointer; border:none; margin-right:6px;">➕ Agregar empleado</button><button onclick="cargarPersonal()" style="width:auto; padding:5px 14px; font-size:.72rem; border-radius:99px; background:var(--violeta-suave); color:#9d8fff; cursor:pointer; border:none;">↻</button></span></div>
-              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Crea las cuentas de tu equipo (correo y clave) o súmalos con el código. Cada uno con su cargo.</p>
+              <p style="color:var(--gris); font-size:.78rem; margin-bottom:10px;">Crea las cuentas de tu equipo (correo y clave). Cada uno con su cargo.</p>
               <div id="altaEmpleado" style="display:none; border:1px solid var(--violeta); border-radius:14px; padding:14px; margin-bottom:14px;">
                 <strong style="font-size:.9rem; display:block; margin-bottom:8px;">Nueva cuenta de empleado</strong>
                 <label>Nombre</label><input type="text" id="aeNombre" placeholder="Ej: Pedro Soto">
@@ -1435,7 +1424,7 @@ textarea{min-height:96px;resize:vertical}
                   <div><b>🚨 Atender</b> — Tomar y cerrar alertas SOS con el protocolo. <span style="color:var(--gris);">Si la cortas: el operador ve las alarmas en el mapa pero no puede atenderlas ni cerrarlas (el botón desaparece y el servidor lo bloquea). Útil para operadores en entrenamiento que solo deben observar.</span></div>
                   <div><b>👥 Clientes</b> — La lista de clientes con nombres, direcciones y teléfonos. <span style="color:var(--gris);">Si la cortas: no ve los datos personales de los clientes; solo los puntos en el mapa.</span></div>
                   <div><b>🕘 Historial</b> — El historial de alarmas y el reporte del día (quién atendió, resultados, tiempos). <span style="color:var(--gris);">Si la cortas: solo ve lo que pasa en vivo, sin acceso al pasado.</span></div>
-                  <div><b>🔧 Técnico</b> — Las visitas técnicas y el código para incorporar técnicos. <span style="color:var(--gris);">Si la cortas: no gestiona visitas ni suma técnicos al equipo.</span></div>
+                  <div><b>🔧 Técnico</b> — Gestiona las visitas técnicas asignadas. <span style="color:var(--gris);">Si la cortas: no gestiona visitas técnicas.</span></div>
                   <div><b>📄 Exportar</b> — Descargar el historial y las zonas a Excel. <span style="color:var(--gris);">Si la cortas: trabaja normal pero no puede llevarse los datos fuera del panel.</span></div>
                   <div><b>📐 Zonas</b> — Marcar perímetros en el mapa y ver las zonas calientes. <span style="color:var(--gris);">Si la cortas: pierde el análisis por sector; el monitoreo normal sigue igual.</span></div>
                   <div><b>🚐 Móviles</b> — Gestión de móviles de reacción: recorridos, despacho y chat. <span style="color:var(--gris);">Si la cortas: esa persona no puede mandar recorridos, despachar móviles ni chatear con ellos.</span></div>
