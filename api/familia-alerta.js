@@ -78,6 +78,20 @@ async function verificarUsuario(idToken) {
   return data.users[0].localId;
 }
 
+async function crearAviso(accessToken, uid, mensaje) {
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}/avisos`;
+  await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: {
+      tipo: { stringValue: 'sos-familia' },
+      mensaje: { stringValue: mensaje },
+      creadoEn: { timestampValue: new Date().toISOString() },
+      leido: { booleanValue: false }
+    } })
+  }).catch(() => {});
+}
+
 async function obtenerUsuario(accessToken, uid) {
   const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}`;
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -189,6 +203,11 @@ export default async function handler(req, res) {
     const destinatarios = integrantes.filter((p) => p.uid !== uid && p.fcmToken && p.recibirAlertasFamilia !== false);
 
     const nombre = nombreUsuario || yo.nombre || 'Un familiar';
+    // Aviso dentro de la app para TODOS los familiares (aunque no tengan push activo)
+    const mensajeAviso = `${nombre} activó el botón SOS`;
+    for (const p of integrantes.filter((x) => x.uid !== uid)) {
+      await crearAviso(accessToken, p.uid, mensajeAviso);
+    }
     const resultados = [];
     for (const persona of destinatarios) {
       const r = await enviarPush(
