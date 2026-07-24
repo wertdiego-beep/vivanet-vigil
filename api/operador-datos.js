@@ -1895,10 +1895,10 @@ export default async function handler(req, res) {
       listarClientes(accessToken),
       listarAlertasRecientes(accessToken)
     ]);
-    // Aislamiento: solo clientes de la empresa del operador, y solo SUS alertas.
-    const clientes = clientesTodos.filter((c) => c.empresaId === empresaOperador);
+    // Aislamiento: cada empresa ve solo lo suyo. La central maestra (superadmin) ve TODO.
+    const clientes = esSA ? clientesTodos : clientesTodos.filter((c) => c.empresaId === empresaOperador);
     const uidsEmpresa = new Set(clientes.map((c) => c.uid));
-    const alertasRecientes = alertasTodas.filter((a) => uidsEmpresa.has(a.clienteUid));
+    const alertasRecientes = esSA ? alertasTodas : alertasTodas.filter((a) => uidsEmpresa.has(a.clienteUid));
     const alertas = derivarAlertasActivas(alertasRecientes);
 
     const stats = calcularStats(alertasRecientes);
