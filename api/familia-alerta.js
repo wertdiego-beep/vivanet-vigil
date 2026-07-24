@@ -78,17 +78,21 @@ async function verificarUsuario(idToken) {
   return data.users[0].localId;
 }
 
-async function crearAviso(accessToken, uid, mensaje) {
+async function crearAviso(accessToken, uid, mensaje, email, lat, lng) {
   const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/usuarios/${uid}/avisos`;
+  const fields = {
+    tipo: { stringValue: 'sos-familia' },
+    mensaje: { stringValue: mensaje },
+    creadoEn: { timestampValue: new Date().toISOString() },
+    leido: { booleanValue: false }
+  };
+  if (email) fields.email = { stringValue: String(email) };
+  if (typeof lat === 'number' && isFinite(lat)) fields.lat = { doubleValue: lat };
+  if (typeof lng === 'number' && isFinite(lng)) fields.lng = { doubleValue: lng };
   await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: {
-      tipo: { stringValue: 'sos-familia' },
-      mensaje: { stringValue: mensaje },
-      creadoEn: { timestampValue: new Date().toISOString() },
-      leido: { booleanValue: false }
-    } })
+    body: JSON.stringify({ fields })
   }).catch(() => {});
 }
 
@@ -167,7 +171,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { idToken, nombreUsuario } = req.body || {};
+  const { idToken, email, lat, lng } = req.body || {};
   if (!idToken) {
     res.status(400).json({ error: 'Falta idToken' });
     return;
@@ -202,19 +206,20 @@ export default async function handler(req, res) {
     // notificaciones familiares desde "Mi cuenta" (activadas por defecto).
     const destinatarios = integrantes.filter((p) => p.uid !== uid && p.fcmToken && p.recibirAlertasFamilia !== false);
 
-    const nombre = nombreUsuario || yo.nombre || 'Un familiar';
+    const nombre = yo.nombre || (email ? String(email).split('@')[0] : 'Un familiar');
+    const mapsLink = (typeof lat === 'number' && isFinite(lat) && typeof lng === 'number' && isFinite(lng)) ? ` Ubicación: https://maps.google.com/?q=${lat},${lng}` : '';
     // Aviso dentro de la app para TODOS los familiares (aunque no tengan push activo)
     const mensajeAviso = `${nombre} activó el botón SOS`;
     for (const p of integrantes.filter((x) => x.uid !== uid)) {
-      await crearAviso(accessToken, p.uid, mensajeAviso);
+      await crearAviso(accessToken, p.uid, mensajeAviso, email, lat, lng);
     }
     const resultados = [];
     for (const persona of destinatarios) {
       const r = await enviarPush(
         accessToken,
         persona.fcmToken,
-        '🚨 Alerta familiar SOS360',
-        `${nombre} activó el botón de pánico. Revisa su ubicación o llámalo.`
+        '🚨 Alerta familiar SOS',
+        `${nombre}${email ? ' (' + email + ')' : ''} activó el botón de pánico.${mapsLink}`
       );
       resultados.push({ uid: persona.uid, ok: r.ok });
     }
