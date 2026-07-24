@@ -805,6 +805,7 @@ export default async function handler(req, res) {
         lugar: perfilOp.fields?.asistLugar?.stringValue || '',
         entrada: perfilOp.fields?.asistEntrada?.stringValue || '',
         salida: perfilOp.fields?.asistSalida?.stringValue || '',
+        radio: perfilOp.fields?.asistRadio ? parseInt(perfilOp.fields.asistRadio.integerValue ?? perfilOp.fields.asistRadio.doubleValue) : 200,
         bloqueo: perfilOp.fields?.asistBloqueo?.booleanValue === true
       };
       const regRuta = `${base0}/empresas/${empA}/asistencia/${uid}_${fechaCl}`;
@@ -827,7 +828,8 @@ export default async function handler(req, res) {
       const dLat = (cfg.lat - la) * rad, dLng = (cfg.lng - lo) * rad;
       const hx = Math.sin(dLat / 2) ** 2 + Math.cos(la * rad) * Math.cos(cfg.lat * rad) * Math.sin(dLng / 2) ** 2;
       const dist = Math.round(2 * R * Math.asin(Math.sqrt(hx)));
-      if (dist > 200) { res.status(400).json({ error: `Estás a ${dist} m de tu punto de trabajo. Debes estar a menos de 200 m para marcar.` }); return; }
+      const radioOk = cfg.radio > 0 ? cfg.radio : 200;
+      if (dist > radioOk) { res.status(400).json({ error: `Estás a ${dist} m de tu punto de trabajo. Debes estar a menos de ${radioOk} m para marcar.` }); return; }
       const aMin = (h) => { const [hh, mm] = String(h || '0:0').split(':').map(Number); return hh * 60 + (mm || 0); };
       const tipo = req.body.tipo === 'salida' ? 'salida' : 'entrada';
       const fields = { uid: { stringValue: uid }, nombre: { stringValue: perfilOp.fields?.nombre?.stringValue || '' }, fecha: { stringValue: fechaCl } };
@@ -1119,6 +1121,7 @@ export default async function handler(req, res) {
         asistLat: { doubleValue: Number(req.body.lat) }, asistLng: { doubleValue: Number(req.body.lng) },
         asistLugar: { stringValue: String(req.body.lugar || '').slice(0, 120) },
         asistEntrada: { stringValue: String(req.body.entrada || '') }, asistSalida: { stringValue: String(req.body.salida || '') },
+        asistRadio: { integerValue: String(Math.max(50, Math.min(2000, parseInt(req.body.radio) || 200))) },
         asistBloqueo: { booleanValue: req.body.bloqueo === true }
       };
       await fetch(`${base0}/usuarios/${destino}?` + Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
@@ -1164,6 +1167,7 @@ export default async function handler(req, res) {
           lat: dd.fields?.asistLat ? parseFloat(dd.fields.asistLat.doubleValue ?? dd.fields.asistLat.integerValue) : null,
           lng: dd.fields?.asistLng ? parseFloat(dd.fields.asistLng.doubleValue ?? dd.fields.asistLng.integerValue) : null,
           lugar: dd.fields?.asistLugar?.stringValue || '', entrada: dd.fields?.asistEntrada?.stringValue || '', salida: dd.fields?.asistSalida?.stringValue || '',
+          radio: dd.fields?.asistRadio ? parseInt(dd.fields.asistRadio.integerValue ?? dd.fields.asistRadio.doubleValue) : 200,
           bloqueo: dd.fields?.asistBloqueo?.booleanValue === true
         };
       });
