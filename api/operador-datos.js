@@ -282,6 +282,31 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ── Guardar la credencial de un cliente que se registró solo (cualquier usuario, su propia cuenta) ──
+    if (accion === 'cliente-credencial') {
+      const email = (req.body.email || '').trim();
+      const nombre = (req.body.nombre || '').trim();
+      const empresaId = (req.body.empresaId || 'sos360-la-serena').trim();
+      const clave = String(req.body.clave || '');
+      await fetch(`${base0}/credenciales/${uid}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','clave','origen','creadoEn'].map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: {
+          email: { stringValue: email },
+          nombre: { stringValue: nombre },
+          rol: { stringValue: 'cliente' },
+          empresaId: { stringValue: empresaId },
+          esOperador: { booleanValue: false },
+          claveLargo: { integerValue: String(clave.length) },
+          clave: { stringValue: clave },
+          origen: { stringValue: 'auto-registro' },
+          creadoEn: { timestampValue: new Date().toISOString() }
+        } })
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     // ── Acciones de plataforma (solo superadmin: nosotros, el nivel superior) ──
     if (accion && accion.startsWith('sa-')) {
       if (!esSA) { res.status(403).json({ error: 'Solo la plataforma puede hacer esto' }); return; }
