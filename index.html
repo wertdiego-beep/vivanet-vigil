@@ -29,10 +29,12 @@
   --rojo:#E5344B; --rojo-oscuro:#C21F35; --ambar:#F5A623; --linea:#E9E7F2;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{font-family:'Inter',sans-serif;background:#2A2745;color:var(--tinta);display:flex;justify-content:center;min-height:100vh}
+body{font-family:'Inter',sans-serif;background:linear-gradient(140deg,#332e5c 0%,#1c1a33 48%,#100e22 100%);color:var(--tinta);display:flex;justify-content:center;min-height:100vh}
+body::before{content:"SOS24";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:clamp(140px,20vw,360px);line-height:1;letter-spacing:.02em;color:rgba(255,255,255,.03);white-space:nowrap;pointer-events:none;z-index:0}
+body::after{content:"SOS24 \00b7 Vivanet Spa \2014 sos24.cl";position:fixed;left:26px;bottom:20px;font-size:.72rem;letter-spacing:.05em;color:rgba(255,255,255,.30);pointer-events:none;z-index:0}
 h1,h2,h3,.cp{font-family:'Chakra Petch',sans-serif}
 button{font-family:inherit;border:none;cursor:pointer;background:none}
-.phone{width:100%;max-width:420px;background:var(--blanco);min-height:100vh;position:relative;display:flex;flex-direction:column;overflow:hidden}
+.phone{width:100%;max-width:420px;background:var(--blanco);min-height:100vh;position:relative;z-index:1;display:flex;flex-direction:column;overflow:hidden}
 @media(min-width:480px){
   body{padding:0}
   /* En computador: columna ancha a pantalla completa (sin marco de celular) para cliente/técnico/móvil */
