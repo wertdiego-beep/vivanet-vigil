@@ -108,6 +108,7 @@ async function enviarPush(accessToken, token, titulo, cuerpo) {
 }
 
 const FIREBASE_API_KEY = 'AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g'; // clave pública del cliente web
+const FIREBASE_SERVER_API_KEY = process.env.FIREBASE_SERVER_API_KEY || FIREBASE_API_KEY; // key de servidor (server-to-server, sin restricción de referrer)
 
 // ── DIFUSIÓN MASIVA: un operador envía un aviso push a TODOS los clientes de
 // su empresa que tengan notificaciones activadas (espec. 27 y 40 del pliego).
@@ -116,7 +117,7 @@ async function manejarDifusion(req, res) {
   if (!idToken || !titulo || !cuerpo) { res.status(400).json({ error: 'Faltan idToken, título o cuerpo' }); return; }
   const accessToken = await obtenerAccessToken();
   // Verificar que quien envía es un operador.
-  const lookup = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+  const lookup = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_SERVER_API_KEY}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken })
   }).then((r) => r.json());
@@ -144,7 +145,7 @@ async function manejarDifusion(req, res) {
 
 // ── API DE CLIENTE AUTENTICADO: config publica, comunidad y comentarios ──
 async function verificarUsuario(idToken) {
-  const lk = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+  const lk = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_SERVER_API_KEY}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken })
   }).then((r) => r.json());

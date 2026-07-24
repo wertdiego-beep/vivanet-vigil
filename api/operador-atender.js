@@ -14,6 +14,7 @@ const CENTRAL_UID = 'ziDCZASJ7GaMoBhUDw7uPbKmFgE2'; // cuenta de Diego (central)
 const OPERADORES = (process.env.OPERADORES_UIDS || CENTRAL_UID).split(',').map((s) => s.trim()).filter(Boolean);
 const esOperador = (uid) => !!uid && OPERADORES.includes(uid);
 const FIREBASE_API_KEY = 'AIzaSyCRAFZXVB6VZ8vAVoMF3WDvjcmUCiInP2g'; // clave pública del cliente web (no es secreta)
+const FIREBASE_SERVER_API_KEY = process.env.FIREBASE_SERVER_API_KEY || FIREBASE_API_KEY; // key de servidor (server-to-server, sin restricción de referrer)
 
 function base64url(input) {
   return Buffer.from(input)
@@ -71,7 +72,7 @@ async function obtenerAccessToken() {
 }
 
 async function verificarOperador(idToken) {
-  const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+  const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_SERVER_API_KEY}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken })
