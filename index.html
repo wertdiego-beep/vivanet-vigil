@@ -668,7 +668,7 @@ textarea{min-height:96px;resize:vertical}
         <div class="evento" data-modo="empresa"><div class="ev-ic g">💳</div><div><strong>Facturas y pagos</strong><small>Al día · Próximo pago 05 Ago</small></div></div>
       </div>
       <div class="card">
-        <div class="card-title">Editar mi información</div>
+        <div class="card-title">Mi perfil</div>
         <label>Nombre</label>
         <input type="text" id="editNombre" placeholder="Ej: Diego Wert">
         <label id="editLocalLabel">Nombre del local</label>
@@ -677,17 +677,15 @@ textarea{min-height:96px;resize:vertical}
         <input type="text" id="editDireccion" placeholder="Ej: Balmaceda 450, La Serena">
         <button class="btn-full" id="guardarEditPerfil">Guardar cambios</button>
         <div class="error-msg" id="editPerfilInfo" style="color:#048A52;"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Teléfono de contacto</div>
-        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Para que la central pueda llamarte directo si es necesario.</p>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--linea);"></div>
+        <strong style="font-size:.9rem;">Teléfono de contacto</strong>
+        <p style="color:var(--gris); font-size:.8rem; margin:4px 0 8px;">Para que la central pueda llamarte directo si es necesario.</p>
         <input type="text" id="accountTelefono" placeholder="Ej: +56912345678">
         <button class="btn-full" id="guardarTelefono">Guardar teléfono</button>
         <div class="error-msg" id="telefonoInfo" style="color:#048A52;"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Clave de seguridad</div>
-        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;">Una palabra o número que la central te pedirá para confirmar tu identidad en una emergencia. Memorízala; no la compartas por escrito.</p>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--linea);"></div>
+        <strong style="font-size:.9rem;">Clave de seguridad</strong>
+        <p style="color:var(--gris); font-size:.8rem; margin:4px 0 8px;">Una palabra o número que la central te pedirá para confirmar tu identidad en una emergencia. Memorízala; no la compartas por escrito.</p>
         <input type="text" id="accountClave" placeholder="Ej: girasol">
         <button class="btn-full" id="guardarClave">Guardar clave</button>
         <div class="error-msg" id="claveInfo" style="color:#048A52;"></div>
@@ -703,31 +701,34 @@ textarea{min-height:96px;resize:vertical}
         <div class="error-msg" id="alertasFamiliaInfo" style="color:#048A52;"></div>
         <button class="btn-out" id="salirFamiliaBtn" style="display:none;">Salir de la familia</button>
         <div class="error-msg" id="salirFamiliaInfo"></div>
-      </div>
-      <div class="card" id="cardUnirme">
-        <div class="card-title" id="unirseGrupoTitulo">Unirme a una familia</div>
-        <p style="color:var(--gris); font-size:.8rem; margin-bottom:8px;" id="unirseGrupoIntro">Si otro integrante de tu familia ya tiene un plan, ingresa aquí el código que te compartió.</p>
-        <input type="text" id="codigoFamiliaInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase;">
-        <label id="rolEmpresaLabel" style="display:none;">Tu cargo en la empresa</label>
-        <select id="rolEmpresaInput" style="display:none;">
-          <option value="gerente">Gerente</option>
-          <option value="empleado" selected>Empleado</option>
-          <option value="tecnico">Técnico</option>
-        </select>
-        <button class="btn-full" id="unirseFamiliaBtn">Unirme</button>
-        <div class="error-msg" id="unirseFamiliaInfo"></div>
-      </div>
-      <div class="card" id="instalarCard" style="display:none;">
-        <div style="display:flex; align-items:center; gap:14px;">
-          <span style="width:46px; height:46px; background:var(--violeta-suave); color:var(--violeta); border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">⬇️</span>
-          <div>
-            <strong style="font-size:.95rem;">Instalar SOS24 en tu celular</strong>
-            <div style="font-size:.8rem; color:var(--gris);">Acceso directo, sin abrir el navegador</div>
-          </div>
+        <div id="cardUnirme">
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--linea);"></div>
+          <strong style="font-size:.9rem;" id="unirseGrupoTitulo">Unirme a una familia</strong>
+          <p style="color:var(--gris); font-size:.8rem; margin:4px 0 8px;" id="unirseGrupoIntro">Si otro integrante de tu familia ya tiene un plan, ingresa aquí el código que te compartió.</p>
+          <input type="text" id="codigoFamiliaInput" placeholder="Ej: 8F3K9A" style="text-transform:uppercase;">
+          <label id="rolEmpresaLabel" style="display:none;">Tu cargo en la empresa</label>
+          <select id="rolEmpresaInput" style="display:none;">
+            <option value="gerente">Gerente</option>
+            <option value="empleado" selected>Empleado</option>
+            <option value="tecnico">Técnico</option>
+          </select>
+          <button class="btn-full" id="unirseFamiliaBtn">Unirme</button>
+          <div class="error-msg" id="unirseFamiliaInfo"></div>
         </div>
-        <button class="btn-full" id="instalarBtn">Instalar app</button>
       </div>
       <div class="card">
+        <div class="card-title">Ajustes</div>
+        <div id="instalarCard" style="display:none;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <span style="width:46px; height:46px; background:var(--violeta-suave); color:var(--violeta); border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">⬇️</span>
+            <div>
+              <strong style="font-size:.95rem;">Instalar SOS24 en tu celular</strong>
+              <div style="font-size:.8rem; color:var(--gris);">Acceso directo, sin abrir el navegador</div>
+            </div>
+          </div>
+          <button class="btn-full" id="instalarBtn">Instalar app</button>
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--linea);"></div>
+        </div>
         <div style="display:flex; align-items:center; gap:14px;">
           <span style="width:46px; height:46px; background:var(--violeta-suave); color:var(--violeta); border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">🔔</span>
           <div>
@@ -736,8 +737,7 @@ textarea{min-height:96px;resize:vertical}
           </div>
         </div>
         <button class="btn-full" id="pushBtn">Activar notificaciones</button>
-      </div>
-      <div class="card">
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--linea);"></div>
         <div style="display:flex; align-items:center; gap:14px;">
           <span style="width:46px; height:46px; background:var(--violeta-suave); color:var(--violeta); border-radius:13px; display:grid; place-items:center; font-size:1.3rem;">🧪</span>
           <div>
