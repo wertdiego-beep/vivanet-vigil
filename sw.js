@@ -44,7 +44,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE_NAME = 'sos360-cache-v84';
+const CACHE_NAME = 'sos360-cache-v85';
 const APP_SHELL = [
   '/manifest.json',
   '/icon-192.png',
