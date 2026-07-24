@@ -429,6 +429,51 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, funciones });
         return;
       }
+      if (accion === 'sa-backfill-credenciales') {
+        // Migración única: crea la credencial (metadata) de cada cliente que se registró
+        // antes de que el sistema las guardara. La clave NO se puede recuperar (Firebase la
+        // guarda hasheada), así que se marca como definida por el cliente.
+        const [respU, respC] = await Promise.all([
+          fetch(`${base}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
+          fetch(`${base}/credenciales?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
+        ]);
+        const yaTienen = new Set((respC.documents || []).map((d) => d.name.split('/').pop()));
+        const clientes = (respU.documents || [])
+          .map((d) => ({ uid: d.name.split('/').pop(), f: d.fields || {} }))
+          .filter((c) => !OPERADORES.includes(c.uid) && !c.f.operadorDe?.stringValue && !yaTienen.has(c.uid));
+        const emails = {};
+        for (let i = 0; i < clientes.length; i += 100) {
+          const lote = clientes.slice(i, i + 100).map((c) => c.uid);
+          try {
+            const lk = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`, {
+              method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ localId: lote })
+            }).then((r) => r.json());
+            (lk.users || []).forEach((u) => { emails[u.localId] = u.email || ''; });
+          } catch (e) {}
+        }
+        let creados = 0;
+        for (const c of clientes) {
+          const f = c.f;
+          await fetch(`${base}/credenciales/${c.uid}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','clave','origen','creadoEn'].map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+            method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: {
+              email: { stringValue: emails[c.uid] || '' },
+              nombre: { stringValue: f.nombre?.stringValue || '' },
+              rol: { stringValue: 'cliente' },
+              empresaId: { stringValue: f.empresaId?.stringValue || 'sos360-la-serena' },
+              esOperador: { booleanValue: false },
+              claveLargo: { integerValue: '0' },
+              clave: { stringValue: '(definida por el cliente — no recuperable)' },
+              origen: { stringValue: 'backfill' },
+              creadoEn: { timestampValue: new Date().toISOString() }
+            } })
+          });
+          creados++;
+        }
+        res.status(200).json({ ok: true, creados, total: clientes.length });
+        return;
+      }
       if (accion === 'sa-superadmin') {
         // Designar o quitar mando máximo. Solo la cuenta maestra puede.
         if (uid !== CUENTA_MAESTRA) { res.status(403).json({ error: 'Solo la cuenta maestra puede nombrar superadmins.' }); return; }
