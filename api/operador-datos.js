@@ -601,7 +601,7 @@ export default async function handler(req, res) {
     }
 
     // ── Acciones del MÓVIL DE REACCIÓN (rol 'movil'; no es operador de central) ──
-    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte', 'movil-incidente', 'movil-contactos', 'movil-chat-listar', 'movil-chat-enviar', 'movil-misiones', 'movil-mision-estado', 'movil-mision-reporte'];
+    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte', 'movil-incidente', 'movil-informe', 'movil-contactos', 'movil-chat-listar', 'movil-chat-enviar', 'movil-misiones', 'movil-mision-estado', 'movil-mision-reporte'];
     if (_accMovil.includes(accion)) {
       const miRolM = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolM !== 'movil') { res.status(403).json({ error: 'Solo un móvil de reacción puede usar esto.' }); return; }
@@ -727,9 +727,12 @@ export default async function handler(req, res) {
         return;
       }
       if (accion === 'movil-chat-listar') {
-        const col = req.body.canal === 'jefe' ? 'chatJefe' : 'chatCentral';
-        const docs = await fetch(`${base0}/usuarios/${uid}/${col}?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-        const mensajes = (docs.documents || []).map((dd) => ({
+        // Canal único: leemos chatCentral + chatJefe (compat) y los unimos en un solo hilo.
+        const [d1, d2] = await Promise.all([
+          fetch(`${base0}/usuarios/${uid}/chatCentral?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
+          fetch(`${base0}/usuarios/${uid}/chatJefe?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
+        ]);
+        const mensajes = [...(d1.documents || []), ...(d2.documents || [])].map((dd) => ({
           de: dd.fields?.de?.stringValue || '', texto: dd.fields?.texto?.stringValue || '',
           foto: dd.fields?.foto?.stringValue || null, creadaEn: dd.fields?.creadaEn?.timestampValue || null
         })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0)).slice(-40);
@@ -737,7 +740,7 @@ export default async function handler(req, res) {
         return;
       }
       if (accion === 'movil-chat-enviar') {
-        const col = req.body.canal === 'jefe' ? 'chatJefe' : 'chatCentral';
+        const col = 'chatCentral'; // canal único: todo va al mismo hilo
         const texto = String(req.body.texto || '').trim().slice(0, 500);
         const foto = req.body.foto ? String(req.body.foto).slice(0, 900000) : null;
         if (!texto && !foto) { res.status(400).json({ error: 'Mensaje vacío' }); return; }
@@ -761,6 +764,27 @@ export default async function handler(req, res) {
           creadaEn: { timestampValue: new Date().toISOString() }
         };
         if (req.body.foto) fields.foto = { stringValue: String(req.body.foto).slice(0, 900000) };
+        await fetch(`${base0}/usuarios/${uid}/reportes`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'movil-informe') {
+        // Informe de turno del móvil: texto + varias fotos. Queda en 'reportes' (lo ve la central).
+        const texto = String(req.body.texto || '').trim().slice(0, 1500);
+        const fotos = Array.isArray(req.body.fotos) ? req.body.fotos.filter((x) => typeof x === 'string' && x).slice(0, 6) : [];
+        if (!texto && !fotos.length) { res.status(400).json({ error: 'Escribe el informe o adjunta una foto.' }); return; }
+        const fields = {
+          categoria: { stringValue: '📋 Informe de turno' },
+          icono: { stringValue: '📋' },
+          texto: { stringValue: texto },
+          estado: { stringValue: 'informe' },
+          anonimo: { booleanValue: false },
+          creadaEn: { timestampValue: new Date().toISOString() }
+        };
+        if (fotos.length) fields.fotos = { arrayValue: { values: fotos.map((f) => ({ stringValue: String(f).slice(0, 900000) })) } };
         await fetch(`${base0}/usuarios/${uid}/reportes`, {
           method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields })
@@ -877,7 +901,7 @@ export default async function handler(req, res) {
       const email = (req.body.email || '').trim().toLowerCase();
       const pass = (req.body.pass || '').trim();
       const nombre = (req.body.nombre || '').trim();
-      const rol = ['jefe','gerente','empleado','tecnico','supervisor','guardia','movil'].includes(req.body.rol) ? req.body.rol : 'empleado';
+      const rol = ['jefe','gerente','empleado','tecnico','supervisor','guardia','movil','conductor','prevencionista','recepcionista','administrativo','operador'].includes(req.body.rol) ? req.body.rol : 'empleado';
       const tel = (req.body.telefono || '').trim();
       if (!email || !/.+@.+\..+/.test(email)) { res.status(400).json({ error: 'Correo no válido' }); return; }
       if (pass.length < 6) { res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres' }); return; }
@@ -975,7 +999,7 @@ export default async function handler(req, res) {
       const fields = {};
       if (req.body.nombre != null) fields.nombre = { stringValue: String(req.body.nombre).trim() };
       if (req.body.telefono != null) fields.telefono = { stringValue: String(req.body.telefono).trim() };
-      if (req.body.rol && ['jefe','gerente','empleado','tecnico','supervisor','guardia','movil'].includes(req.body.rol)) fields.rolEmpresa = { stringValue: req.body.rol };
+      if (req.body.rol && ['jefe','gerente','empleado','tecnico','supervisor','guardia','movil','conductor','prevencionista','recepcionista','administrativo','operador'].includes(req.body.rol)) fields.rolEmpresa = { stringValue: req.body.rol };
       if (!Object.keys(fields).length) { res.status(400).json({ error: 'Nada que cambiar' }); return; }
       await fetch(`${base0}/usuarios/${destino}?` + Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
         method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -1187,10 +1211,13 @@ export default async function handler(req, res) {
       if (!esSA && (docM.fields?.empresaId?.stringValue || 'sos360-la-serena') !== empresaOperador) { res.status(403).json({ error: 'Ese móvil es de otra empresa.' }); return; }
       const miRolC2 = perfilOp.fields?.rolEmpresa?.stringValue || '';
       const esJefatura = miRolC2 === 'jefe' || miRolC2 === 'gerente';
-      const col = esJefatura ? 'chatJefe' : 'chatCentral';
+      const col = 'chatCentral'; // canal único: móvil, jefe y central comparten el mismo hilo
       if (accion === 'chat-movil-listar') {
-        const docs = await fetch(`${base0}/usuarios/${mUid}/${col}?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-        const mensajes = (docs.documents || []).map((dd) => ({
+        const [c1, c2] = await Promise.all([
+          fetch(`${base0}/usuarios/${mUid}/chatCentral?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {}),
+          fetch(`${base0}/usuarios/${mUid}/chatJefe?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {})
+        ]);
+        const mensajes = [...(c1.documents || []), ...(c2.documents || [])].map((dd) => ({
           de: dd.fields?.de?.stringValue || '', texto: dd.fields?.texto?.stringValue || '',
           foto: dd.fields?.foto?.stringValue || null, creadaEn: dd.fields?.creadaEn?.timestampValue || null
         })).sort((a, b) => new Date(a.creadaEn || 0) - new Date(b.creadaEn || 0)).slice(-40);
@@ -1879,6 +1906,7 @@ export default async function handler(req, res) {
           icono: f.icono?.stringValue || '📌',
           texto: f.texto?.stringValue || '',
           foto: f.foto?.stringValue || null,
+          fotos: (f.fotos?.arrayValue?.values || []).map((v) => v.stringValue).filter(Boolean),
           anonimo: f.anonimo?.booleanValue === true,
           estado: f.estado?.stringValue || 'pendiente',
           creadaEn: f.creadaEn?.timestampValue || null
