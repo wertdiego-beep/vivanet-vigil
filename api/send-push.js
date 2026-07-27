@@ -184,6 +184,25 @@ async function manejarCliente(req, res) {
     return;
   }
 
+  if (accion === 'noticias') {
+    // Noticias del sector publicadas por la central maestra: las ven TODOS los clientes.
+    const docs = await fetch(`${base}/noticias?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const noticias = (docs.documents || []).map((d) => {
+      const f = d.fields || {};
+      return {
+        id: d.name.split('/').pop(),
+        titulo: f.titulo?.stringValue || '',
+        categoria: f.categoria?.stringValue || 'Aviso',
+        icono: f.icono?.stringValue || '📰',
+        texto: f.texto?.stringValue || '',
+        foto: f.foto?.stringValue || null,
+        creadaEn: f.creadaEn?.timestampValue || null
+      };
+    }).sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 20);
+    res.status(200).json({ ok: true, noticias });
+    return;
+  }
+
   if (accion === 'comunidad') {
     // Reportes recientes de la comuna (misma empresa de seguridad).
     const docU = await fetch(`${base}/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});

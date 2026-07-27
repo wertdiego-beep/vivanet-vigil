@@ -344,6 +344,50 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, id: slug });
         return;
       }
+      if (accion === 'sa-noticia-crear') {
+        // La central maestra publica una noticia del sector (la ven todos los clientes).
+        const titulo = String(req.body.titulo || '').trim().slice(0, 120);
+        const texto = String(req.body.texto || '').trim().slice(0, 2000);
+        if (!titulo || !texto) { res.status(400).json({ error: 'Escribe el título y el texto de la noticia.' }); return; }
+        const CATS_NOT = { seguridad: '🚨', aviso: '📣', comunidad: '🏘', clima: '🌧', transito: '🚧' };
+        const catN = CATS_NOT[req.body.categoria] ? req.body.categoria : 'aviso';
+        const fields = {
+          titulo: { stringValue: titulo },
+          texto: { stringValue: texto },
+          categoria: { stringValue: catN.charAt(0).toUpperCase() + catN.slice(1) },
+          icono: { stringValue: CATS_NOT[catN] },
+          autor: { stringValue: 'SOS24' },
+          creadaEn: { timestampValue: new Date().toISOString() }
+        };
+        if (req.body.foto) fields.foto = { stringValue: String(req.body.foto).slice(0, 900000) };
+        await fetch(`${base}/noticias`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields })
+        });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'sa-noticia-eliminar') {
+        const nid = (req.body.noticiaId || '').trim();
+        if (!/^[A-Za-z0-9]+$/.test(nid)) { res.status(400).json({ error: 'Noticia no válida' }); return; }
+        await fetch(`${base}/noticias/${nid}`, { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (accion === 'sa-noticias-listar') {
+        const docs = await fetch(`${base}/noticias?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const noticias = (docs.documents || []).map((d) => {
+          const f = d.fields || {};
+          return {
+            id: d.name.split('/').pop(),
+            titulo: f.titulo?.stringValue || '', categoria: f.categoria?.stringValue || 'Aviso',
+            icono: f.icono?.stringValue || '📰', texto: f.texto?.stringValue || '',
+            foto: f.foto?.stringValue || null, creadaEn: f.creadaEn?.timestampValue || null
+          };
+        }).sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
+        res.status(200).json({ ok: true, noticias });
+        return;
+      }
       if (accion === 'sa-empresa-visible') {
         const empId = (req.body.empresaIdDestino || '').trim();
         if (!empId) { res.status(400).json({ error: 'Falta la empresa' }); return; }
