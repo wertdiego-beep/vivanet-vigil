@@ -276,7 +276,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (req.body && ['config', 'comunidad', 'comentarios', 'comentar'].includes(req.body.accion)) {
+  if (req.body && ['config', 'comunidad', 'comentarios', 'comentar', 'noticias'].includes(req.body.accion)) {
     try { await manejarCliente(req, res); } catch (err) { res.status(500).json({ error: err.message }); }
     return;
   }
