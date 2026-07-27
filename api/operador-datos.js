@@ -1935,7 +1935,8 @@ export default async function handler(req, res) {
         }).then((r) => r.json()),
         listarClientes(accessToken)
       ]);
-      const mios = new Set(clientesTodos.filter((c) => c.empresaId === empresaOperador).map((c) => c.uid));
+      // La central maestra (superadmin) ve los reportes de TODAS las empresas.
+      const mios = new Set((esSA ? clientesTodos : clientesTodos.filter((c) => c.empresaId === empresaOperador)).map((c) => c.uid));
       const nombreDe = {};
       clientesTodos.forEach((c) => { nombreDe[c.uid] = c.local || c.nombre || 'Cliente'; });
       const reportes = (lista || []).filter((r) => r.document).map((r) => {
