@@ -287,8 +287,9 @@ export default async function handler(req, res) {
       const email = (req.body.email || '').trim();
       const nombre = (req.body.nombre || '').trim();
       const empresaId = (req.body.empresaId || 'sos360-la-serena').trim();
-      const clave = String(req.body.clave || '');
-      await fetch(`${base0}/credenciales/${uid}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','clave','origen','creadoEn'].map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+      // SEGURIDAD: la clave NUNCA se guarda en texto; solo su largo (auditoría).
+      const clave = { length: parseInt(req.body.claveLargo) || String(req.body.clave || '').length };
+      await fetch(`${base0}/credenciales/${uid}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','origen','creadoEn'].map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: {
@@ -298,7 +299,6 @@ export default async function handler(req, res) {
           empresaId: { stringValue: empresaId },
           esOperador: { booleanValue: false },
           claveLargo: { integerValue: String(clave.length) },
-          clave: { stringValue: clave },
           origen: { stringValue: 'auto-registro' },
           creadoEn: { timestampValue: new Date().toISOString() }
         } })
@@ -342,6 +342,25 @@ export default async function handler(req, res) {
           body: JSON.stringify({ fields: { nombre: { stringValue: nombre }, estado: { stringValue: 'activa' }, creadaEn: { timestampValue: new Date().toISOString() } } })
         });
         res.status(200).json({ ok: true, id: slug });
+        return;
+      }
+      if (accion === 'sa-purgar-claves') {
+        // Limpieza de seguridad: elimina el campo 'clave' de todos los registros
+        // de credenciales (queda solo claveLargo como auditoría).
+        const docs = await fetch(`${base}/credenciales?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        let purgadas = 0, conClave = 0;
+        for (const d of (docs.documents || [])) {
+          if (d.fields && d.fields.clave !== undefined) {
+            conClave++;
+            const id = d.name.split('/').pop();
+            const r2 = await fetch(`${base}/credenciales/${id}?updateMask.fieldPaths=clave`, {
+              method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields: {} })
+            });
+            if (r2.ok) purgadas++;
+          }
+        }
+        res.status(200).json({ ok: true, total: (docs.documents || []).length, conClave, purgadas });
         return;
       }
       if (accion === 'sa-noticia-crear') {
@@ -499,7 +518,7 @@ export default async function handler(req, res) {
         let creados = 0;
         for (const c of clientes) {
           const f = c.f;
-          await fetch(`${base}/credenciales/${c.uid}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','clave','origen','creadoEn'].map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
+          await fetch(`${base}/credenciales/${c.uid}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','origen','creadoEn'].map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
             method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ fields: {
               email: { stringValue: emails[c.uid] || '' },
@@ -508,7 +527,6 @@ export default async function handler(req, res) {
               empresaId: { stringValue: f.empresaId?.stringValue || 'sos360-la-serena' },
               esOperador: { booleanValue: false },
               claveLargo: { integerValue: '0' },
-              clave: { stringValue: '(definida por el cliente — no recuperable)' },
               origen: { stringValue: 'backfill' },
               creadoEn: { timestampValue: new Date().toISOString() }
             } })
@@ -625,7 +643,6 @@ export default async function handler(req, res) {
             rol: f.rol?.stringValue || '', empresaId: f.empresaId?.stringValue || '',
             esOperador: f.esOperador?.booleanValue === true,
             claveLargo: Number(f.claveLargo?.integerValue || 0),
-            clave: f.clave?.stringValue || '',
             creadoPorNombre: f.creadoPorNombre?.stringValue || '',
             creadoEn: f.creadoEn?.timestampValue || null
           };
@@ -974,13 +991,12 @@ export default async function handler(req, res) {
       // solo el evento (correo, cargo, quien la creo y cuando) + el largo de la clave.
       try {
         const miNombreC = perfilOp.fields?.nombre?.stringValue || perfilOp.fields?.displayName?.stringValue || '';
-        await fetch(`${base0}/credenciales/${su.localId}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','clave','creadoPorUid','creadoPorNombre','creadoEn'].map((k)=>`updateMask.fieldPaths=${k}`).join('&'), {
+        await fetch(`${base0}/credenciales/${su.localId}?` + ['email','nombre','rol','empresaId','esOperador','claveLargo','creadoPorUid','creadoPorNombre','creadoEn'].map((k)=>`updateMask.fieldPaths=${k}`).join('&'), {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: {
             email: { stringValue: email }, nombre: { stringValue: nombre }, rol: { stringValue: rol },
             empresaId: { stringValue: empDest }, esOperador: { booleanValue: !!req.body.esOperador },
             claveLargo: { integerValue: String(pass.length) },
-            clave: { stringValue: pass },
             creadoPorUid: { stringValue: uid }, creadoPorNombre: { stringValue: miNombreC },
             creadoEn: { timestampValue: new Date().toISOString() }
           } })
@@ -1007,7 +1023,6 @@ export default async function handler(req, res) {
           rol: f.rol?.stringValue || '', empresaId: f.empresaId?.stringValue || '',
           esOperador: f.esOperador?.booleanValue === true,
           claveLargo: Number(f.claveLargo?.integerValue || 0),
-          clave: f.clave?.stringValue || '',
           creadoPorNombre: f.creadoPorNombre?.stringValue || '',
           creadoEn: f.creadoEn?.timestampValue || null
         };
@@ -1076,7 +1091,7 @@ export default async function handler(req, res) {
         await fetch(`${base0}/credenciales/${destino}?` + ['clave','claveLargo','reseteadoPor','reseteadoEn'].map((k) => `updateMask.fieldPaths=${k}`).join('&'), {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: {
-            clave: { stringValue: pass }, claveLargo: { integerValue: String(pass.length) },
+            claveLargo: { integerValue: String(pass.length) },
             reseteadoPor: { stringValue: miNombreR }, reseteadoEn: { timestampValue: new Date().toISOString() }
           } })
         });
