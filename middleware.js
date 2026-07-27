@@ -4,7 +4,7 @@
 
 export const config = {
   // Aplica a todo menos los recursos estáticos necesarios para que la PWA cargue.
-  matcher: ['/((?!_next/|favicon\\.ico|manifest\\.json|icon-|sw\\.js).*)'],
+  matcher: ['/((?!_next/|favicon\\.ico|manifest\\.json|icon-|sw\\.js|privacidad|terminos|\\.well-known).*)'],
 };
 
 const BLOQUEADOS = [
