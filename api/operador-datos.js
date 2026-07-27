@@ -1951,12 +1951,15 @@ export default async function handler(req, res) {
           texto: f.texto?.stringValue || '',
           foto: f.foto?.stringValue || null,
           fotos: (f.fotos?.arrayValue?.values || []).map((v) => v.stringValue).filter(Boolean),
+          lat: f.lat ? parseFloat(f.lat.doubleValue ?? f.lat.integerValue) : null,
+          lng: f.lng ? parseFloat(f.lng.doubleValue ?? f.lng.integerValue) : null,
+          direccion: f.direccion?.stringValue || null,
           anonimo: f.anonimo?.booleanValue === true,
           estado: f.estado?.stringValue || 'pendiente',
           creadaEn: f.creadaEn?.timestampValue || null
         };
       }).filter((x) => mios.has(x.clienteUid))
-        .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 25);
+        .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 40);
       res.status(200).json({ ok: true, reportes });
       return;
     }
