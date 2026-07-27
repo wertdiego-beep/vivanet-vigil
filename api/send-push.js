@@ -185,7 +185,14 @@ async function manejarCliente(req, res) {
   }
 
   if (accion === 'noticias') {
-    // Noticias del sector publicadas por la central maestra: las ven TODOS los clientes.
+    // Noticias del sector publicadas por la central maestra.
+    // Función por plan: si la empresa del cliente tiene 'noticias' cortada, no las ve.
+    const docUN = await fetch(`${base}/usuarios/${uid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const empN = docUN.fields?.empresaId?.stringValue || 'sos360-la-serena';
+    const rutaFnN = empN === 'sos360-la-serena' ? `${base}/plataforma/funciones` : `${base}/empresas/${empN}`;
+    const docFnN = await fetch(rutaFnN, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+    const frawN = (docFnN.fields?.flags || docFnN.fields?.funciones)?.mapValue?.fields || {};
+    if (frawN.noticias?.booleanValue === false) { res.status(200).json({ ok: true, noticias: [] }); return; }
     const docs = await fetch(`${base}/noticias?pageSize=60`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
     const noticias = (docs.documents || []).map((d) => {
       const f = d.fields || {};

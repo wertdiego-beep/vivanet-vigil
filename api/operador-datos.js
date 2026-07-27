@@ -1928,6 +1928,13 @@ export default async function handler(req, res) {
     }
     if (accion === 'reportes') {
       // Reportes de incidentes de los clientes de la empresa del operador.
+      // Función por plan: si la empresa no tiene 'reportes' activo, no ve nada.
+      if (!esSA) {
+        const rutaFnRep = empresaOperador === 'sos360-la-serena' ? `${base0}/plataforma/funciones` : `${base0}/empresas/${empresaOperador}`;
+        const docFnRep = await fetch(rutaFnRep, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const frawRep = (docFnRep.fields?.flags || docFnRep.fields?.funciones)?.mapValue?.fields || {};
+        if (frawRep.reportes?.booleanValue !== true) { res.status(200).json({ ok: true, reportes: [] }); return; }
+      }
       const [lista, clientesTodos] = await Promise.all([
         fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`, {
           method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
