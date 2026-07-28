@@ -525,7 +525,22 @@ export default async function handler(req, res) {
         // Funciones POR EMPRESA (el plan que le asignas a cada cliente que te contrata).
         const empId = (req.body.empresaIdFn || 'sos360-la-serena').trim();
         const docPath = empId === 'sos360-la-serena' ? `${base}/plataforma/funciones` : `${base}/empresas/${empId}`;
+        const campoFn = empId === 'sos360-la-serena' ? 'flags' : 'funciones';
         if (req.body.modo === 'set') {
+          // Guardado POR CLAVE: toca solo el interruptor que cambió.
+          // Antes se reescribía el mapa completo, así que dos guardados seguidos
+          // (o una lectura que llegaba tarde) se borraban los interruptores entre sí.
+          if (req.body.clave != null) {
+            const kFn = String(req.body.clave);
+            if (!/^[A-Za-z0-9_]{1,40}$/.test(kFn)) { res.status(400).json({ error: 'Interruptor no válido' }); return; }
+            await fetch(`${docPath}?updateMask.fieldPaths=${campoFn}.${kFn}`, {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields: { [campoFn]: { mapValue: { fields: { [kFn]: { booleanValue: req.body.valor === true } } } } } })
+            });
+            res.status(200).json({ ok: true, clave: kFn, valor: req.body.valor === true });
+            return;
+          }
           const p = req.body.funciones || {};
           const fields = {};
           Object.keys(p).forEach((k) => { fields[k] = { booleanValue: !!p[k] }; });
