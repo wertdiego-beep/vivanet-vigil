@@ -533,12 +533,29 @@ export default async function handler(req, res) {
           if (req.body.clave != null) {
             const kFn = String(req.body.clave);
             if (!/^[A-Za-z0-9_]{1,40}$/.test(kFn)) { res.status(400).json({ error: 'Interruptor no válido' }); return; }
-            await fetch(`${docPath}?updateMask.fieldPaths=${campoFn}.${kFn}`, {
-              method: 'PATCH',
-              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fields: { [campoFn]: { mapValue: { fields: { [kFn]: { booleanValue: req.body.valor === true } } } } } })
-            });
-            res.status(200).json({ ok: true, clave: kFn, valor: req.body.valor === true });
+            try {
+              // Leer, fusionar y escribir. Se lee justo antes de escribir, así el
+              // navegador nunca manda un mapa viejo que borre lo que otro guardó.
+              const docPrev = await fetch(docPath, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+              const prev = docPrev.fields?.[campoFn]?.mapValue?.fields || {};
+              const fusion = {};
+              Object.keys(prev).forEach((k) => { fusion[k] = { booleanValue: prev[k].booleanValue === true }; });
+              fusion[kFn] = { booleanValue: req.body.valor === true };
+              const rPatch = await fetch(`${docPath}?updateMask.fieldPaths=${campoFn}`, {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fields: { [campoFn]: { mapValue: { fields: fusion } } } })
+              });
+              if (!rPatch.ok) {
+                // Antes esto se ignoraba y el panel decía "Guardado" aunque no lo estuviera.
+                const txt = await rPatch.text().catch(() => '');
+                res.status(200).json({ ok: false, error: `No se pudo guardar (${rPatch.status}). ${String(txt).slice(0, 180)}` });
+                return;
+              }
+              res.status(200).json({ ok: true, clave: kFn, valor: req.body.valor === true });
+            } catch (e) {
+              res.status(200).json({ ok: false, error: 'No se pudo guardar: ' + (e && e.message ? e.message : 'error de red') });
+            }
             return;
           }
           const p = req.body.funciones || {};
