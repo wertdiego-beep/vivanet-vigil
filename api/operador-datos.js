@@ -130,6 +130,30 @@ async function listarClientes(accessToken) {
 // activas (aunque el historial —que usa la consulta SIN filtro— sí las
 // mostraba). Ahora las activas se derivan en JS desde esa misma consulta
 // sin filtro, que no necesita ningún índice.
+// ── NUC (Número Único de Causa) ─────────────────────────────────────────
+// Folio único y trazable de cada evento. Se DERIVA del identificador del
+// documento y del año del hecho, así que es estable en el tiempo, no
+// necesita contador central (que se rompería con varias empresas
+// escribiendo a la vez) y vale también para los eventos ya registrados.
+// Formato:  SOS-2026-4F9C2A   ·   REP-2026-7B10E4
+function nucFolio(prefijo, id, fechaIso) {
+  // El año SIEMPRE en hora de Chile: si se tomara la del servidor, un hecho
+  // del 1 de enero quedaría archivado con el folio del año anterior.
+  const base = fechaIso ? new Date(fechaIso) : new Date();
+  const anio = isNaN(base.getTime())
+    ? new Date().getUTCFullYear()
+    : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric' }).format(base);
+  const limpio = String(id || '').replace(/[^A-Za-z0-9]/g, '');
+  // Hash estable (FNV-1a) -> 6 caracteres en base 36, legible por teléfono.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < limpio.length; i++) {
+    h ^= limpio.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  const cuerpo = h.toString(36).toUpperCase().padStart(6, '0').slice(-6);
+  return `${prefijo}-${anio}-${cuerpo}`;
+}
+
 function derivarAlertasActivas(alertasRecientes) {
   // Una alerta "activa" con más de 12 horas se considera vencida (quedó
   // huérfana de alguna prueba o de un cierre que falló) y no se muestra
@@ -176,6 +200,7 @@ async function listarAlertasRecientes(accessToken) {
       return {
         clienteUid: uid,
         alertaId,
+        nuc: nucFolio('SOS', alertaId, f.creadaEn?.timestampValue),
         estado: f.estado?.stringValue || '',
         creadaEn: f.creadaEn?.timestampValue || null,
         atendidaEn: f.atendidaEn?.timestampValue || null,
@@ -1941,6 +1966,93 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true });
       return;
     }
+    if (accion === 'kpi') {
+      // Indicadores de desempeño del período (para reportes ejecutivos).
+      const dias = Math.max(1, Math.min(180, parseInt(req.body.dias) || 30));
+      const desde = Date.now() - dias * 24 * 3600 * 1000;
+      const fchCL = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+
+      const [clientesTodosK, alertasTodasK] = await Promise.all([
+        listarClientes(accessToken),
+        listarAlertasRecientes(accessToken)
+      ]);
+      const clientesK = esSA ? clientesTodosK : clientesTodosK.filter((c) => c.empresaId === empresaOperador);
+      const uidsK = new Set(clientesK.map((c) => c.uid));
+      const alertas = alertasTodasK
+        .filter((a) => esSA || uidsK.has(a.clienteUid))
+        .filter((a) => a.creadaEn && new Date(a.creadaEn).getTime() >= desde);
+
+      // — Tiempos de respuesta (minutos entre creación y atención) —
+      const tiempos = alertas
+        .filter((a) => a.creadaEn && a.atendidaEn)
+        .map((a) => (new Date(a.atendidaEn) - new Date(a.creadaEn)) / 60000)
+        .filter((m) => m >= 0 && m < 24 * 60)
+        .sort((x, y) => x - y);
+      const prom = tiempos.length ? tiempos.reduce((s2, v) => s2 + v, 0) / tiempos.length : null;
+      const mediana = tiempos.length ? tiempos[Math.floor(tiempos.length / 2)] : null;
+
+      // — Serie por día y por hora —
+      const porDia = {}, porHora = new Array(24).fill(0);
+      alertas.forEach((a) => {
+        const d = fchCL(a.creadaEn);
+        porDia[d] = (porDia[d] || 0) + 1;
+        const hh = parseInt(new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', hour12: false }).format(new Date(a.creadaEn)));
+        if (!isNaN(hh)) porHora[hh % 24]++;
+      });
+      const serieDia = Object.keys(porDia).sort().map((k) => ({ fecha: k, total: porDia[k] }));
+
+      // — Ranking de clientes con más alertas —
+      const nombreK = {}; clientesK.forEach((c) => { nombreK[c.uid] = c.local || c.nombre || 'Cliente'; });
+      const porCliente = {};
+      alertas.forEach((a) => { porCliente[a.clienteUid] = (porCliente[a.clienteUid] || 0) + 1; });
+      const topClientes = Object.keys(porCliente)
+        .map((uid2) => ({ nombre: nombreK[uid2] || 'Cliente', total: porCliente[uid2] }))
+        .sort((x, y) => y.total - x.total).slice(0, 8);
+
+      // — Cierre y resultados —
+      const atendidas = alertas.filter((a) => a.atendidaEn).length;
+      const canceladas = alertas.filter((a) => a.estado === 'cancelada').length;
+      const resultados = {};
+      alertas.forEach((a) => { if (a.resultado) resultados[a.resultado] = (resultados[a.resultado] || 0) + 1; });
+
+      // — Asistencia del personal en el período —
+      let asistencia = { marcajes: 0, atrasos: 0, jornadasCompletas: 0 };
+      try {
+        const empK = esSA ? null : empresaOperador;
+        if (empK) {
+          const regs = await fetch(`${base0}/empresas/${empK}/asistencia?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+          (regs.documents || []).forEach((dd) => {
+            const f2 = dd.fields || {};
+            const fec = f2.fecha?.stringValue || '';
+            if (!fec || new Date(fec + 'T12:00:00').getTime() < desde) return;
+            if (f2.entradaHora?.stringValue) asistencia.marcajes++;
+            if (f2.atrasoMin && parseInt(f2.atrasoMin.integerValue) > 0) asistencia.atrasos++;
+            if (f2.jornadaOk?.booleanValue === true) asistencia.jornadasCompletas++;
+          });
+        }
+      } catch (e) {}
+
+      res.status(200).json({
+        ok: true,
+        dias,
+        empresa: esSA ? 'todas' : empresaOperador,
+        totales: {
+          alertas: alertas.length,
+          atendidas,
+          canceladas,
+          clientes: clientesK.length,
+          tasaAtencion: alertas.length ? Math.round((atendidas / alertas.length) * 100) : null
+        },
+        tiempoRespuesta: {
+          promedioMin: prom != null ? Math.round(prom * 10) / 10 : null,
+          medianaMin: mediana != null ? Math.round(mediana * 10) / 10 : null,
+          muestras: tiempos.length
+        },
+        serieDia, porHora, topClientes, resultados, asistencia
+      });
+      return;
+    }
+
     if (accion === 'reportes') {
       // Reportes de incidentes de los clientes de la empresa del operador.
       // Función por plan: si la empresa no tiene 'reportes' activo, no ve nada.
@@ -1968,6 +2080,7 @@ export default async function handler(req, res) {
         const f = r.document.fields || {};
         return {
           id: repId, clienteUid: cuid,
+          nuc: nucFolio('REP', repId, f.creadaEn?.timestampValue),
           cliente: f.anonimo?.booleanValue === true ? 'Anónimo' : (nombreDe[cuid] || 'Cliente'),
           categoria: f.categoria?.stringValue || 'Otro',
           icono: f.icono?.stringValue || '📌',
