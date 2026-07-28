@@ -1966,6 +1966,111 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true });
       return;
     }
+    if (accion === 'prediccion') {
+      // ── Analítica predictiva de puntos críticos ──────────────────────────
+      // Modelo estadístico sobre el histórico propio de la empresa. NO es una
+      // caja negra: se puede explicar y auditar, que es lo que exige un
+      // municipio. Tres señales combinadas:
+      //   1) Densidad espacial: la comuna se divide en celdas de ~400 m y se
+      //      cuentan los hechos de cada celda.
+      //   2) Recencia: un hecho de esta semana pesa más que uno de hace dos
+      //      meses (decaimiento exponencial, vida media 21 días).
+      //   3) Patrón horario: en qué franja del día se concentra cada celda.
+      // El riesgo resultante se normaliza de 0 a 100 para leerlo de un vistazo.
+      const diasP = Math.max(7, Math.min(180, parseInt(req.body.dias) || 60));
+      const desdeP = Date.now() - diasP * 24 * 3600 * 1000;
+      const VIDA_MEDIA_DIAS = 21;
+      const CELDA = 0.0045; // ~0,5 km de lado (lat); suficiente para un sector
+
+      const [clientesP, alertasP] = await Promise.all([
+        listarClientes(accessToken),
+        listarAlertasRecientes(accessToken)
+      ]);
+      const misP = new Set((esSA ? clientesP : clientesP.filter((c) => c.empresaId === empresaOperador)).map((c) => c.uid));
+
+      // Hechos con coordenada: alertas con GPS + reportes ciudadanos.
+      const hechos = [];
+      alertasP.forEach((a) => {
+        if (!misP.has(a.clienteUid) && !esSA) return;
+        if (!a.creadaEn || new Date(a.creadaEn).getTime() < desdeP) return;
+        if (!a.ubicacion || a.ubicacion.lat == null) return;
+        hechos.push({ lat: a.ubicacion.lat, lng: a.ubicacion.lng, fecha: a.creadaEn, tipo: 'sos' });
+      });
+      try {
+        const repsQ = await fetch(`${base0}:runQuery`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'reportes', allDescendants: true }], limit: 200 } })
+        }).then((r) => r.json());
+        (repsQ || []).forEach((r) => {
+          if (!r.document) return;
+          const parts = r.document.name.split('/'); parts.pop(); parts.pop();
+          const cuid = parts.pop();
+          if (!misP.has(cuid) && !esSA) return;
+          const f = r.document.fields || {};
+          const fe = f.creadaEn?.timestampValue;
+          if (!fe || new Date(fe).getTime() < desdeP) return;
+          if (!f.lat || !f.lng) return;
+          hechos.push({
+            lat: parseFloat(f.lat.doubleValue ?? f.lat.integerValue),
+            lng: parseFloat(f.lng.doubleValue ?? f.lng.integerValue),
+            fecha: fe, tipo: 'reporte'
+          });
+        });
+      } catch (e) {}
+
+      // Agrupar en celdas con peso por recencia.
+      const ahora = Date.now();
+      const celdas = {};
+      hechos.forEach((h) => {
+        const gi = Math.floor(h.lat / CELDA), gj = Math.floor(h.lng / CELDA);
+        const k = gi + '|' + gj;
+        const diasAtras = (ahora - new Date(h.fecha).getTime()) / 86400000;
+        const peso = Math.pow(0.5, diasAtras / VIDA_MEDIA_DIAS); // recencia
+        const hora = parseInt(new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', hour12: false }).format(new Date(h.fecha)));
+        if (!celdas[k]) celdas[k] = { gi, gj, n: 0, peso: 0, horas: new Array(24).fill(0), ultimo: h.fecha, sos: 0, reportes: 0 };
+        const c2 = celdas[k];
+        c2.n++; c2.peso += peso;
+        if (!isNaN(hora)) c2.horas[hora % 24] += peso;
+        if (new Date(h.fecha) > new Date(c2.ultimo)) c2.ultimo = h.fecha;
+        if (h.tipo === 'sos') c2.sos++; else c2.reportes++;
+      });
+
+      const lista = Object.values(celdas);
+      const pesoMax = Math.max(0.0001, ...lista.map((c2) => c2.peso));
+      const franja = (h) => h < 6 ? 'madrugada (00–06)' : (h < 12 ? 'mañana (06–12)' : (h < 18 ? 'tarde (12–18)' : 'noche (18–24)'));
+
+      const puntos = lista.map((c2) => {
+        const horaPeak = c2.horas.indexOf(Math.max(...c2.horas));
+        const riesgo = Math.round((c2.peso / pesoMax) * 100);
+        return {
+          lat: (c2.gi + 0.5) * CELDA,
+          lng: (c2.gj + 0.5) * CELDA,
+          hechos: c2.n, sos: c2.sos, reportes: c2.reportes,
+          riesgo,
+          horaPeak,
+          franja: franja(horaPeak),
+          ultimo: c2.ultimo
+        };
+      }).sort((a, b) => b.riesgo - a.riesgo).slice(0, 30);
+
+      // Recomendaciones legibles para el jefe de operaciones.
+      const recomendaciones = puntos.slice(0, 5).map((p, i) => ({
+        prioridad: i + 1,
+        texto: `Reforzar patrullaje en la franja de ${p.franja}: ${p.hechos} hecho${p.hechos === 1 ? '' : 's'} registrado${p.hechos === 1 ? '' : 's'} en el sector durante los últimos ${diasP} días.`,
+        lat: p.lat, lng: p.lng, riesgo: p.riesgo
+      }));
+
+      res.status(200).json({
+        ok: true,
+        dias: diasP,
+        totalHechos: hechos.length,
+        celdas: puntos.length,
+        metodo: 'Densidad espacial en celdas de ~500 m, ponderada por recencia (vida media 21 días) y perfil horario.',
+        puntos, recomendaciones
+      });
+      return;
+    }
+
     if (accion === 'kpi') {
       // Indicadores de desempeño del período (para reportes ejecutivos).
       const dias = Math.max(1, Math.min(180, parseInt(req.body.dias) || 30));
