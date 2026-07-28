@@ -297,6 +297,33 @@ export default async function handler(req, res) {
     const esSA = SUPERADMINS.includes(uid) || saExtra.includes(uid);
     const esOp = esOperador(uid) || !!perfilOp.fields?.operadorDe?.stringValue;
 
+    // ── Interruptores de la empresa (una sola lectura por request, memorizada) ──
+    // Sirve para cortar funciones por plan sin tocar código. Un interruptor que
+    // nunca se configuró se considera ENCENDIDO: así ninguna empresa pierde algo
+    // que ya estaba usando cuando se agrega un switch nuevo.
+    const _empFlags = perfilOp.fields?.operadorDe?.stringValue || perfilOp.fields?.empresaId?.stringValue || 'sos360-la-serena';
+    let _flagsCache = null;
+    const flagsEmpresa = async () => {
+      if (_flagsCache) return _flagsCache;
+      const ruta = _empFlags === 'sos360-la-serena' ? `${base0}/plataforma/funciones` : `${base0}/empresas/${_empFlags}`;
+      const doc = await fetch(ruta, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      _flagsCache = (doc.fields?.flags || doc.fields?.funciones)?.mapValue?.fields || {};
+      return _flagsCache;
+    };
+    const funcionOn = async (k) => (await flagsEmpresa())[k]?.booleanValue !== false;
+    // La central maestra nunca queda fuera: necesita ver todo para dar soporte.
+    const funcionCortada = async (k) => !esSA && !(await funcionOn(k));
+
+    // Cualquier miembro de la empresa (incluido el móvil, que no es operador) puede
+    // preguntar qué funciones tiene encendidas, para no mostrar botones que no sirven.
+    if (accion === 'mis-funciones') {
+      const fr = await flagsEmpresa();
+      const funcionesMias = {};
+      Object.keys(fr).forEach((k) => { funcionesMias[k] = fr[k].booleanValue !== false; });
+      res.status(200).json({ ok: true, funciones: funcionesMias });
+      return;
+    }
+
     // ── Empresas visibles para el cliente final (cualquier usuario autenticado, ej. registro) ──
     if (accion === 'empresas-visibles') {
       const respEmp = await fetch(`${base0}/empresas?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
@@ -859,6 +886,7 @@ export default async function handler(req, res) {
       }
       if (accion === 'movil-informe') {
         // Informe de turno del móvil: texto + varias fotos. Queda en 'reportes' (lo ve la central).
+        if (await funcionCortada('informeturno')) { res.status(403).json({ error: 'El informe de turno no está incluido en el plan de tu empresa.' }); return; }
         const texto = String(req.body.texto || '').trim().slice(0, 1500);
         const fotos = Array.isArray(req.body.fotos) ? req.body.fotos.filter((x) => typeof x === 'string' && x).slice(0, 6) : [];
         if (!texto && !fotos.length) { res.status(400).json({ error: 'Escribe el informe o adjunta una foto.' }); return; }
@@ -1977,6 +2005,7 @@ export default async function handler(req, res) {
       //      meses (decaimiento exponencial, vida media 21 días).
       //   3) Patrón horario: en qué franja del día se concentra cada celda.
       // El riesgo resultante se normaliza de 0 a 100 para leerlo de un vistazo.
+      if (await funcionCortada('prediccion')) { res.status(403).json({ error: 'La analítica predictiva no está incluida en el plan de tu empresa.' }); return; }
       const diasP = Math.max(7, Math.min(180, parseInt(req.body.dias) || 60));
       const desdeP = Date.now() - diasP * 24 * 3600 * 1000;
       const VIDA_MEDIA_DIAS = 21;
@@ -2073,6 +2102,7 @@ export default async function handler(req, res) {
 
     if (accion === 'kpi') {
       // Indicadores de desempeño del período (para reportes ejecutivos).
+      if (await funcionCortada('kpi')) { res.status(403).json({ error: 'El panel de indicadores no está incluido en el plan de tu empresa.' }); return; }
       const dias = Math.max(1, Math.min(180, parseInt(req.body.dias) || 30));
       const desde = Date.now() - dias * 24 * 3600 * 1000;
       const fchCL = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
@@ -2201,6 +2231,8 @@ export default async function handler(req, res) {
         };
       }).filter((x) => mios.has(x.clienteUid))
         .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0)).slice(0, 40);
+      // Trazabilidad NUC apagada por plan: el folio ni siquiera viaja al navegador.
+      if (await funcionCortada('nuc')) reportes.forEach((r) => { delete r.nuc; });
       res.status(200).json({ ok: true, reportes });
       return;
     }
@@ -2256,6 +2288,12 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
     Object.keys(praw).forEach((k) => { if (praw[k].booleanValue === false) permisos[k] = false; });
+
+    // Trazabilidad NUC apagada por plan: el folio no viaja al navegador.
+    if (!esSA && funciones.nuc === false) {
+      alertas.forEach((a) => { delete a.nuc; });
+      historial.forEach((a) => { delete a.nuc; });
+    }
 
     res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, esMaestra: uid === CUENTA_MAESTRA, miUid: uid, rolEmpresa: perfilOp.fields?.rolEmpresa?.stringValue || '', esRolCustom: /^rc_/.test(miRolE), rolCustomNombre, empresaId: empresaOperador, permisos, funciones });
   } catch (err) {
