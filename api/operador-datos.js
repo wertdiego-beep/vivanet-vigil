@@ -770,7 +770,7 @@ export default async function handler(req, res) {
         });
         if (req.body.rastro === true) {
           try {
-            const rutaRas = `${base0}/empresas/${empMovil}/rastros/${uid}`;
+            const rutaRas = `${base0}/empresas/${empMovil}/rastros/${uid}_${hoyStr}`;
             const docRas = await fetch(rutaRas, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
             const mismaFecha = docRas.fields?.fecha?.stringValue === hoyStr;
             let pts = mismaFecha ? (docRas.fields?.puntos?.arrayValue?.values || []) : [];
@@ -985,6 +985,36 @@ export default async function handler(req, res) {
       }
     }
 
+    // ── POSICIÓN del personal de terreno (Módulo 2: "funcionarios con dispositivo móvil") ──
+    if (accion === 'pos-reportar') {
+      const rolT = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      const TERRENO = ['movil', 'guardia', 'conductor', 'supervisor', 'prevencionista'];
+      if (!TERRENO.includes(rolT)) { res.status(403).json({ error: 'Solo el personal de terreno reporta posición.' }); return; }
+      const laP = Number(req.body.lat), loP = Number(req.body.lng);
+      if (isNaN(laP) || isNaN(loP) || Math.abs(laP) > 90 || Math.abs(loP) > 180) { res.status(400).json({ error: 'Posición no válida' }); return; }
+      const empT = perfilOp.fields?.empresaId?.stringValue || perfilOp.fields?.operadorDe?.stringValue || 'sos360-la-serena';
+      const hoyT = new Date().toISOString().slice(0, 10);
+      const ahoraT = new Date().toISOString();
+      await fetch(`${base0}/usuarios/${uid}?updateMask.fieldPaths=posLat&updateMask.fieldPaths=posLng&updateMask.fieldPaths=posEn`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { posLat: { doubleValue: laP }, posLng: { doubleValue: loP }, posEn: { timestampValue: ahoraT } } })
+      });
+      if (req.body.rastro === true) {
+        try {
+          const rutaRasT = `${base0}/empresas/${empT}/rastros/${uid}_${hoyT}`;
+          const docRasT = await fetch(rutaRasT, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+          let ptsT = (docRasT.fields?.puntos?.arrayValue?.values || []).slice(-599);
+          ptsT.push({ mapValue: { fields: { lat: { doubleValue: laP }, lng: { doubleValue: loP }, t: { timestampValue: ahoraT } } } });
+          await fetch(`${rutaRasT}?updateMask.fieldPaths=fecha&updateMask.fieldPaths=puntos&updateMask.fieldPaths=nombre&updateMask.fieldPaths=cargo`, {
+            method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: { fecha: { stringValue: hoyT }, cargo: { stringValue: rolT }, nombre: { stringValue: perfilOp.fields?.nombre?.stringValue || 'Personal' }, puntos: { arrayValue: { values: ptsT } } } })
+          });
+        } catch (e) {}
+      }
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     // ── ASISTENCIA del personal (cualquier rol de empresa; no requiere ser operador) ──
     if (accion === 'asist-mi-config' || accion === 'asist-marcar') {
       const rolA = perfilOp.fields?.rolEmpresa?.stringValue || '';
@@ -1012,7 +1042,7 @@ export default async function handler(req, res) {
       const regRuta = `${base0}/empresas/${empA}/asistencia/${uid}_${fechaCl}`;
       if (accion === 'asist-mi-config') {
         const reg = await fetch(regRuta, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-        res.status(200).json({ ok: true, config: cfg, hoy: {
+        res.status(200).json({ ok: true, rol: rolA, config: cfg, hoy: {
           fecha: fechaCl,
           entradaHora: reg.fields?.entradaHora?.stringValue || null,
           atrasoMin: reg.fields?.atrasoMin ? parseInt(reg.fields.atrasoMin.integerValue) : null,
@@ -1294,10 +1324,24 @@ export default async function handler(req, res) {
       return;
     }
     if (accion === 'moviles-empresa') {
-      // Lista los móviles de reacción de la empresa del operador (para despachar / armar recorrido).
-      const clientes = await listarClientes(accessToken);
-      const moviles = clientes.filter((c) => c.empresaId === empresaOperador && c.rolEmpresa === 'movil')
-        .map((c) => ({ uid: c.uid, nombre: c.nombre || c.local || 'Móvil', telefono: c.telefono || '', tipo: c.tipoMovil || 'patrullaje' }));
+      // Lista los móviles de reacción de la empresa, con su última posición GPS
+      // para que el despacho pueda ordenarlos por cercanía al punto del evento.
+      const respMU = await fetch(`${base0}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const moviles = (respMU.documents || []).map((d2) => {
+        const f2 = d2.fields || {};
+        return {
+          uid: d2.name.split('/').pop(),
+          empresaId: f2.empresaId?.stringValue || 'sos360-la-serena',
+          rolEmpresa: f2.rolEmpresa?.stringValue || '',
+          nombre: f2.nombre?.stringValue || f2.local?.stringValue || 'Móvil',
+          telefono: f2.telefono?.stringValue || '',
+          tipo: f2.tipoMovil?.stringValue || 'patrullaje',
+          lat: f2.posLat ? parseFloat(f2.posLat.doubleValue ?? f2.posLat.integerValue) : null,
+          lng: f2.posLng ? parseFloat(f2.posLng.doubleValue ?? f2.posLng.integerValue) : null,
+          posEn: f2.posEn?.timestampValue || null
+        };
+      }).filter((c) => c.empresaId === empresaOperador && c.rolEmpresa === 'movil')
+        .map(({ empresaId, rolEmpresa, ...m2 }) => m2);
       res.status(200).json({ ok: true, moviles });
       return;
     }
@@ -2270,10 +2314,10 @@ export default async function handler(req, res) {
           lng: f2.posLng ? parseFloat(f2.posLng.doubleValue ?? f2.posLng.integerValue) : null,
           posEn: f2.posEn?.timestampValue || null
         };
-      }).filter((m) => m.rolEmpresa === 'movil'
+      }).filter((m) => ['movil', 'guardia', 'conductor', 'supervisor', 'prevencionista'].includes(m.rolEmpresa)
         && (esSA || m.empresaId === empresaOperador)
         && m.lat != null && m.posEn && new Date(m.posEn).getTime() >= corte)
-        .map(({ rolEmpresa, ...m }) => m);
+        .map((m) => ({ uid: m.uid, nombre: m.nombre, empresaId: m.empresaId, lat: m.lat, lng: m.lng, posEn: m.posEn, cargo: m.rolEmpresa }));
       res.status(200).json({ ok: true, moviles });
       return;
     }
@@ -2285,13 +2329,20 @@ export default async function handler(req, res) {
       const docM = await fetch(`${base0}/usuarios/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       const empM = docM.fields?.empresaId?.stringValue || 'sos360-la-serena';
       if (!esSA && empM !== empresaOperador) { res.status(403).json({ error: 'Ese móvil no es de tu empresa.' }); return; }
-      const docRas = await fetch(`${base0}/empresas/${empM}/rastros/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       const hoyR = new Date().toISOString().slice(0, 10);
-      const puntos = (docRas.fields?.fecha?.stringValue === hoyR ? (docRas.fields?.puntos?.arrayValue?.values || []) : []).map((p) => {
+      let fechaR = String(req.body.fecha || hoyR).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaR)) { res.status(400).json({ error: 'Fecha no válida (AAAA-MM-DD).' }); return; }
+      let docRas = await fetch(`${base0}/empresas/${empM}/rastros/${mUid}_${fechaR}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      if (!docRas.fields && fechaR === hoyR) {
+        // Compatibilidad con el esquema anterior (un solo doc que se pisaba cada día).
+        const legado = await fetch(`${base0}/empresas/${empM}/rastros/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        if (legado.fields?.fecha?.stringValue === hoyR) docRas = legado;
+      }
+      const puntos = (docRas.fields?.puntos?.arrayValue?.values || []).map((p) => {
         const pf = p.mapValue?.fields || {};
         return { lat: parseFloat(pf.lat?.doubleValue ?? 0), lng: parseFloat(pf.lng?.doubleValue ?? 0), t: pf.t?.timestampValue || null };
       });
-      res.status(200).json({ ok: true, nombre: docRas.fields?.nombre?.stringValue || 'Móvil', fecha: hoyR, puntos });
+      res.status(200).json({ ok: true, nombre: docRas.fields?.nombre?.stringValue || 'Móvil', cargo: docRas.fields?.cargo?.stringValue || 'movil', fecha: fechaR, puntos });
       return;
     }
 
