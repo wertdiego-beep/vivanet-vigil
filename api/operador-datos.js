@@ -746,7 +746,7 @@ export default async function handler(req, res) {
     }
 
     // ── Acciones del MÓVIL DE REACCIÓN (rol 'movil'; no es operador de central) ──
-    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte', 'movil-incidente', 'movil-informe', 'movil-contactos', 'movil-chat-listar', 'movil-chat-enviar', 'movil-misiones', 'movil-mision-estado', 'movil-mision-reporte'];
+    const _accMovil = ['movil-recorrido', 'movil-parada', 'movil-despachos', 'movil-estado', 'movil-reporte', 'movil-incidente', 'movil-informe', 'movil-contactos', 'movil-chat-listar', 'movil-chat-enviar', 'movil-misiones', 'movil-mision-estado', 'movil-mision-reporte', 'movil-pos'];
     if (_accMovil.includes(accion)) {
       const miRolM = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && miRolM !== 'movil') { res.status(403).json({ error: 'Solo un móvil de reacción puede usar esto.' }); return; }
@@ -754,6 +754,36 @@ export default async function handler(req, res) {
       const rutaRec = `${base0}/empresas/${empMovil}/recorridos/${uid}`;
       const hoyStr = new Date().toISOString().slice(0, 10);
 
+      if (accion === 'movil-pos') {
+        // ── GPS en tiempo real (Módulo 2 de la licitación) ──
+        // El móvil manda su posición cada ~15 s. Se guarda en su perfil (1 escritura
+        // chica) y, cuando viene la marca 'rastro', también se acumula un punto en el
+        // rastro del día (tope 600 puntos ≈ 10 h a 1 punto/min) para la trazabilidad
+        // territorial: "historial de rutas y desplazamientos".
+        const la = Number(req.body.lat), lo = Number(req.body.lng);
+        if (isNaN(la) || isNaN(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) { res.status(400).json({ error: 'Posición no válida' }); return; }
+        const ahoraIso = new Date().toISOString();
+        await fetch(`${base0}/usuarios/${uid}?updateMask.fieldPaths=posLat&updateMask.fieldPaths=posLng&updateMask.fieldPaths=posEn`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { posLat: { doubleValue: la }, posLng: { doubleValue: lo }, posEn: { timestampValue: ahoraIso } } })
+        });
+        if (req.body.rastro === true) {
+          try {
+            const rutaRas = `${base0}/empresas/${empMovil}/rastros/${uid}`;
+            const docRas = await fetch(rutaRas, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+            const mismaFecha = docRas.fields?.fecha?.stringValue === hoyStr;
+            let pts = mismaFecha ? (docRas.fields?.puntos?.arrayValue?.values || []) : [];
+            pts = pts.slice(-599); // tope de puntos: se conserva lo más reciente
+            pts.push({ mapValue: { fields: { lat: { doubleValue: la }, lng: { doubleValue: lo }, t: { timestampValue: ahoraIso } } } });
+            await fetch(`${rutaRas}?updateMask.fieldPaths=fecha&updateMask.fieldPaths=puntos&updateMask.fieldPaths=nombre`, {
+              method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields: { fecha: { stringValue: hoyStr }, nombre: { stringValue: perfilOp.fields?.nombre?.stringValue || 'Móvil' }, puntos: { arrayValue: { values: pts } } } })
+            });
+          } catch (e) {}
+        }
+        res.status(200).json({ ok: true });
+        return;
+      }
       if (accion === 'movil-recorrido') {
         const doc = await fetch(rutaRec, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
         const fecha = doc.fields?.fecha?.stringValue || '';
@@ -2129,6 +2159,47 @@ export default async function handler(req, res) {
         metodo: 'Densidad espacial en celdas de ~500 m, ponderada por recencia (vida media 21 días) y perfil horario.',
         puntos, recomendaciones
       });
+      return;
+    }
+
+    if (accion === 'moviles-pos') {
+      // Posición en tiempo real de los recursos desplegados (Módulo 2).
+      // Devuelve los móviles de la empresa con su última posición reportada.
+      const respU = await fetch(`${base0}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const corte = Date.now() - 3 * 3600 * 1000; // sin señal hace 3 h = fuera de servicio, no se pinta
+      const moviles = (respU.documents || []).map((d2) => {
+        const f2 = d2.fields || {};
+        return {
+          uid: d2.name.split('/').pop(),
+          nombre: f2.nombre?.stringValue || 'Móvil',
+          empresaId: f2.empresaId?.stringValue || 'sos360-la-serena',
+          rolEmpresa: f2.rolEmpresa?.stringValue || '',
+          lat: f2.posLat ? parseFloat(f2.posLat.doubleValue ?? f2.posLat.integerValue) : null,
+          lng: f2.posLng ? parseFloat(f2.posLng.doubleValue ?? f2.posLng.integerValue) : null,
+          posEn: f2.posEn?.timestampValue || null
+        };
+      }).filter((m) => m.rolEmpresa === 'movil'
+        && (esSA || m.empresaId === empresaOperador)
+        && m.lat != null && m.posEn && new Date(m.posEn).getTime() >= corte)
+        .map(({ rolEmpresa, ...m }) => m);
+      res.status(200).json({ ok: true, moviles });
+      return;
+    }
+
+    if (accion === 'movil-rastro') {
+      // Rastro del día de un móvil: la trazabilidad territorial del Módulo 2.
+      const mUid = (req.body.movilUid || '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(mUid)) { res.status(400).json({ error: 'Móvil no válido' }); return; }
+      const docM = await fetch(`${base0}/usuarios/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const empM = docM.fields?.empresaId?.stringValue || 'sos360-la-serena';
+      if (!esSA && empM !== empresaOperador) { res.status(403).json({ error: 'Ese móvil no es de tu empresa.' }); return; }
+      const docRas = await fetch(`${base0}/empresas/${empM}/rastros/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      const hoyR = new Date().toISOString().slice(0, 10);
+      const puntos = (docRas.fields?.fecha?.stringValue === hoyR ? (docRas.fields?.puntos?.arrayValue?.values || []) : []).map((p) => {
+        const pf = p.mapValue?.fields || {};
+        return { lat: parseFloat(pf.lat?.doubleValue ?? 0), lng: parseFloat(pf.lng?.doubleValue ?? 0), t: pf.t?.timestampValue || null };
+      });
+      res.status(200).json({ ok: true, nombre: docRas.fields?.nombre?.stringValue || 'Móvil', fecha: hoyR, puntos });
       return;
     }
 
