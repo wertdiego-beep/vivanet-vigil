@@ -217,13 +217,15 @@ async function listarAlertasRecientes(accessToken) {
         movilReporteNota: f.movilReporteNota?.stringValue || '',
         movilReporteFoto: f.movilReporteFoto?.stringValue || '',
         movilReporteEn: f.movilReporteEn?.timestampValue || null,
-        ubicacion: ubic
-          ? {
-              lat: parseFloat(ubic.lat?.doubleValue ?? ubic.lat?.integerValue ?? 0),
-              lng: parseFloat(ubic.lng?.doubleValue ?? ubic.lng?.integerValue ?? 0),
-              precision: parseFloat(ubic.precision?.doubleValue ?? ubic.precision?.integerValue ?? 0)
-            }
-          : null
+        ubicacion: (() => {
+          // 0,0 cae en el océano Atlántico: si el SOS llegó sin GPS real,
+          // va como "sin ubicación" para que el mapa nunca salte al azul.
+          if (!ubic) return null;
+          const laU = parseFloat(ubic.lat?.doubleValue ?? ubic.lat?.integerValue ?? NaN);
+          const loU = parseFloat(ubic.lng?.doubleValue ?? ubic.lng?.integerValue ?? NaN);
+          if (!isFinite(laU) || !isFinite(loU) || (laU === 0 && loU === 0)) return null;
+          return { lat: laU, lng: loU, precision: parseFloat(ubic.precision?.doubleValue ?? ubic.precision?.integerValue ?? 0) };
+        })()
       };
     })
     .sort((a, b) => new Date(b.creadaEn || 0) - new Date(a.creadaEn || 0));
@@ -2544,10 +2546,11 @@ export default async function handler(req, res) {
       listarClientes(accessToken),
       listarAlertasRecientes(accessToken)
     ]);
-    // Aislamiento: cada empresa ve solo lo suyo. La central maestra (superadmin) ve TODO.
-    const clientes = esSA ? clientesTodos : clientesTodos.filter((c) => c.empresaId === empresaOperador);
+    // Aislamiento total: cada empresa ve solo lo suyo — también la central maestra.
+    // Las alarmas de una empresa cliente son de SU panel, no del panel de la plataforma.
+    const clientes = clientesTodos.filter((c) => c.empresaId === empresaOperador);
     const uidsEmpresa = new Set(clientes.map((c) => c.uid));
-    const alertasRecientes = esSA ? alertasTodas : alertasTodas.filter((a) => uidsEmpresa.has(a.clienteUid));
+    const alertasRecientes = alertasTodas.filter((a) => uidsEmpresa.has(a.clienteUid));
     const alertas = derivarAlertasActivas(alertasRecientes);
 
     const stats = calcularStats(alertasRecientes);

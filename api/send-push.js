@@ -304,8 +304,29 @@ export default async function handler(req, res) {
     const accessToken = await obtenerAccessToken();
     const resultados = {};
 
-    // Push a TODOS los operadores que tengan notificaciones activadas.
-    const tokens = await Promise.all(OPERADORES.map((uid) => obtenerTokenUsuario(accessToken, uid)));
+    // Push a la central que corresponde (multitenant): si el cliente es de una
+    // empresa, suena en los operadores de ESA empresa; los operadores maestros
+    // solo reciben las alarmas de la central propia (sos360-la-serena).
+    let tokensEmpresa = null;
+    if (req.body.idToken) {
+      try {
+        const uidCliG = await verificarUsuario(req.body.idToken);
+        if (uidCliG) {
+          const baseG = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+          const docCliG = await fetch(`${baseG}/usuarios/${uidCliG}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : ({}));
+          const empCliG = docCliG.fields?.empresaId?.stringValue || 'sos360-la-serena';
+          if (empCliG !== 'sos360-la-serena') {
+            const todosG = await fetch(`${baseG}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : ({}));
+            tokensEmpresa = (todosG.documents || [])
+              .filter((d) => (d.fields?.operadorDe?.stringValue || '') === empCliG && d.fields?.fcmToken?.stringValue)
+              .map((d) => d.fields.fcmToken.stringValue);
+          }
+        }
+      } catch (e) { tokensEmpresa = null; }
+    }
+    const tokens = tokensEmpresa !== null
+      ? tokensEmpresa
+      : await Promise.all(OPERADORES.map((uid) => obtenerTokenUsuario(accessToken, uid)));
     const envios = await Promise.all(tokens.filter(Boolean).map((t) => enviarPush(accessToken, t, tituloCentral, cuerpoCentral)));
     resultados.central = envios.length
       ? { ok: envios.some((e) => e.ok), enviados: envios.length }
