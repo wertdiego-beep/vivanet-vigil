@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/informe-programado",
-      "schedule": "0 11 * * *"
-    }
-  ]
-}
