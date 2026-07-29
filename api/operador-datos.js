@@ -647,7 +647,10 @@ export default async function handler(req, res) {
         const docs = resp.documents || [];
         const ops = docs.filter((d) => {
           const id = d.name.split('/').pop();
-          return OPERADORES.includes(id) || !!d.fields?.operadorDe?.stringValue;
+          const rolE = d.fields?.rolEmpresa?.stringValue || '';
+          // También los jefes y gerentes: administran el panel de su empresa y
+          // la plataforma debe poder designarles permisos (ej: despacho de móviles).
+          return OPERADORES.includes(id) || !!d.fields?.operadorDe?.stringValue || rolE === 'jefe' || rolE === 'gerente';
         }).map((d) => {
           const id = d.name.split('/').pop();
           const praw = d.fields?.permisosOp?.mapValue?.fields || {};
@@ -656,6 +659,7 @@ export default async function handler(req, res) {
           return {
             uid: id,
             nombre: d.fields?.nombre?.stringValue || '',
+            rolEmpresa: d.fields?.rolEmpresa?.stringValue || '',
             empresa: d.fields?.operadorDe?.stringValue || d.fields?.empresaId?.stringValue || 'sos360-la-serena',
             esSuperadmin: SUPERADMINS.includes(id) || saExtra.includes(id),
           esMaestra: id === CUENTA_MAESTRA,
@@ -2625,6 +2629,8 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
     Object.keys(praw).forEach((k) => { if (praw[k].booleanValue === false) permisos[k] = false; });
+    const permisosPlan = { atender: true, clientes: true, historial: true, tecnico: true, exportar: true, zonas: true, credenciales: true, moviles: true, asistencia: true, operativos: true, encurso: true, registro: true, llamados: true, tickets: true };
+    Object.keys(praw).forEach((k) => { if (praw[k].booleanValue === false) permisosPlan[k] = false; });
 
     // Trazabilidad NUC apagada por plan: el folio no viaja al navegador.
     if (!esSA && funciones.nuc === false) {
@@ -2632,7 +2638,7 @@ export default async function handler(req, res) {
       historial.forEach((a) => { delete a.nuc; });
     }
 
-    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, esMaestra: uid === CUENTA_MAESTRA, miUid: uid, rolEmpresa: perfilOp.fields?.rolEmpresa?.stringValue || '', esRolCustom: /^rc_/.test(miRolE), rolCustomNombre, empresaId: empresaOperador, permisos, funciones });
+    res.status(200).json({ ok: true, clientes, alertas, historial, stats, esSuperadmin: esSA, esMaestra: uid === CUENTA_MAESTRA, miUid: uid, rolEmpresa: perfilOp.fields?.rolEmpresa?.stringValue || '', esRolCustom: /^rc_/.test(miRolE), rolCustomNombre, empresaId: empresaOperador, permisos, permisosPlan, funciones });
   } catch (err) {
     console.error('Error en panel operador:', err);
     res.status(500).json({ error: err.message || 'Error interno del servidor' });
