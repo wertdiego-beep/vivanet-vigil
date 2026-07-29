@@ -952,7 +952,8 @@ export default async function handler(req, res) {
         if (await funcionCortada('informeturno')) { res.status(403).json({ error: 'El informe de turno no está incluido en el plan de tu empresa.' }); return; }
         const texto = String(req.body.texto || '').trim().slice(0, 1500);
         const fotos = Array.isArray(req.body.fotos) ? req.body.fotos.filter((x) => typeof x === 'string' && x).slice(0, 6) : [];
-        if (!texto && !fotos.length) { res.status(400).json({ error: 'Escribe el informe o adjunta una foto.' }); return; }
+        const audioInf = (typeof req.body.audio === 'string' && req.body.audio.startsWith('data:audio')) ? req.body.audio.slice(0, 700000) : null;
+        if (!texto && !fotos.length && !audioInf) { res.status(400).json({ error: 'Escribe el informe, adjunta una foto o graba una nota de voz.' }); return; }
         const fields = {
           categoria: { stringValue: '📋 Informe de turno' },
           icono: { stringValue: '📋' },
@@ -962,6 +963,7 @@ export default async function handler(req, res) {
           creadaEn: { timestampValue: new Date().toISOString() }
         };
         if (fotos.length) fields.fotos = { arrayValue: { values: fotos.map((f) => ({ stringValue: String(f).slice(0, 900000) })) } };
+        if (audioInf) fields.audio = { stringValue: audioInf };
         await fetch(`${base0}/usuarios/${uid}/reportes`, {
           method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields })
@@ -2255,7 +2257,7 @@ export default async function handler(req, res) {
           const cli = clientesF.find((c) => c.uid === cuid);
           const anon = f.anonimo?.booleanValue === true;
           meta = { tipo: '📢 Reporte de incidente', estado: f.estado?.stringValue || 'pendiente', quien: anon ? 'Anónimo' : ((cli && (cli.local || cli.nombre)) || 'Cliente'), lat: f.lat ? parseFloat(f.lat.doubleValue ?? f.lat.integerValue) : null, lng: f.lng ? parseFloat(f.lng.doubleValue ?? f.lng.integerValue) : null, direccion: f.direccion?.stringValue || null };
-          paso(f.creadaEn?.timestampValue, `${f.icono?.stringValue || '📌'} Reporte ingresado — ${f.categoria?.stringValue || 'Otro'}`, (f.texto?.stringValue || '').slice(0, 300) + ((f.fotos?.arrayValue?.values || []).length || f.foto ? ' · con evidencia fotográfica' : ''));
+          paso(f.creadaEn?.timestampValue, `${f.icono?.stringValue || '📌'} Reporte ingresado — ${f.categoria?.stringValue || 'Otro'}`, (f.texto?.stringValue || '').slice(0, 300) + ((f.fotos?.arrayValue?.values || []).length || f.foto ? ' · con evidencia fotográfica' : '') + (f.audio?.stringValue ? ' · con nota de voz' : ''));
           if ((f.estado?.stringValue || '') === 'revisado') paso(f.revisadoEn?.timestampValue || f.creadaEn?.timestampValue, '✅ Marcado como revisado por la central', '');
           break;
         }
@@ -2467,6 +2469,7 @@ export default async function handler(req, res) {
           icono: f.icono?.stringValue || '📌',
           texto: f.texto?.stringValue || '',
           foto: f.foto?.stringValue || null,
+          audio: f.audio?.stringValue || null,
           fotos: (f.fotos?.arrayValue?.values || []).map((v) => v.stringValue).filter(Boolean),
           lat: f.lat ? parseFloat(f.lat.doubleValue ?? f.lat.integerValue) : null,
           lng: f.lng ? parseFloat(f.lng.doubleValue ?? f.lng.integerValue) : null,
