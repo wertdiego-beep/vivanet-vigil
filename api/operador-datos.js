@@ -2212,6 +2212,28 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (accion === 'informe-prog') {
+      // Interruptor del informe automático (Módulo 6: informes periódicos).
+      const rolIP = perfilOp.fields?.rolEmpresa?.stringValue || '';
+      if (!esSA && rolIP !== 'jefe' && rolIP !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente configura los informes automáticos.' }); return; }
+      const empIP = req.body.empresaIdFn && esSA ? String(req.body.empresaIdFn).trim() : empresaOperador;
+      if (req.body.modo === 'set') {
+        await fetch(`${base0}/empresas/${empIP}?updateMask.fieldPaths=informeAuto`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { informeAuto: { booleanValue: req.body.valor === true } } })
+        });
+        res.status(200).json({ ok: true, valor: req.body.valor === true });
+        return;
+      }
+      const docIP = await fetch(`${base0}/empresas/${empIP}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+      res.status(200).json({ ok: true,
+        activo: docIP.fields?.informeAuto?.booleanValue !== false,
+        ultimoEn: docIP.fields?.ultimoInformeEn?.timestampValue || null,
+        ultimoTipo: docIP.fields?.ultimoInformeTipo?.stringValue || null
+      });
+      return;
+    }
+
     if (accion === 'evento-ficha') {
       // ── Ficha del evento (Módulo 1): bitácora unificada por folio NUC ──
       // Se ingresa un folio (SOS-, REP-, OPE- o TKT-) y se reconstruye la
@@ -2353,6 +2375,7 @@ export default async function handler(req, res) {
       if (await funcionCortada('kpi')) { res.status(403).json({ error: 'El panel de indicadores no está incluido en el plan de tu empresa.' }); return; }
       const dias = Math.max(1, Math.min(180, parseInt(req.body.dias) || 30));
       const desde = Date.now() - dias * 24 * 3600 * 1000;
+      const desdePrev = desde - dias * 24 * 3600 * 1000; // ventana anterior, mismo largo
       const fchCL = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
 
       const [clientesTodosK, alertasTodasK] = await Promise.all([
@@ -2361,9 +2384,23 @@ export default async function handler(req, res) {
       ]);
       const clientesK = esSA ? clientesTodosK : clientesTodosK.filter((c) => c.empresaId === empresaOperador);
       const uidsK = new Set(clientesK.map((c) => c.uid));
-      const alertas = alertasTodasK
-        .filter((a) => esSA || uidsK.has(a.clienteUid))
-        .filter((a) => a.creadaEn && new Date(a.creadaEn).getTime() >= desde);
+      const visiblesK = alertasTodasK.filter((a) => esSA || uidsK.has(a.clienteUid));
+      const alertas = visiblesK.filter((a) => a.creadaEn && new Date(a.creadaEn).getTime() >= desde);
+      // Período anterior (para el comparativo): mismo largo, inmediatamente antes.
+      const alertasPrev = visiblesK.filter((a) => {
+        const t = a.creadaEn ? new Date(a.creadaEn).getTime() : 0;
+        return t >= desdePrev && t < desde;
+      });
+      const tPrev = alertasPrev
+        .filter((a) => a.creadaEn && a.atendidaEn)
+        .map((a) => (new Date(a.atendidaEn) - new Date(a.creadaEn)) / 60000)
+        .filter((m) => m >= 0 && m < 24 * 60);
+      const promPrev = tPrev.length ? tPrev.reduce((s2, v) => s2 + v, 0) / tPrev.length : null;
+      const anterior = {
+        alertas: alertasPrev.length,
+        atendidas: alertasPrev.filter((a) => a.atendidaEn).length,
+        promedioMin: promPrev != null ? Math.round(promPrev * 10) / 10 : null
+      };
 
       // — Tiempos de respuesta (minutos entre creación y atención) —
       const tiempos = alertas
@@ -2431,7 +2468,7 @@ export default async function handler(req, res) {
           medianaMin: mediana != null ? Math.round(mediana * 10) / 10 : null,
           muestras: tiempos.length
         },
-        serieDia, porHora, topClientes, resultados, asistencia
+        serieDia, porHora, topClientes, resultados, asistencia, anterior
       });
       return;
     }
