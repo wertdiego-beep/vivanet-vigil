@@ -756,6 +756,7 @@ export default async function handler(req, res) {
       const hoyStr = new Date().toISOString().slice(0, 10);
 
       if (accion === 'movil-pos') {
+        if (await funcionCortada('gpsvivo')) { res.status(200).json({ ok: true }); return; }
         // ── GPS en tiempo real (Módulo 2 de la licitación) ──
         // El móvil manda su posición cada ~15 s. Se guarda en su perfil (1 escritura
         // chica) y, cuando viene la marca 'rastro', también se acumula un punto en el
@@ -952,7 +953,8 @@ export default async function handler(req, res) {
         if (await funcionCortada('informeturno')) { res.status(403).json({ error: 'El informe de turno no está incluido en el plan de tu empresa.' }); return; }
         const texto = String(req.body.texto || '').trim().slice(0, 1500);
         const fotos = Array.isArray(req.body.fotos) ? req.body.fotos.filter((x) => typeof x === 'string' && x).slice(0, 6) : [];
-        const audioInf = (typeof req.body.audio === 'string' && req.body.audio.startsWith('data:audio')) ? req.body.audio.slice(0, 700000) : null;
+        let audioInf = (typeof req.body.audio === 'string' && req.body.audio.startsWith('data:audio')) ? req.body.audio.slice(0, 700000) : null;
+        if (audioInf && await funcionCortada('audio')) audioInf = null;
         if (!texto && !fotos.length && !audioInf) { res.status(400).json({ error: 'Escribe el informe, adjunta una foto o graba una nota de voz.' }); return; }
         const fields = {
           categoria: { stringValue: '📋 Informe de turno' },
@@ -989,6 +991,7 @@ export default async function handler(req, res) {
 
     // ── POSICIÓN del personal de terreno (Módulo 2: "funcionarios con dispositivo móvil") ──
     if (accion === 'pos-reportar') {
+      if (await funcionCortada('gpsvivo')) { res.status(200).json({ ok: true }); return; }
       const rolT = perfilOp.fields?.rolEmpresa?.stringValue || '';
       const TERRENO = ['movil', 'guardia', 'conductor', 'supervisor', 'prevencionista'];
       if (!TERRENO.includes(rolT)) { res.status(403).json({ error: 'Solo el personal de terreno reporta posición.' }); return; }
@@ -1344,6 +1347,7 @@ export default async function handler(req, res) {
         };
       }).filter((c) => c.empresaId === empresaOperador && c.rolEmpresa === 'movil')
         .map(({ empresaId, rolEmpresa, ...m2 }) => m2);
+      if (await funcionCortada('gpsvivo')) moviles.forEach((m2) => { m2.lat = null; m2.lng = null; m2.posEn = null; });
       res.status(200).json({ ok: true, moviles });
       return;
     }
@@ -2217,6 +2221,7 @@ export default async function handler(req, res) {
       const rolIP = perfilOp.fields?.rolEmpresa?.stringValue || '';
       if (!esSA && rolIP !== 'jefe' && rolIP !== 'gerente') { res.status(403).json({ error: 'Solo el jefe o gerente configura los informes automáticos.' }); return; }
       const empIP = req.body.empresaIdFn && esSA ? String(req.body.empresaIdFn).trim() : empresaOperador;
+      if (!esSA && await funcionCortada('informes')) { res.status(403).json({ error: 'Los informes automáticos no están incluidos en el plan de tu empresa.' }); return; }
       if (req.body.modo === 'set') {
         await fetch(`${base0}/empresas/${empIP}?updateMask.fieldPaths=informeAuto`, {
           method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -2239,6 +2244,7 @@ export default async function handler(req, res) {
       // Se ingresa un folio (SOS-, REP-, OPE- o TKT-) y se reconstruye la
       // secuencia operativa completa de ese evento, juntando lo que ya está
       // guardado en las distintas colecciones.
+      if (await funcionCortada('nuc')) { res.status(403).json({ error: 'La trazabilidad NUC no está incluida en el plan de tu empresa.' }); return; }
       const folioB = String(req.body.nuc || '').trim().toUpperCase();
       if (!/^(SOS|REP|OPE|TKT)-\d{4}-[0-9A-Z]{6}$/.test(folioB)) { res.status(400).json({ error: 'Folio no válido. Formato: SOS-2026-XXXXXX (o REP-, OPE-, TKT-).' }); return; }
       const pref = folioB.slice(0, 3);
@@ -2325,6 +2331,7 @@ export default async function handler(req, res) {
     if (accion === 'moviles-pos') {
       // Posición en tiempo real de los recursos desplegados (Módulo 2).
       // Devuelve los móviles de la empresa con su última posición reportada.
+      if (await funcionCortada('gpsvivo')) { res.status(200).json({ ok: true, moviles: [] }); return; }
       const respU = await fetch(`${base0}/usuarios?pageSize=300`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       const corte = Date.now() - 3 * 3600 * 1000; // sin señal hace 3 h = fuera de servicio, no se pinta
       const moviles = (respU.documents || []).map((d2) => {
@@ -2348,6 +2355,7 @@ export default async function handler(req, res) {
 
     if (accion === 'movil-rastro') {
       // Rastro del día de un móvil: la trazabilidad territorial del Módulo 2.
+      if (await funcionCortada('gpsvivo')) { res.status(403).json({ error: 'El GPS en tiempo real no está incluido en el plan de tu empresa.' }); return; }
       const mUid = (req.body.movilUid || '').trim();
       if (!/^[A-Za-z0-9]+$/.test(mUid)) { res.status(400).json({ error: 'Móvil no válido' }); return; }
       const docM = await fetch(`${base0}/usuarios/${mUid}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
@@ -2482,6 +2490,7 @@ export default async function handler(req, res) {
         const frawRep = (docFnRep.fields?.flags || docFnRep.fields?.funciones)?.mapValue?.fields || {};
         if (frawRep.reportes?.booleanValue !== true) { res.status(200).json({ ok: true, reportes: [] }); return; }
       }
+      const audioOn = !(await funcionCortada('audio'));
       const [lista, clientesTodos] = await Promise.all([
         fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`, {
           method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -2506,7 +2515,7 @@ export default async function handler(req, res) {
           icono: f.icono?.stringValue || '📌',
           texto: f.texto?.stringValue || '',
           foto: f.foto?.stringValue || null,
-          audio: f.audio?.stringValue || null,
+          audio: audioOn ? (f.audio?.stringValue || null) : null,
           fotos: (f.fotos?.arrayValue?.values || []).map((v) => v.stringValue).filter(Boolean),
           lat: f.lat ? parseFloat(f.lat.doubleValue ?? f.lat.integerValue) : null,
           lng: f.lng ? parseFloat(f.lng.doubleValue ?? f.lng.integerValue) : null,
@@ -2549,7 +2558,8 @@ export default async function handler(req, res) {
     try {
       if (empresaOperador && !esSA) {
         const empDocI = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
-        const autoOn = empDocI.fields?.informeAuto?.booleanValue !== false;
+        const flagsI = (empDocI.fields?.funciones || empDocI.fields?.flags)?.mapValue?.fields || {};
+        const autoOn = flagsI.informes?.booleanValue !== false && empDocI.fields?.informeAuto?.booleanValue !== false;
         const ultimo = empDocI.fields?.ultimoInformeEn?.timestampValue || null;
         const hoyCL = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
         const ultimoDia = ultimo ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ultimo)) : null;
