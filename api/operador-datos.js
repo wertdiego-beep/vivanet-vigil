@@ -105,6 +105,8 @@ async function listarClientes(accessToken) {
         local: f.local?.stringValue || '',
         direccion: f.direccion?.stringValue || '',
         telefono: f.telefono?.stringValue || '',
+        casaLat: f.casaLat ? parseFloat(f.casaLat.doubleValue ?? f.casaLat.integerValue) : null,
+        casaLng: f.casaLng ? parseFloat(f.casaLng.doubleValue ?? f.casaLng.integerValue) : null,
         notaCentral: f.notaCentral?.stringValue || '',
         modo: f.modo?.stringValue || 'empresa',
         rolEmpresa: f.rolEmpresa?.stringValue || '',
