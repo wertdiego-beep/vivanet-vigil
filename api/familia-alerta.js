@@ -194,6 +194,24 @@ export default async function handler(req, res) {
     // Si tengo grupoFamiliarId, el titular es ese uid; si no, yo mismo soy el titular.
     const grupoId = yo.grupoFamiliarId || uid;
 
+    // 👨‍👩‍👧 Modo listar: la app muestra quiénes forman la familia y quién
+    // recibe de verdad los avisos SOS (sin mandar ningún push).
+    if (req.body.modo === 'listar') {
+      const lista = [];
+      if (grupoId === uid) lista.push({ ...yo, titular: true });
+      else { const tit = await obtenerUsuario(accessToken, grupoId); if (tit) lista.push({ ...tit, titular: true }); }
+      const miembros = await listarIntegrantesGrupo(accessToken, grupoId);
+      miembros.forEach((m) => { if (!lista.some((x) => x.uid === m.uid)) lista.push({ ...m, titular: false }); });
+      res.status(200).json({ ok: true, integrantes: lista.map((p) => ({
+        nombre: p.nombre || 'Integrante',
+        soyYo: p.uid === uid,
+        titular: p.titular === true,
+        push: !!p.fcmToken,
+        avisos: p.recibirAlertasFamilia !== false
+      })) });
+      return;
+    }
+
     const integrantes = [];
     if (grupoId !== uid) {
       const titular = await obtenerUsuario(accessToken, grupoId);
