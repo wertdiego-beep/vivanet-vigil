@@ -2545,6 +2545,42 @@ export default async function handler(req, res) {
 
     const historial = alertasRecientes.slice(0, 120);
 
+    // ── 🗓 Informe programado (Módulo 6) — disparo automático diario ──
+    try {
+      if (empresaOperador && !esSA) {
+        const empDocI = await fetch(`${base0}/empresas/${empresaOperador}`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const autoOn = empDocI.fields?.informeAuto?.booleanValue !== false;
+        const ultimo = empDocI.fields?.ultimoInformeEn?.timestampValue || null;
+        const hoyCL = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        const ultimoDia = ultimo ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ultimo)) : null;
+        if (autoOn && ultimoDia !== hoyCL) {
+          const ayerCL = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() - 24 * 3600 * 1000));
+          const dowCL = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Santiago', weekday: 'short' }).format(new Date());
+          const diaMesCL = parseInt(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', day: '2-digit' }).format(new Date()), 10);
+          const tiposI = [{ tipo: 'diario', dias: 1 }];
+          if (dowCL === 'Mon') tiposI.push({ tipo: 'semanal', dias: 7 });
+          if (diaMesCL === 1) tiposI.push({ tipo: 'mensual', dias: 30 });
+          const misUidsI = new Set(clientes.map((c) => c.uid));
+          for (const { tipo, dias } of tiposI) {
+            const corteI = Date.now() - dias * 24 * 3600 * 1000;
+            const delPer = alertasRecientes.filter((a) => misUidsI.has(a.clienteUid) && a.creadaEn && new Date(a.creadaEn).getTime() >= corteI);
+            await fetch(`${base0}/empresas/${empresaOperador}/informes/${tipo}_${ayerCL}?updateMask.fieldPaths=tipo&updateMask.fieldPaths=fecha&updateMask.fieldPaths=dias&updateMask.fieldPaths=resumen&updateMask.fieldPaths=generadoEn`, {
+              method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields: {
+                tipo: { stringValue: tipo }, fecha: { stringValue: ayerCL }, dias: { integerValue: String(dias) },
+                resumen: { mapValue: { fields: { alertas: { integerValue: String(delPer.length) }, atendidas: { integerValue: String(delPer.filter((a) => a.atendidaEn).length) } } } },
+                generadoEn: { timestampValue: new Date().toISOString() }
+              } })
+            });
+          }
+          await fetch(`${base0}/empresas/${empresaOperador}?updateMask.fieldPaths=ultimoInformeEn&updateMask.fieldPaths=ultimoInformeTipo`, {
+            method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: { ultimoInformeEn: { timestampValue: new Date().toISOString() }, ultimoInformeTipo: { stringValue: tiposI.map((t) => t.tipo).join('+') } } })
+          });
+        }
+      }
+    } catch (e) {}
+
     // Funciones del operador: las de SU empresa (o las de plataforma si es la nuestra).
     const rutaFn = empresaOperador === 'sos360-la-serena'
       ? `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/plataforma/funciones`
