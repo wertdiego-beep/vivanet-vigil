@@ -214,6 +214,7 @@ async function listarAlertasRecientes(accessToken) {
         movilEstado: f.movilEstado?.stringValue || '',
         movilReporteNota: f.movilReporteNota?.stringValue || '',
         movilReporteFoto: f.movilReporteFoto?.stringValue || '',
+        movilReporteEn: f.movilReporteEn?.timestampValue || null,
         ubicacion: ubic
           ? {
               lat: parseFloat(ubic.lat?.doubleValue ?? ubic.lat?.integerValue ?? 0),
@@ -1522,6 +1523,7 @@ export default async function handler(req, res) {
       const docs = await fetch(`${base0}/empresas/${empresaOperador}/misiones?pageSize=100`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
       let misiones = (docs.documents || []).map((dd) => ({
         id: dd.name.split('/').pop(),
+        nuc: nucFolio('OPE', dd.name.split('/').pop(), dd.fields?.creadaEn?.timestampValue),
         movilUid: dd.fields?.movilUid?.stringValue || '', movilNombre: dd.fields?.movilNombre?.stringValue || 'Móvil',
         tipo: dd.fields?.tipo?.stringValue || 'patrullaje',
         titulo: dd.fields?.titulo?.stringValue || '', descripcion: dd.fields?.descripcion?.stringValue || '',
@@ -1609,7 +1611,9 @@ export default async function handler(req, res) {
       const tickets = (docsT.documents || []).map((dd) => {
         const ff = dd.fields || {};
         return {
-          id: dd.name.split('/').pop(), folio: gv(ff.folio), estado: gv(ff.estado) || 'ingresado',
+          id: dd.name.split('/').pop(), folio: gv(ff.folio),
+          nuc: nucFolio('TKT', dd.name.split('/').pop(), ff.creadaEn?.timestampValue),
+          estado: gv(ff.estado) || 'ingresado',
           creadaEn: ff.creadaEn?.timestampValue || null, tomadoPor: gv(ff.tomadoPor), medio: gv(ff.medio),
           nombre: gv(ff.nombre), rut: gv(ff.rut), telefono: gv(ff.telefono), edad: gi(ff.edad),
           calle: gv(ff.calle), sector: gv(ff.sector), comuna: gv(ff.comuna), referencia: gv(ff.referencia),
@@ -2159,6 +2163,94 @@ export default async function handler(req, res) {
         metodo: 'Densidad espacial en celdas de ~500 m, ponderada por recencia (vida media 21 días) y perfil horario.',
         puntos, recomendaciones
       });
+      return;
+    }
+
+    if (accion === 'evento-ficha') {
+      // ── Ficha del evento (Módulo 1): bitácora unificada por folio NUC ──
+      // Se ingresa un folio (SOS-, REP-, OPE- o TKT-) y se reconstruye la
+      // secuencia operativa completa de ese evento, juntando lo que ya está
+      // guardado en las distintas colecciones.
+      const folioB = String(req.body.nuc || '').trim().toUpperCase();
+      if (!/^(SOS|REP|OPE|TKT)-\d{4}-[0-9A-Z]{6}$/.test(folioB)) { res.status(400).json({ error: 'Folio no válido. Formato: SOS-2026-XXXXXX (o REP-, OPE-, TKT-).' }); return; }
+      const pref = folioB.slice(0, 3);
+      const linea = []; // { t, titulo, detalle }
+      const paso = (t, titulo, detalle) => { if (t) linea.push({ t, titulo, detalle: detalle || '' }); };
+      let meta = null;
+
+      if (pref === 'SOS') {
+        const todasA = await listarAlertasRecientes(accessToken);
+        const clientesF = await listarClientes(accessToken);
+        const miosF = new Set((esSA ? clientesF : clientesF.filter((c) => c.empresaId === empresaOperador)).map((c) => c.uid));
+        const a = todasA.find((x) => miosF.has(x.clienteUid) && nucFolio('SOS', x.alertaId, x.creadaEn) === folioB);
+        if (a) {
+          const cli = clientesF.find((c) => c.uid === a.clienteUid);
+          meta = { tipo: '🆘 Alarma SOS', estado: a.estado || '—', quien: (cli && (cli.local || cli.nombre)) || 'Cliente', lat: a.ubicacion?.lat ?? null, lng: a.ubicacion?.lng ?? null, direccion: (cli && cli.direccion) || null };
+          paso(a.creadaEn, '🆘 Alerta SOS activada', a.ubicacion?.lat ? `Georreferenciada (${a.ubicacion.lat.toFixed(5)}, ${a.ubicacion.lng.toFixed(5)})` : 'Sin GPS del teléfono');
+          paso(a.atendidaEn, '👮 Atendida por la central', a.atendidaPor ? 'Operador: ' + a.atendidaPor : '');
+          if (a.movilNombre) paso(a.atendidaEn || a.creadaEn, '🚐 Móvil despachado', a.movilNombre + (a.movilEstado ? ' · ' + a.movilEstado : ''));
+          paso(a.movilReporteEn, '📡 Reporte del móvil en el punto', (a.movilReporteNota || '') + (a.movilReporteFoto ? ' · con foto' : ''));
+          if (a.estado === 'cancelada') paso(a.canceladaEn || a.creadaEn, '⚪ Cancelada', '');
+          else if (a.resultado || a.notaAtencion) paso(a.atendidaEn || a.creadaEn, '✅ Cierre', (a.resultado ? 'Resultado: ' + a.resultado : '') + (a.notaAtencion ? ' · Nota: ' + a.notaAtencion : ''));
+        }
+      } else if (pref === 'REP') {
+        const listaR = await fetch(`${base0}:runQuery`, {
+          method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'reportes', allDescendants: true }], limit: 200 } })
+        }).then((r) => r.json());
+        const clientesF = await listarClientes(accessToken);
+        const miosF = new Set((esSA ? clientesF : clientesF.filter((c) => c.empresaId === empresaOperador)).map((c) => c.uid));
+        for (const r of (listaR || [])) {
+          if (!r.document) continue;
+          const parts = r.document.name.split('/');
+          const repId = parts.pop(); parts.pop();
+          const cuid = parts.pop();
+          if (!miosF.has(cuid)) continue;
+          const f = r.document.fields || {};
+          if (nucFolio('REP', repId, f.creadaEn?.timestampValue) !== folioB) continue;
+          const cli = clientesF.find((c) => c.uid === cuid);
+          const anon = f.anonimo?.booleanValue === true;
+          meta = { tipo: '📢 Reporte de incidente', estado: f.estado?.stringValue || 'pendiente', quien: anon ? 'Anónimo' : ((cli && (cli.local || cli.nombre)) || 'Cliente'), lat: f.lat ? parseFloat(f.lat.doubleValue ?? f.lat.integerValue) : null, lng: f.lng ? parseFloat(f.lng.doubleValue ?? f.lng.integerValue) : null, direccion: f.direccion?.stringValue || null };
+          paso(f.creadaEn?.timestampValue, `${f.icono?.stringValue || '📌'} Reporte ingresado — ${f.categoria?.stringValue || 'Otro'}`, (f.texto?.stringValue || '').slice(0, 300) + ((f.fotos?.arrayValue?.values || []).length || f.foto ? ' · con evidencia fotográfica' : ''));
+          if ((f.estado?.stringValue || '') === 'revisado') paso(f.revisadoEn?.timestampValue || f.creadaEn?.timestampValue, '✅ Marcado como revisado por la central', '');
+          break;
+        }
+      } else if (pref === 'OPE') {
+        const docsM = await fetch(`${base0}/empresas/${empresaOperador}/misiones?pageSize=100`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const dm = (docsM.documents || []).find((dd) => nucFolio('OPE', dd.name.split('/').pop(), dd.fields?.creadaEn?.timestampValue) === folioB);
+        if (dm) {
+          const f = dm.fields || {}; const mid = dm.name.split('/').pop();
+          meta = { tipo: '🚨 Operativo', estado: f.estado?.stringValue || 'despachado', quien: f.movilNombre?.stringValue || 'Móvil', lat: null, lng: null, direccion: f.direccion?.stringValue || null };
+          paso(f.creadaEn?.timestampValue, `🚨 Operativo despachado — ${f.titulo?.stringValue || f.tipo?.stringValue || ''}`, (f.descripcion?.stringValue || '') + (f.creadaPor?.stringValue ? ' · Por: ' + f.creadaPor.stringValue : '') + (f.ticketFolio?.stringValue ? ' · Origen: ticket ' + f.ticketFolio.stringValue : ''));
+          paso(f.estadoEn?.timestampValue, '🔄 Cambio de estado', 'Estado: ' + (f.estado?.stringValue || ''));
+          try {
+            const rp = await fetch(`${base0}/empresas/${empresaOperador}/misiones/${mid}/reportes?pageSize=30`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+            (rp.documents || []).forEach((rr) => paso(rr.fields?.creadaEn?.timestampValue, '📡 Reporte desde terreno', (rr.fields?.texto?.stringValue || '(foto)') + (rr.fields?.foto?.stringValue ? ' · con foto' : '')));
+          } catch (e) {}
+          paso(f.cerradaEn?.timestampValue, '✅ Operativo cerrado', (f.resultado?.stringValue ? 'Cumplimiento: ' + f.resultado.stringValue : '') + (f.cerradaPor?.stringValue ? ' · Cerró: ' + f.cerradaPor.stringValue : ''));
+        }
+      } else if (pref === 'TKT') {
+        const docsT = await fetch(`${base0}/empresas/${empresaOperador}/tickets?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.ok ? r.json() : {});
+        const dt = (docsT.documents || []).find((dd) => nucFolio('TKT', dd.name.split('/').pop(), dd.fields?.creadaEn?.timestampValue) === folioB);
+        if (dt) {
+          const f = dt.fields || {}; const gvF = (x) => x?.stringValue ?? '';
+          meta = { tipo: '🎫 Ticket ciudadano ' + gvF(f.folio), estado: gvF(f.estado) || 'ingresado', quien: gvF(f.nombre) || '—', lat: f.lat ? parseFloat(f.lat.doubleValue) : null, lng: f.lng ? parseFloat(f.lng.doubleValue) : null, direccion: [gvF(f.calle), gvF(f.sector), gvF(f.comuna)].filter(Boolean).join(', ') || null };
+          paso(f.creadaEn?.timestampValue, `🎫 Ticket ingresado — ${gvF(f.categoria)}`, (gvF(f.descripcion) || '').slice(0, 300) + (gvF(f.tomadoPor) ? ' · Tomado por: ' + gvF(f.tomadoPor) : '') + (gvF(f.medio) ? ' · Medio: ' + gvF(f.medio) : ''));
+          if (gvF(f.asignadoNombre)) paso(f.creadaEn?.timestampValue, '👤 Asignado', gvF(f.asignadoNombre) + (gvF(f.area) ? ' · Área: ' + gvF(f.area) : ''));
+          (f.gestiones?.arrayValue?.values || []).forEach((g) => {
+            const gf = g.mapValue?.fields || {};
+            paso(gf.creadaEn?.timestampValue, '🔄 Gestión: ' + (gf.estado?.stringValue || ''), (gf.texto?.stringValue || '') + (gf.por?.stringValue ? ' · Por: ' + gf.por.stringValue : ''));
+          });
+          (f.tareas?.arrayValue?.values || []).forEach((tv) => {
+            const tf = tv.mapValue?.fields || {};
+            paso(tf.creadaEn?.timestampValue, (tf.estado?.stringValue === 'lista' ? '☑️' : '📋') + ' Tarea: ' + (tf.texto?.stringValue || ''), (tf.asignadoNombre?.stringValue ? 'Asignada a ' + tf.asignadoNombre.stringValue : '') + ' · ' + (tf.estado?.stringValue || 'pendiente'));
+          });
+        }
+      }
+
+      if (!meta) { res.status(200).json({ ok: false, error: 'No se encontró un evento con el folio ' + folioB + ' entre los eventos recientes de tu empresa.' }); return; }
+      linea.sort((x, y) => new Date(x.t) - new Date(y.t));
+      res.status(200).json({ ok: true, nuc: folioB, meta, linea });
       return;
     }
 
